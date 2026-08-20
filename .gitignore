@@ -30,3 +30,11 @@ desktop.ini
 # Host test binary
 tools/host_tests/test_all
 tools/host_tests/test_all.exe
+
+# Android build outputs. The APK is a build artefact, not a source file.
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+*.apk
+*.aab

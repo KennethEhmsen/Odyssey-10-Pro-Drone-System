@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Odyssey RID Test</string>
+    <string name="start_scan">Start scan</string>
+    <string name="stop_scan">Stop scan</string>
+    <string name="self_test">Self-test</string>
+    <string name="clear">Clear</string>
+    <string name="share">Share</string>
+    <string name="expected_uas_id">Expected UAS ID (optional)</string>
+    <string name="expected_operator_id">Expected operator ID, public part only</string>
+</resources>

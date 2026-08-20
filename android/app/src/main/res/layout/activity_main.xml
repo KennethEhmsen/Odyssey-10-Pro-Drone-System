@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <EditText
+        android:id="@+id/expectedUasId"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/expected_uas_id"
+        android:inputType="textNoSuggestions"
+        android:textSize="13sp"
+        android:importantForAutofill="no" />
+
+    <!-- Public 16 characters only. The 3-character secret must never be typed into
+         a receiver, and is not needed to verify a broadcast. -->
+    <EditText
+        android:id="@+id/expectedOperatorId"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/expected_operator_id"
+        android:inputType="textNoSuggestions"
+        android:textSize="13sp"
+        android:importantForAutofill="no" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/scanButton"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="@string/start_scan"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/selfTestButton"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="@string/self_test"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/clearButton"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="@string/clear"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/shareButton"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="@string/share"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:id="@+id/scroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/report"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:textSize="10sp"
+                android:typeface="monospace"
+                android:textIsSelectable="true" />
+
+            <TextView
+                android:id="@+id/events"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingTop="12dp"
+                android:fontFamily="monospace"
+                android:textSize="9sp"
+                android:textColor="#666666"
+                android:textIsSelectable="true" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

@@ -20,7 +20,7 @@
 set -e
 
 root=$(git rev-parse --show-toplevel)
-WATCHED="firmware shared tools/host_tests"
+WATCHED="firmware shared tools/host_tests android"
 ZERO=0000000000000000000000000000000000000000
 
 should_run=no
@@ -76,6 +76,20 @@ fi
 # The host tests only need to run when something they cover actually changed.
 if [ "$should_run" = no ]; then
     exit 0
+fi
+
+# The Remote ID decoder is dependency-free Java and runs in about a second, so there is
+# no reason not to check it on every push that touches it.
+if command -v javac >/dev/null 2>&1; then
+    if ! sh "$root/tools/run_android_parser_tests.sh" > /dev/null 2>&1; then
+        sh "$root/tools/run_android_parser_tests.sh" || true
+        echo
+        echo "pre-push: Remote ID decoder tests FAILED -- push aborted."
+        exit 1
+    fi
+    echo "pre-push: Remote ID decoder OK"
+else
+    echo "pre-push: no javac, skipping the Remote ID decoder tests"
 fi
 
 echo "pre-push: running host verification..."

@@ -3,6 +3,7 @@
 [![host-tests](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml/badge.svg?branch=main)](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml)
 [![assertions](https://img.shields.io/badge/host_assertions-145-blue)](tools/host_tests/)
 [![consistency](https://img.shields.io/badge/consistency_checks-13-blue)](tools/check_consistency.py)
+[![decoder](https://img.shields.io/badge/RID_decoder_tests-80-blue)](android/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-ESP32--P4%20%7C%20C3%20%7C%20C6-lightgrey)](firmware/)
 
@@ -39,6 +40,7 @@ finding-by-finding index, or section 13 of the specification.
 | `tools/md2docx.py` | Regenerates the Word document from the Markdown |
 | `tools/host_tests/` | Compiles the real firmware headers on a PC and verifies the safety-critical algorithms |
 | `tools/check_consistency.py` | Checks the specification, firmware and BOM still agree; `--fix` repairs the mechanical ones |
+| `android/` | Remote ID test receiver for Android — verifies the aircraft broadcasts what you configured, at the required rate |
 
 ---
 
@@ -150,6 +152,16 @@ The `pre-push` hook runs the suite and aborts the push if anything fails, but on
 something under `firmware/`, `shared/` or `tools/host_tests/` actually changed. This
 costs nothing and needs no network. Bypass a single push with `git push --no-verify`.
 
+### Remote ID decoder
+
+```bash
+sh tools/run_android_parser_tests.sh
+```
+
+80 assertions in about a second, needing only a JDK — no Gradle, no Android SDK, no
+network. The decoder in `android/app/src/main/java/dk/odyssey/ridtest/odid/` is
+dependency-free Java with no Android imports specifically so this is possible.
+
 ### Consistency
 
 Most defects in this project's review were *disagreements* — the specification saying
@@ -192,6 +204,20 @@ python tools/md2docx.py docs/Odyssey-10-Pro-Drone-System.md docs/Odyssey-10-Pro-
 
 Requires `python-docx`. The Markdown is the source of truth; do not edit the `.docx`
 directly, because the next regeneration will overwrite it.
+
+---
+
+## Remote ID test receiver
+
+`android/` holds an Android app that receives the aircraft's Remote ID broadcast and
+checks it against what you configured — identifiers, 1 Hz location rate, 3 s static
+message cadence, position plausibility, and whether the operator secret is leaking on
+air. Build it with `cd android && gradle assembleDebug`, or read
+[android/README.md](android/README.md).
+
+Needs a handset that can scan **Bluetooth 5 extended advertisements on the Coded PHY**.
+One that cannot will never see the aircraft, and that looks exactly like the aircraft
+being switched off — the app detects and warns about this.
 
 ---
 

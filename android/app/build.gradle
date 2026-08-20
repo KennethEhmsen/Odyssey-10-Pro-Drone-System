@@ -1,0 +1,49 @@
+// =====================================================================================
+//  Odyssey Remote ID test receiver
+//  ------------------------------------------------------------------------------------
+//  NO EXTERNAL DEPENDENCIES. Not AndroidX, not a chart library, nothing.
+//
+//  That is a deliberate choice for a diagnostic tool: it has to build years from now on
+//  whatever machine is to hand, and every dependency is a future reason it will not.
+//  The UI is plain framework widgets and the decoder is dependency-free Java, which is
+//  why the decoder can also be unit-tested with nothing but javac -- see
+//  tools/run_android_parser_tests.sh
+// =====================================================================================
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'dk.odyssey.ridtest'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "dk.odyssey.ridtest"
+        // API 26: BLE extended advertising and Coded PHY scanning, without which the
+        // aircraft's Bluetooth 5 Long Range broadcast cannot be seen at all.
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+    }
+}
+
+// Intentionally empty. The decoder tests use a plain main() rather than JUnit so they
+// run with javac alone -- see tools/run_android_parser_tests.sh
+dependencies {
+}

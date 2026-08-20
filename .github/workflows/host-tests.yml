@@ -47,6 +47,7 @@ on:
       - 'tools/**'
       - 'hardware/**'
       - 'docs/**'
+      - 'android/**'
       - '.github/workflows/host-tests.yml'
   pull_request:
     paths:
@@ -55,6 +56,7 @@ on:
       - 'tools/**'
       - 'hardware/**'
       - 'docs/**'
+      - 'android/**'
       - '.github/workflows/host-tests.yml'
 
   # Manual trigger, for running against an unchanged tree.
@@ -93,6 +95,11 @@ jobs:
       # specification and the firmware silently disagreeing with each other.
       - name: Project consistency
         run: python3 tools/check_consistency.py
+
+      # The decoder is dependency-free Java; the runner already has a JDK, so this
+      # needs no Android SDK and no Gradle.
+      - name: Remote ID decoder tests
+        run: sh tools/run_android_parser_tests.sh
 
       - name: Build and run host tests
         env:

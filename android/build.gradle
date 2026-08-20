@@ -1,0 +1,4 @@
+// Root build script. Plugin versions are declared here so the app module stays short.
+plugins {
+    id 'com.android.application' version '8.7.3' apply false
+}

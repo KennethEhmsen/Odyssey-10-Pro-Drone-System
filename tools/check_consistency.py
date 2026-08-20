@@ -641,6 +641,25 @@ def _run_suite_count():
     return int(m.group(1)) + int(m.group(2))
 
 
+def _run_decoder_count():
+    """Builds and runs the Remote ID decoder tests, returning the assertion count."""
+    import shutil, subprocess
+    if not shutil.which("javac"):
+        return None
+    script = ROOT / "tools" / "run_android_parser_tests.sh"
+    if not script.exists():
+        return None
+    try:
+        r = subprocess.run(["sh", str(script)], capture_output=True, text=True,
+                           timeout=180, cwd=str(ROOT))
+    except Exception:
+        return None
+    m = re.search(r"(\d+)\s+passed,\s+(\d+)\s+failed", r.stdout)
+    if not m:
+        return None
+    return int(m.group(1)) + int(m.group(2))
+
+
 def check_readme(rep, fix):
     rep.checks_run += 1
     if not README.exists():
@@ -695,6 +714,25 @@ def check_readme(rep, fix):
             else:
                 rep.problem("readme",
                             f"assertion badge says {m.group(1)}, the suite runs {actual}",
+                            fixable=True)
+
+    # --- Remote ID decoder assertion count ------------------------------------------
+    m = re.search(r"RID_decoder_tests-(\d+)-", text)
+    if m:
+        actual = _run_decoder_count()
+        if actual is None:
+            rep.problem("readme",
+                        "cannot verify the decoder badge (no JDK, or the tests did not "
+                        "run)", severity="warn")
+        elif int(m.group(1)) != actual:
+            if fix:
+                text = text.replace(f"RID_decoder_tests-{m.group(1)}-",
+                                    f"RID_decoder_tests-{actual}-")
+                changed = True
+                rep.fix("readme", f"decoder badge {m.group(1)} -> {actual}")
+            else:
+                rep.problem("readme",
+                            f"decoder badge says {m.group(1)}, the suite runs {actual}",
                             fixable=True)
 
     # --- the CI badge must point at this repository's workflow ----------------------
