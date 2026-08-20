@@ -340,7 +340,6 @@ def check_spec_constants(rep, fix):
         write(SPEC, spec)
 
     # Thrust-to-weight must follow from the two masses rather than being asserted.
-    rep.checks_run += 1
     auw = float(defines["AIRFRAME_AUW_G"].rstrip("f"))
     thrust = float(defines["MOTOR_MAX_THRUST_G"].rstrip("f")) * 4.0
     twr = thrust / auw
@@ -607,6 +606,99 @@ def check_workflow_cost(rep, fix):
 
 
 # =====================================================================================
+#  CHECK: README badges and revision agree with reality
+#
+#  Badges that carry numbers rot. A badge claiming "135 assertions" after the suite has
+#  grown to 150 is worse than no badge, because it is confidently wrong. The counts are
+#  therefore derived and compared, not trusted -- and --fix rewrites them.
+# =====================================================================================
+README = ROOT / "README.md"
+
+
+def _run_suite_count():
+    """Builds and runs the host suite, returning its assertion count, or None."""
+    import shutil, subprocess
+    if not shutil.which("g++"):
+        return None
+    script = ROOT / "tools" / "host_tests" / "run_tests.sh"
+    if not script.exists():
+        return None
+    try:
+        r = subprocess.run(["sh", str(script)], capture_output=True, text=True,
+                           timeout=180, cwd=str(ROOT))
+    except Exception:
+        return None
+    m = re.search(r"(\d+)\s+passed,\s+(\d+)\s+failed", r.stdout)
+    if not m:
+        return None
+    return int(m.group(1)) + int(m.group(2))
+
+
+def check_readme(rep, fix):
+    rep.checks_run += 1
+    if not README.exists():
+        return
+    text = read(README)
+    changed = False
+
+    # --- revision must match the specification -------------------------------------
+    spec = read(SPEC)
+    ms = re.search(r"\*\*Document revision:\*\*\s*([\d.]+)", spec)
+    mr = re.search(r"\*\*Status:\*\*\s*revision\s*([\d.]+)", text)
+    if ms and mr and ms.group(1) != mr.group(1):
+        if fix:
+            start, end = mr.span(1)
+            text = text[:start] + ms.group(1) + text[end:]
+            changed = True
+            rep.fix("readme", f"revision {mr.group(1)} -> {ms.group(1)}")
+        else:
+            rep.problem("readme",
+                        f"README says revision {mr.group(1)}, the specification says "
+                        f"{ms.group(1)}", fixable=True)
+
+    # --- consistency-check count ----------------------------------------------------
+    m = re.search(r"consistency_checks-(\d+)-", text)
+    if m:
+        actual = len(CHECKS)
+        if int(m.group(1)) != actual:
+            if fix:
+                text = text.replace(f"consistency_checks-{m.group(1)}-",
+                                    f"consistency_checks-{actual}-")
+                changed = True
+                rep.fix("readme", f"consistency badge {m.group(1)} -> {actual}")
+            else:
+                rep.problem("readme",
+                            f"consistency badge says {m.group(1)}, there are {actual} "
+                            f"checks", fixable=True)
+
+    # --- host assertion count -------------------------------------------------------
+    m = re.search(r"host_assertions-(\d+)-", text)
+    if m:
+        actual = _run_suite_count()
+        if actual is None:
+            rep.problem("readme",
+                        "cannot verify the assertion badge (no compiler, or the suite "
+                        "did not run)", severity="warn")
+        elif int(m.group(1)) != actual:
+            if fix:
+                text = text.replace(f"host_assertions-{m.group(1)}-",
+                                    f"host_assertions-{actual}-")
+                changed = True
+                rep.fix("readme", f"assertion badge {m.group(1)} -> {actual}")
+            else:
+                rep.problem("readme",
+                            f"assertion badge says {m.group(1)}, the suite runs {actual}",
+                            fixable=True)
+
+    # --- the CI badge must point at this repository's workflow ----------------------
+    if "actions/workflows/host-tests.yml/badge.svg" not in text:
+        rep.problem("readme", "no CI status badge", severity="warn")
+
+    if changed:
+        write(README, text)
+
+
+# =====================================================================================
 #  Registry
 # =====================================================================================
 CHECKS = [
@@ -628,6 +720,7 @@ CHECKS = [
      check_arm_gate),
     ("workflow-cost", "the CI workflow stays on Linux, unscheduled and unmatrixed",
      check_workflow_cost),
+    ("readme", "README badge counts and revision match reality", check_readme),
 ]
 
 

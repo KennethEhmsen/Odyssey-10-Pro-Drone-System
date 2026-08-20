@@ -1,11 +1,22 @@
 # Odyssey-10 Pro
 
+[![host-tests](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml/badge.svg?branch=main)](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml)
+[![assertions](https://img.shields.io/badge/host_assertions-135-blue)](tools/host_tests/)
+[![consistency](https://img.shields.io/badge/consistency_checks-13-blue)](tools/check_consistency.py)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![platform](https://img.shields.io/badge/platform-ESP32--P4%20%7C%20C3%20%7C%20C6-lightgrey)](firmware/)
+
 Autonomous long-range 10-inch quadcopter. ESP32-P4 dual-core RISC-V avionics, integrated
 perception, kinetic recovery and safety stack.
 
-**Status:** revision 2.0 — engineering review applied. All eighteen defects found in the
-revision 1.0 review are fixed. See [`docs/review-findings-resolution.md`](docs/review-findings-resolution.md)
-for the finding-by-finding index, or section 13 of the specification.
+**Status:** revision 2.1 — engineering review applied, regulatory position corrected. All
+eighteen defects found in the revision 1.0 review are fixed. See
+[`docs/review-findings-resolution.md`](docs/review-findings-resolution.md) for the
+finding-by-finding index, or section 13 of the specification.
+
+> The badge reflects `tools/check_consistency.py` plus the host test suite, which compile
+> the real firmware headers on a PC. It does **not** mean the aircraft has flown. Nothing
+> here has been on hardware; see [Safety](#safety).
 
 ---
 
@@ -128,8 +139,6 @@ documentation to match, never the reverse. It runs in the pre-push hook on every
 including documentation-only ones.
 
 ### In CI
-
-[![host-tests](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml/badge.svg)](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml)
 
 `.github/workflows/host-tests.yml` runs the consistency check and the host suite on
 every push and pull request.
