@@ -1,6 +1,6 @@
 Category,Component,Key Specifications,Qty,Unit Price USD,Total USD,Mass g,Primary Function,Notes
 Airframe,RJXHOBBY Mark4 V2 387 mm carbon frame,387 mm wheelbase / 3K carbon / 6 mm arms / 9 inch,1,55.00,55.00,230,Structural chassis and motor mounting,"Mass includes standoffs, gel dampers and hardware"
-Propulsion,3110 / 2812 brushless motor,"900 KV, 4S-6S, M5 shaft",4,22.00,88.00,272,Primary thrust generation,"68 g each installed. Sized for 10 inch, so under-propped on 9 inch -- cooler and with headroom, at some efficiency cost"
+Propulsion,2810 / 2812 brushless motor,"900 KV, 28 mm stator, 4S-6S, M5 shaft",4,22.00,88.00,208,Primary thrust generation,52 g each installed. 28 mm stator is the 8-9 inch class; the 3110 previously specified is a 10-11 inch motor
 Propellers,HQProp / Gemfan 9x5x3,"9 inch, glass-nylon, 2 CW + 2 CCW, props-out",2 pair,6.00,12.00,36,Aerodynamic lift,9 g per propeller / 4 fitted plus spares
 Drive,4-in-1 ESC (BLHeli_32),50 A continuous / 60 A burst / 6S / DShot300,1,45.00,45.00,34,Motor commutation and power delivery,Configured for 400 Hz analog PWM (see docs 4.3)
 Main Battery,6S LiPo pack,22.2 V nominal / 4500 mAh / 45C,1,110.00,110.00,680,Primary flight energy source,6S2P 21700 Li-ion alternative is 8400 mAh / 790 g

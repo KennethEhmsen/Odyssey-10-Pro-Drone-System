@@ -20,8 +20,8 @@
 //  1. AIRFRAME
 // =====================================================================================
 #define AIRFRAME_NAME             "Odyssey-10 Pro"
-#define AIRFRAME_AUW_G            1705.0f   // all-up weight, grams (see docs section 3)
-#define MOTOR_MAX_THRUST_G        1300.0f   // per motor, MODELLED at 6S / 9x5x3 -- verify
+#define AIRFRAME_AUW_G            1641.0f   // all-up weight, grams (see docs section 3)
+#define MOTOR_MAX_THRUST_G        1400.0f   // per motor, MODELLED at 6S / 9x5x3 -- verify
 
 // =====================================================================================
 //  2. BATTERY  --  FIX FOR FINDING 1
@@ -75,15 +75,23 @@
 // Dynamic bi-quad gyro notch.
 //
 // Raised from 80 Hz when the airframe moved to the 387 mm 9-inch frame. A smaller disc
-// needs roughly (10/9)^2 more shaft speed for the same thrust, moving the hover
-// fundamental from about 78 Hz to about 97 Hz. At Q = 4 an 80 Hz notch is already -3 dB
-// by 90 Hz, so the old setting would have passed the new peak straight through into the
-// rate controller.
+// needs more shaft speed for the same thrust, so the hover fundamental moved up.
 //
-// This figure is MODELLED. Confirm it from a BlackBox gyro trace on your own build and
-// retune -- the 6 mm arms on this frame are also less stiff than the 7-8 mm arms
-// previously specified, which moves the structural resonance as well.
-#define NOTCH_CENTER_HZ           95.0f
+// TWO INDEPENDENT ESTIMATES DISAGREE, which is worth knowing before trusting either:
+//
+//   scaling the 10-inch figure by (10/9)^2 ............. about  97 Hz
+//   momentum theory from hover thrust and disc area .... about 105 Hz
+//
+// A 7% spread. 100 Hz is set as the midpoint, NOT because it is known to be right but
+// because it is the least-wrong single number available without data. At Q = 4 the
+// notch is -3 dB about 12 Hz either side, so 100 Hz covers roughly 94-106 Hz -- which
+// spans both estimates, but only just.
+//
+// MEASURE IT. Take a BlackBox gyro trace at hover, find the actual peak, and set this
+// from the data. The 6 mm arms on this frame are also less stiff than the 7-8 mm arms
+// previously specified, which moves the structural resonance independently of the
+// propellers, so neither model above accounts for it.
+#define NOTCH_CENTER_HZ           100.0f
 #define NOTCH_Q                   4.0f
 
 // Complementary filter weighting for the attitude estimate
@@ -159,7 +167,7 @@
 #define RECOVERY_RADIUS_M         15.0f
 
 // Nominal cruise current, used to budget the mAh required to fly home.
-#define CRUISE_CURRENT_A          10.7f
+#define CRUISE_CURRENT_A          10.1f
 
 // =====================================================================================
 //  6. FAILSAFE AND LANDING
