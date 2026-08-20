@@ -7,9 +7,14 @@
 # development.
 set -e
 cd "$(dirname "$0")"
+
 g++ -std=c++17 -Wall -Wextra ${EXTRA_CXXFLAGS:-} \
     -I . \
     -I ../../shared \
     -I ../../firmware/flight-controller/include \
-    test_all.cpp -o test_all
+    -I ../../firmware/remote-id/src \
+    test_all.cpp \
+    ../../firmware/remote-id/src/identity.cpp \
+    -o test_all
+
 ./test_all

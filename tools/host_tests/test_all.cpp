@@ -19,6 +19,7 @@ uint32_t g_millis = 0;
 #include "filters.h"
 #include "pid.h"
 #include "state_machine.h"
+#include "identity.h"
 
 #include <cstdio>
 #include <vector>
@@ -506,6 +507,129 @@ static void testDebounce() {
 }
 
 // =====================================================================================
+//  FINDING 17 -- Remote ID identifiers
+// =====================================================================================
+static void testCtaSerial() {
+  section("Remote ID: CTA-2063-A hardware serial");
+
+  // The worked example: 4-char ICAO code, F = 15 characters, then 15 characters.
+  check(odyValidateCtaSerial("K7E3F000000000000001") == ODY_ID_OK,
+        "a valid 20-character serial is accepted");
+  check(strlen("K7E3F000000000000001") == ODY_CTA_SERIAL_MAX,
+        "...and it fills the 20-byte OpenDroneID UAS ID field exactly");
+
+  // Shorter length codes.
+  check(odyValidateCtaSerial("K7E31A") == ODY_ID_OK,
+        "length code '1' with a 1-character serial");
+  check(odyValidateCtaSerial("K7E3C00000000ABCD") == ODY_ID_OK,
+        "length code 'C' with a 12-character serial");
+
+  // The placeholder that shipped in revision 2.0 was malformed: 'P' is not a valid
+  // length code, and the serial that followed it was 16 characters -- over the 15 max.
+  check(odyValidateCtaSerial("ODY1P0000000000000000") != ODY_ID_OK,
+        "the original malformed placeholder is REJECTED");
+  checkNear((float)odyValidateCtaSerial("ODY1P0000000000000000"),
+            (float)ODY_ID_ERR_LENGTH, 0.01f,
+            "...rejected for being over the maximum length");
+
+  // Length code must agree with the actual serial length.
+  check(odyValidateCtaSerial("K7E3F0001") == ODY_ID_ERR_LENGTH_MISMATCH,
+        "a declared length that disagrees with the serial is rejected");
+  check(odyValidateCtaSerial("K7E3G0001") == ODY_ID_ERR_LENGTH_CODE,
+        "'G' is not a valid length code (max is F = 15)");
+
+  // I and O are excluded from the alphabet to avoid confusion with 1 and 0.
+  check(odyValidateCtaSerial("K7E34ABIC") == ODY_ID_ERR_CHARSET,
+        "the letter I is rejected");
+  check(odyValidateCtaSerial("K7E34ABOC") == ODY_ID_ERR_CHARSET,
+        "the letter O is rejected");
+  check(odyIsCtaChar('0') && odyIsCtaChar('9') && odyIsCtaChar('A') && odyIsCtaChar('Z'),
+        "digits and A-Z are permitted");
+  check(!odyIsCtaChar('I') && !odyIsCtaChar('O') && !odyIsCtaChar('a'),
+        "I, O and lower case are not permitted");
+
+  check(odyValidateCtaSerial(nullptr) == ODY_ID_ERR_NULL, "a null serial is rejected");
+  check(odyValidateCtaSerial("") == ODY_ID_ERR_LENGTH, "an empty serial is rejected");
+
+  // Construction round-trips through validation.
+  char built[ODY_CTA_SERIAL_MAX + 1];
+  check(odyMakeCtaSerial("K7E3", "7C2P4K8M1X6R3T9", built, sizeof(built)) == ODY_ID_OK,
+        "a 15-character serial is built");
+  printf("      built: %s\n", built);
+  check(strcmp(built, "K7E3F7C2P4K8M1X6R3T9") == 0, "...with the expected layout");
+  check(odyValidateCtaSerial(built) == ODY_ID_OK, "...and it validates");
+
+  check(odyMakeCtaSerial("K7E3", "0123456789ABCDEF", built, sizeof(built))
+          == ODY_ID_ERR_LENGTH,
+        "a 16-character serial is refused (15 is the maximum)");
+  check(odyMakeCtaSerial("K7E3", "ABIC", built, sizeof(built)) == ODY_ID_ERR_CHARSET,
+        "a serial containing I is refused at construction");
+  check(odyMakeCtaSerial("K7", "0001", built, sizeof(built)) == ODY_ID_ERR_MFR_CODE,
+        "a short manufacturer code is refused");
+}
+
+static void testOperatorId() {
+  section("Remote ID: EU / Danish operator registration number");
+
+  // EASA's published example. This is the ONLY vector available, which is why the
+  // checksum is advisory rather than blocking -- see identity.h.
+  const char* easa = "FIN87astrdge12k8";
+  check(odyValidateOperatorIdPublic(easa, false) == ODY_ID_OK,
+        "the EASA example passes structural validation");
+
+  char payload[13];
+  memcpy(payload, easa + 3, 12);
+  payload[12] = '\0';
+  const char ck = odyOperatorChecksum(payload);
+  printf("      payload '%s' -> check '%c' (published: '%c')\n",
+         payload, ck, easa[15]);
+  check(ck == easa[15], "the Luhn mod 36 implementation reproduces the published check");
+  check(odyValidateOperatorIdPublic(easa, true) == ODY_ID_OK,
+        "...so strict validation also passes");
+
+  // A Danish-prefixed identifier of the same shape.
+  check(odyValidateOperatorIdPublic("DNK87astrdge12k8", false) == ODY_ID_OK,
+        "a DNK-prefixed identifier passes structural validation");
+
+  // Structure.
+  check(odyValidateOperatorIdPublic("FIN87astrdge12k", false) == ODY_ID_ERR_LENGTH,
+        "15 characters is rejected");
+  check(odyValidateOperatorIdPublic("FIN87astrdge12k88", false) == ODY_ID_ERR_LENGTH,
+        "17 characters is rejected");
+  check(odyValidateOperatorIdPublic("F1N87astrdge12k8", false) == ODY_ID_ERR_COUNTRY,
+        "a country prefix containing a digit is rejected");
+  check(odyValidateOperatorIdPublic("FIN87astrdge12k-", false) == ODY_ID_ERR_CHARSET,
+        "a non-alphanumeric body character is rejected");
+
+  // A wrong check character is caught in strict mode and tolerated otherwise. This
+  // asymmetry is deliberate: strict mode must never sit in a path that can block flight.
+  check(odyValidateOperatorIdPublic("FIN87astrdge12k9", true) == ODY_ID_ERR_CHECKSUM,
+        "a wrong check character fails STRICT validation");
+  check(odyValidateOperatorIdPublic("FIN87astrdge12k9", false) == ODY_ID_OK,
+        "...and passes non-strict validation, so it cannot ground the aircraft");
+
+  // Splitting the public part from the secret.
+  char pub[ODY_OPERATOR_PUBLIC_LEN + 1], sec[ODY_OPERATOR_SECRET_LEN + 1];
+  check(odySplitOperatorId("FIN87astrdge12k8-xyz", pub, sizeof(pub),
+                           sec, sizeof(sec)) == ODY_ID_OK,
+        "a full identifier splits");
+  check(strcmp(pub, "FIN87astrdge12k8") == 0, "...the public part is the first 16");
+  check(strcmp(sec, "xyz") == 0,              "...the secret is the trailing 3");
+  check(odyValidateOperatorIdFull("FIN87astrdge12k8-xyz", false) == ODY_ID_OK,
+        "the full identifier validates");
+
+  check(odySplitOperatorId("FIN87astrdge12k8xyz", pub, sizeof(pub),
+                           sec, sizeof(sec)) == ODY_ID_ERR_SEPARATOR,
+        "a missing separator is rejected");
+  check(odyValidateOperatorIdFull("FIN87astrdge12k8-xy", false) == ODY_ID_ERR_LENGTH,
+        "a 2-character secret is rejected");
+
+  // The secret must never appear in the broadcast identity. Guard the public accessor.
+  check(odyValidateOperatorIdPublic("FIN87astrdge12k8-xyz", false) == ODY_ID_ERR_LENGTH,
+        "a full identifier is not accepted where only the public part belongs");
+}
+
+// =====================================================================================
 int main() {
   printf("=====================================================================\n");
   printf(" Odyssey-10 Pro -- host verification of review-finding fixes\n");
@@ -521,6 +645,8 @@ int main() {
   testNotchFilter();
   testPid();
   testDebounce();
+  testCtaSerial();
+  testOperatorId();
 
   printf("\n=====================================================================\n");
   printf(" %d passed, %d failed\n", g_pass, g_fail);

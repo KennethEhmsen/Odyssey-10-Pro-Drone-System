@@ -4,7 +4,7 @@
 
 **Architecture:** 10-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 2.0 — engineering review applied
+**Document revision:** 2.1 — engineering review applied, regulatory position corrected
 
 ---
 
@@ -853,6 +853,9 @@ flight loop raises a flag and returns; it never calls `delay()`, `Serial` or the
    (0 deg nose)    |                 | 2. IMU stack (gel-damped) |    |   (RHCP pagoda)
                    |                 | 3. ESC + TVS diode        |    |
                    |                 | 4. Remote ID module       |    |
+                   |                 |    (antenna forward,      |    |
+                   |                 |     see 8.5 -- keep it    |    |
+                   |                 |     away from the ELRS RX)|    |
                   (O)----------------+---------------------------+---(O)
                   /   /               \  [1S beacon + latch]     /   /
                  /   /                 \ [downward ToF belly]   /   /
@@ -910,7 +913,54 @@ fit a harmonic filter on the LoRa output.
 | Remote ID (ESP32-C6) | 2.4 GHz | +9 dBm | BLE + beacon |
 
 **Legality of 433 MHz at +20 dBm is your responsibility and it is not universal.**
-See section 12.2.
+See section 12.5.
+
+### 8.5 The 2.4 GHz problem this design created for itself
+
+Revision 2.0 moved the RC link to 2.4 GHz ExpressLRS specifically to escape the 433 MHz
+second harmonic at 866 MHz. That was the right call for *that* problem, but it created a
+second one that revision 2.0 did not address: **the Remote ID module also transmits on
+2.4 GHz**, and revision 2.0's placement diagram put it in the central stack, close to
+everything.
+
+Three 2.4 GHz emitters now share the airframe:
+
+| Emitter | Duty | Consequence of interference |
+| --- | --- | --- |
+| ExpressLRS receiver (RX, and TX for handset telemetry) | continuous, FHSS | **Loss of manual control** |
+| Remote ID BLE 5 advertising | ~1–4 packets/s | Missed Remote ID broadcast |
+| Remote ID Wi-Fi beacon | 1 Hz | Missed Remote ID broadcast |
+
+These are not equally important. **ExpressLRS packet reception is mission-critical and
+Remote ID is not.** A Remote ID advertisement that collides with an ELRS packet costs a
+Remote ID frame; the reverse costs the aircraft. The mitigation must therefore be
+asymmetric — protect the receiver, and let Remote ID take the loss.
+
+**Placement rules, in priority order:**
+
+1. **Separation.** The Remote ID antenna and the ExpressLRS antennas sit at opposite
+   ends of the airframe — Remote ID forward on the central stack, ExpressLRS at the tail.
+   Aim for ≥ 150 mm; a +9 dBm transmitter 30 mm from a receiver front-end will desensitise
+   it regardless of channel.
+2. **Orthogonal polarisation.** The ExpressLRS dipoles are already mounted at 90° to each
+   other for diversity; mount the Remote ID antenna orthogonal to both.
+3. **Never bundle the Remote ID coax with the ExpressLRS coax**, and do not route either
+   along the ESC power leads.
+4. **Ground plane.** Keep the carbon top plate between the Remote ID module and the
+   ExpressLRS receiver where the layout allows it — carbon fibre is conductive and gives
+   useful isolation almost for free.
+
+**Verification, not assumption.** Section 11.4 adds a bench check: with the aircraft
+powered and Remote ID broadcasting, confirm the ExpressLRS link quality reported in
+telemetry does not drop when Remote ID transmits. If it does, the antennas are too close.
+This is measurable in the BlackBox — `rcLinkQuality` is logged — so it does not require
+test equipment.
+
+**If the coexistence cannot be made to work** on your airframe, the escape route is to
+move the *telemetry* link rather than the RC link: fit an Ra-02H (868/915 MHz) as
+section 12.5 describes, which frees 2.4 GHz for RC and Remote ID alone and removes the
+433 MHz harmonic issue at the same time. That is the cleanest RF plan overall and is the
+recommended configuration for a new build.
 
 ---
 
@@ -1228,7 +1278,14 @@ rebuilds all four.
       the GCS raises the alert, press PERMIT on the ground station and confirm the
       aircraft transitions. This path was unreachable in revision 1.0.
 - [ ] **Remote ID.** Confirm a Remote ID receiver app sees the aircraft, with **your**
-      registered operator ID and serial number — not the placeholder.
+      registered operator ID and serial number — not the placeholder. The module
+      holds its health line low until both are valid, so the aircraft will refuse to
+      arm if this step is skipped.
+- [ ] **2.4 GHz coexistence (see 8.5).** With the aircraft powered and Remote ID
+      broadcasting, watch the ExpressLRS link quality in telemetry for 60 s. It must
+      not dip in step with the Remote ID transmissions. `rcLinkQuality` is recorded
+      in the BlackBox, so this is measurable without test equipment. A visible dip
+      means the antennas are too close — move them apart before flying.
 
 ### 11.5 Field
 
@@ -1245,39 +1302,134 @@ rebuilds all four.
 
 ## 12. Regulatory Compliance
 
-> **FINDING 17.** Revision 1.0's section 1 listed a "Native Direct Remote ID (DRI)
-> OpenDroneID Broadcaster" among the core avionics. The string appeared exactly once in
-> the entire document and nothing implemented it. At 1773 g the aircraft is over the
-> 250 g threshold in every jurisdiction that has one, so flying it without Remote ID is
-> not a missing feature — it is unlawful.
+> **CORRECTION TO REVISION 2.0.** Revision 2.0 stated that at 1773 g "flying it without
+> Remote ID is not a missing feature — it is unlawful" in the US, EU and UK. **That was
+> an over-claim for the EU and it is withdrawn.** Section 12.1 sets out the actual
+> position for a privately built aircraft. The engineering is unchanged; the legal
+> framing was wrong.
 
-### 12.1 Remote identification
+### 12.1 Do you actually need Direct Remote ID?
 
-An **ESP32-C6 module** on the AUX bus broadcasts ASTM F3411 / ASD-STAN prEN 4709-002
-messages over Bluetooth 5 Long Range (Coded PHY) and a Wi-Fi beacon vendor IE. It
-transmits Location/Vector at 1 Hz and the static messages (Basic ID, System, Operator ID)
-every 3 s.
+For a **privately built** aircraft in the EU **open category**, the answer is not
+automatically yes, and revision 2.0 got this wrong.
 
-Message encoding uses the reference library `opendroneid/opendroneid-core-c` rather than
-a hand-rolled bit layout, because the ASTM field packing is bit-exact and easy to get
-subtly wrong.
+Under EU 2019/945 the Direct Remote ID obligation attaches to **class-marked** aircraft —
+C1, C2, C3. EASA separately permits **privately built** UAS in the open category: A1
+below 250 g, and A3 below 25 kg. A privately built aircraft carries no class mark, so
+the C-class DRI requirement does not reach it by that route.
 
-**Before flight you must set, in `firmware/remote-id/src/main.cpp`:**
-
-- `UAS_SERIAL_NUMBER` — your ANSI/CTA-2063-A serial number
-- `OPERATOR_ID` — the registration number issued by your civil aviation authority
-
-Broadcasting a placeholder ID is itself a violation. The firmware prints a warning on
-boot while the placeholder is present, and Remote ID health is a **blocking arm
-condition** in `ODY_ARM_REQUIRED_SENSORS`.
-
-| Jurisdiction | Regulation | Applies above |
+| Aircraft | Operation | Direct Remote ID |
 | --- | --- | --- |
-| United States | 14 CFR Part 89 | 250 g |
-| European Union | EU 2019/945 direct remote identification | 250 g |
-| United Kingdom | UK Reg. (EU) 2019/945 as retained | 250 g |
+| Privately built, < 250 g, < 19 m/s | A1 | Not required merely because it is DIY |
+| Privately built, < 25 kg | A3 | Not required merely because it is DIY |
+| Class-marked C1 / C2 / C3 | A1 / A2 / A3 | **Required** |
+| Any aircraft | **Specific category** | **Required** |
 
-### 12.2 Radio spectrum
+This aircraft is 1773 g and privately built, so flown in **A3** in the EU it plausibly
+falls in the second row. Flown in the **specific category** — under an operational
+authorisation, an STS, or a SORA — Remote ID is required regardless.
+
+**This is a summary, not advice.** Confirm the position for your own operation and
+jurisdiction. The distinction that matters is *class-marked versus privately built*, and
+it is easy to miss because most published guidance is written for shop-bought drones.
+
+### 12.2 Denmark
+
+Trafikstyrelsen's current guidance requires Remote ID for the relevant C-marked drones,
+and — regardless of weight or class — when flying in the **specific category**.
+
+There is a change in progress. Trafikstyrelsen has proposed national rules broadening
+electronic-visibility requirements. The consultation closed **21 August 2026** and the
+proposed changes are expected to take effect **1 January 2027**.
+
+> As of this revision those are **proposed** rules, not final law. If you are reading
+> this after 1 January 2027, check what was actually adopted rather than trusting this
+> paragraph.
+
+Because that change is coming, the Remote ID module is specified and implemented here
+even though it may not be required for A3 operation today. The alternative — discovering
+in January 2027 that the airframe has no room, no spare UART and no power budget for it
+— is worse.
+
+### 12.3 The two identifiers
+
+Direct Remote ID involves two completely different identifiers. Conflating them is a
+common and consequential mistake, and revision 2.0 partly did.
+
+**CTA-2063-A serial number — identifies the HARDWARE**
+
+```
+    K7E3F000000000000001
+    ├──┘│└────────────┘
+    │   │      └── manufacturer serial, up to 15 characters
+    │   └───────── length code: 1-9 = 1..9 characters, A-F = 10..15
+    └───────────── 4-character ICAO manufacturer code
+```
+
+Permitted characters are 0–9 and A–Z **excluding I and O**, so a serial cannot be
+misread as containing 1 or 0. A 4 + 1 + 15 = 20 character serial fills OpenDroneID's
+20-byte UAS ID field exactly, which is why the design uses the full length.
+
+Apply for an ICAO manufacturer code at `OPSInbox@icao.int`.
+
+> Revision 2.0 shipped `ODY1P0000000000000000` as the placeholder. It was malformed in
+> two ways — `P` is not a valid length code, and the serial that followed ran to 16
+> characters against a maximum of 15 — but it looked plausible enough to ship, and would
+> have broadcast a structurally invalid UAS ID. The placeholder is now deliberately
+> obvious (`SET-YOUR-CTA-SERIAL`) and `odyValidateCtaSerial()` rejects it, holding the
+> module's health line low so the aircraft will not arm.
+
+**Operator registration number — identifies the PERSON**
+
+```
+    DNK87astrdge12k8-xyz
+    ├─┘├──────────┘│ └─┘
+    │  │           │  └── 3 SECRET characters  <-- never publish these
+    │  │           └───── Luhn mod 36 check character
+    │  └───────────────── 12 characters
+    └──────────────────── ICAO country code (DNK for Denmark)
+```
+
+The **16 characters before the hyphen are public** and go on the airframe label. The
+**three characters after it are secret.** EASA is explicit that they must not be shared;
+Trafikstyrelsen calls the Danish equivalent a *security code*.
+
+> **The secret is therefore never compiled into this firmware.** There is no `#define`
+> for it. It is provisioned at runtime into NVS over the serial console
+> (`SETOPERATOR DNKxxxxxxxxxxxxx-yyy`), only the public 16 characters are ever copied
+> into the broadcast structure, and `tools/check_consistency.py` fails the build if
+> anything resembling a full operator ID appears in a committed source file. A secret
+> committed once stays in git history even after it is "removed".
+
+**A note on the checksum.** `odyOperatorChecksum()` implements Luhn mod 36 and
+reproduces EASA's published example (`FIN87astrdge12k8`). That is **one** test vector; a
+sweep of sixteen plausible algorithm variants found two that reproduce it, so a single
+example cannot distinguish between them. The implementation is therefore **advisory**:
+strict validation is opt-in and is not used anywhere that could block a flight, because
+a false rejection would ground a legitimate operator over an unverified algorithm.
+Confirm it against ASD-STAN prEN 4709-002 before relying on it.
+
+### 12.4 What this module is, and is not
+
+The module broadcasts correctly encoded OpenDroneID messages over Bluetooth 5 Long Range
+(Coded PHY) and a Wi-Fi beacon vendor IE — Location/Vector at 1 Hz, static messages every
+3 s — using the reference encoder `opendroneid/opendroneid-core-c` rather than a
+hand-rolled bit layout.
+
+That is **not** the same as being a compliant Direct Remote Identification add-on. EU
+2019/945 Part 6 additionally requires:
+
+- operator-ID upload with validity and consistency checking;
+- a CTA-2063-A serial physically associated with the module;
+- continuous periodic broadcast of the defined aircraft information;
+- resistance to tampering;
+- manufacturer instructions covering installation and protocol.
+
+And if the module were **placed on the EU market**, product-conformity obligations apply
+on top of that. Linking the reference encoder gets the wire format right. It does not
+confer compliance, and this document does not claim it does.
+
+### 12.5 Radio spectrum
 
 The specified 433 MHz LoRa link at +20 dBm (100 mW) is **not universally legal**, and
 revision 1.0 did not mention this at all.
@@ -1293,18 +1445,25 @@ changes in firmware. **Choose the band for your region before you build.**
 
 Duty cycles are budgeted in section 8.4 and enforced at runtime by the beacon firmware.
 
-### 12.3 Video transmitter
+### 12.6 Video transmitter
 
 The 800 mW–1.6 W 5.8 GHz VTX exceeds unlicensed limits in most jurisdictions. In the US
 it requires an amateur licence; in the EU, 25 mW EIRP is the general limit. Set the
 output power accordingly — most VTX modules support 25 mW.
 
-### 12.4 Weight and category
+### 12.7 Weight and category
 
-At 1773 g the aircraft falls into EU open category **A3** at best (class C3), requiring
-150 m separation from residential, commercial and industrial areas, and an A1/A3 remote
-pilot certificate. In the US it requires FAA registration and, for anything beyond
-recreational flying under the exception, a Part 107 certificate.
+At 1773 g the aircraft falls into EU open category **A3**, requiring 150 m separation
+from residential, commercial and industrial areas, and an A1/A3 remote pilot
+certificate. As a privately built aircraft it carries **no class mark** — see 12.1, and
+note that the Remote ID firmware therefore declares
+`ODID_CLASS_EU_CLASS_UNDECLARED` rather than asserting a C-class it has not been
+assessed against.
+
+In the US it requires FAA registration and, for anything beyond recreational flying
+under the exception, a Part 107 certificate. US Remote ID rules (14 CFR Part 89) are
+structured differently from the EU's and do apply above 250 g including to home-built
+aircraft, with a broadcast module being the standard route.
 
 ---
 
@@ -1351,6 +1510,21 @@ These were not in the original eighteen but surfaced during the rework:
 | Beacon battery divider was on an undeclared pin with an undocumented ratio | Declared pin, documented 100k/100k divider |
 | 433 MHz second harmonic at 866 MHz would desensitise an 868 MHz ExpressLRS receiver | RC link specified as 2.4 GHz; interaction documented |
 | No endurance or range figures existed to calibrate the energy budget against | Section 3.3, with assumptions stated |
+
+### 13.2 Corrected in revision 2.1
+
+Revision 2.0 introduced or left standing the following, all corrected here.
+
+| Issue | Resolution |
+| --- | --- |
+| §12 asserted that flying above 250 g without Remote ID is unlawful in the EU. **Over-claim.** The DRI obligation attaches to class-marked C1/C2/C3 aircraft; EASA separately permits privately built UAS in A1 (<250 g) and A3 (<25 kg), and a home build carries no class mark | §12.1 rewritten with the class-marked versus privately built distinction, and a table of when DRI actually applies |
+| No Denmark-specific position, despite the aircraft being built there | §12.2 added, including Trafikstyrelsen's proposed electronic-visibility rules (consultation closed 21 August 2026, proposed effect 1 January 2027) flagged as proposed rather than adopted |
+| The CTA-2063-A placeholder `ODY1P0000000000000000` was malformed — `P` is not a valid length code and the serial ran to 16 characters against a maximum of 15 — but looked plausible enough to ship | Placeholder made obviously invalid; `odyValidateCtaSerial()` added and the module holds its health line low until a real serial is set |
+| `OPERATOR_ID` was a compiled-in constant, so a user following the instructions would have committed the three SECRET characters of their registration into git history | Operator ID moved to runtime NVS provisioning; no `#define` exists; only the public 16 characters reach the broadcast structure; `check_consistency.py` fails if a full operator ID appears in a source file |
+| Remote ID declared `ODID_CLASS_EU_CLASS_3`, asserting a conformity assessment a home build has not been through | Changed to `ODID_CLASS_EU_CLASS_UNDECLARED` |
+| Moving the RC link to 2.4 GHz solved the 433 MHz harmonic problem but created an unaddressed 2.4 GHz coexistence problem with the Remote ID module, which the placement diagram put in the central stack | §8.5 added: asymmetric mitigation protecting the mission-critical ELRS receiver, placement rules, and a measurable bench check in §11.4 |
+| §12 implied that broadcasting OpenDroneID messages constitutes compliance | §12.4 added, listing what EU 2019/945 Part 6 additionally requires |
+| Nothing checked that the specification and the firmware still agreed with each other — the failure mode behind findings 1, 2, 16 and 18 | `tools/check_consistency.py` added: 12 automated checks with `--fix` for the mechanically correctable ones, wired into the pre-push hook and CI |
 
 ---
 

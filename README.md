@@ -16,6 +16,7 @@ for the finding-by-finding index, or section 13 of the specification.
 | `docs/Odyssey-10-Pro-Drone-System.md` | The engineering master specification |
 | `docs/Odyssey-10-Pro-Drone-System.docx` | The same document as Word, generated from the Markdown |
 | `docs/review-findings-resolution.md` | Every review finding mapped to its fix |
+| `docs/remote-id-regulatory-notes.md` | Direct Remote ID reference notes for a privately built aircraft in Denmark/EU |
 | `docs/Odyssey-10-Pro-Drone-System.ORIGINAL.md` | Revision 1.0, kept for reference |
 | `shared/odyssey_link.h` | Wire protocol shared by all four firmware images |
 | `firmware/flight-controller/` | ESP32-P4 flight controller |
@@ -26,6 +27,7 @@ for the finding-by-finding index, or section 13 of the specification.
 | `tools/blackbox_decode.py` | Decodes flight logs to CSV, prints a flight summary |
 | `tools/md2docx.py` | Regenerates the Word document from the Markdown |
 | `tools/host_tests/` | Compiles the real firmware headers on a PC and verifies the safety-critical algorithms |
+| `tools/check_consistency.py` | Checks the specification, firmware and BOM still agree; `--fix` repairs the mechanical ones |
 
 ---
 
@@ -108,6 +110,22 @@ git config core.hooksPath tools/git-hooks
 The `pre-push` hook runs the suite and aborts the push if anything fails, but only when
 something under `firmware/`, `shared/` or `tools/host_tests/` actually changed. This
 costs nothing and needs no network. Bypass a single push with `git push --no-verify`.
+
+### Consistency
+
+Most defects in this project's review were *disagreements* — the specification saying
+115200 baud while the firmware opened 9600, the motor diagram contradicting the pinout,
+the BOM total not matching its own line items. Each was obvious alone and invisible
+together, because nothing checked that the parts still agreed.
+
+```bash
+python tools/check_consistency.py --fix
+```
+
+12 checks. `--fix` repairs whitespace, BOM totals and any specification constant that has
+drifted from `config.h` — the code is the source of truth, and the fixer rewrites the
+documentation to match, never the reverse. It runs in the pre-push hook on every push,
+including documentation-only ones.
 
 ### In CI
 

@@ -56,6 +56,24 @@ if [ "$should_run" = no ] && [ -t 0 ]; then
     should_run=yes
 fi
 
+# The consistency check runs ALWAYS, not behind the firmware gate -- it exists to catch
+# documentation drifting away from the code, so a doc-only push is exactly when it
+# matters most.
+echo "pre-push: checking project consistency..."
+if command -v python >/dev/null 2>&1; then
+    if ! python "$root/tools/check_consistency.py" > /dev/null; then
+        python "$root/tools/check_consistency.py" || true
+        echo
+        echo "pre-push: consistency check FAILED -- push aborted."
+        echo "          Most of it fixes itself:  python tools/check_consistency.py --fix"
+        exit 1
+    fi
+    echo "pre-push: consistency OK"
+else
+    echo "pre-push: python not found, skipping the consistency check"
+fi
+
+# The host tests only need to run when something they cover actually changed.
 if [ "$should_run" = no ]; then
     exit 0
 fi

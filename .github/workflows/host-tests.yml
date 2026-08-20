@@ -94,6 +94,11 @@ jobs:
       # everyone's local runs. The -Wcomment class in particular matters: a `//`
       # comment ending in a backslash silently swallows the following line, which is
       # exactly the sort of latent trap this project exists to avoid.
+      # Catches the class of defect that dominated this project's review: the
+      # specification and the firmware silently disagreeing with each other.
+      - name: Project consistency
+        run: python3 tools/check_consistency.py
+
       - name: Build and run host tests
         env:
           EXTRA_CXXFLAGS: -Werror

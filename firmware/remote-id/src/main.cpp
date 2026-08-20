@@ -5,70 +5,110 @@
 //
 //  Section 1 of the original specification listed a "Native Direct Remote ID (DRI)
 //  OpenDroneID Broadcaster" among the core avionics. The string appeared exactly once
-//  in the entire 1258-line document and nothing implemented it. At an all-up weight of
-//  1773 g the aircraft is over the 250 g threshold in every jurisdiction that has one,
-//  so flying it without Remote ID is not a missing feature -- it is illegal in the
-//  United States (14 CFR Part 89), the European Union (EU 2019/945 direct remote
-//  identification) and the United Kingdom.
+//  in the entire 1258-line document and nothing implemented it.
 //
 //  There is also a hardware reason it could never have worked as drawn: the ESP32-P4
-//  has no radio. It has no Wi-Fi and no Bluetooth at all, so no amount of firmware on
-//  the flight controller can broadcast anything. Remote ID needs its own radio, which
-//  is why the BOM now carries an ESP32-C6 module on the AUX broadcast bus.
+//  has no radio. No Wi-Fi, no Bluetooth. No firmware on the flight controller could
+//  broadcast anything. Remote ID needs its own radio, which is why the BOM carries this
+//  ESP32-C6 module on the AUX broadcast bus.
 //
 //  ------------------------------------------------------------------------------------
-//  MESSAGE ENCODING
+//  WHETHER YOU ACTUALLY NEED THIS -- READ docs SECTION 12.2 FIRST
 //
-//  The ASTM F3411 / ASD-STAN prEN 4709-002 message layout is bit-exact and easy to get
-//  subtly wrong. Rather than hand-roll it, this firmware links the reference encoder,
-//  opendroneid/opendroneid-core-c, which is the same library the standard's own
-//  conformance tools use. See platformio.ini lib_deps.
+//  Revision 2.0 of the specification asserted that flying above 250 g without Remote ID
+//  is unlawful in the EU. That was an over-claim, and it is corrected in revision 2.1.
 //
-//  Broadcast media (both enabled, as recommended for maximum receiver compatibility):
-//    * Bluetooth 5 Long Range, Coded PHY, extended advertising -- ASTM service data
-//      under UUID 0xFFFA with application code 0x0D
-//    * Wi-Fi NAN / Beacon vendor-specific IE
+//  Under EU 2019/945 the Direct Remote ID requirement attaches to CLASS-MARKED aircraft
+//  (C1/C2/C3). EASA separately permits PRIVATELY BUILT UAS in the open category -- A1
+//  below 250 g and A3 below 25 kg -- and a privately built aircraft is not class-marked,
+//  so the C-class DRI requirement does not attach to it by that route.
 //
-//  Rates required by the standard: Location/Vector at 1 Hz minimum, static messages
-//  (Basic ID, System, Operator ID) at least every 3 s. The AUX bus feeds this module
-//  at 2 Hz, giving comfortable margin on the dynamic message.
+//  A home-built 1773 g aircraft flown in A3 may therefore not require Direct Remote ID
+//  today. It IS required in the specific category. Denmark has also proposed national
+//  rules broadening electronic visibility (consultation closed 21 August 2026, proposed
+//  effect 1 January 2027) which would change the position. Check the current rules for
+//  your own operation rather than trusting this comment or a specification section.
 //
 //  ------------------------------------------------------------------------------------
-//  BEFORE FLYING: set OPERATOR_ID and UAS_SERIAL_NUMBER below to the values registered
-//  with your civil aviation authority. Broadcasting a placeholder is itself a
-//  violation. See docs section 12.
+//  WHAT THIS MODULE IS AND IS NOT
+//
+//  It broadcasts correctly-encoded OpenDroneID messages. That is NOT the same as being
+//  a compliant Direct Remote Identification add-on under EU 2019/945 Part 6, which
+//  additionally requires tamper resistance, the serial physically associated with the
+//  module, operator-ID upload with validity checking, and manufacturer instructions --
+//  plus product-conformity obligations if placed on the EU market. Linking the reference
+//  encoder gets the wire format right; it does not confer compliance.
+//
+//  Message encoding uses opendroneid/opendroneid-core-c rather than a hand-rolled bit
+//  layout, because the ASTM F3411 / ASD-STAN field packing is bit-exact and easy to get
+//  subtly wrong.
+//
+//  Broadcast media, both enabled for receiver compatibility:
+//    * Bluetooth 5 Long Range, Coded PHY, extended advertising (ASTM service data,
+//      UUID 0xFFFA, application code 0x0D)
+//    * Wi-Fi beacon vendor-specific IE
+//
+//  Rates: Location/Vector at 1 Hz minimum, static messages at least every 3 s. The AUX
+//  bus feeds this module at 2 Hz, giving margin on the dynamic message.
 // =====================================================================================
 
 #include <Arduino.h>
+#include <Preferences.h>
 #include <opendroneid.h>
 #include "odyssey_link.h"
 #include "odid_transport.h"
+#include "identity.h"
 
 // -------------------------------------------------------------------------------------
-//  OPERATOR CONFIGURATION -- MUST BE SET BEFORE FLIGHT
+//  IDENTITY CONFIGURATION
+//
+//  Two identifiers, handled very differently. See identity.h for the full explanation.
+//
+//  1. CTA-2063-A SERIAL identifies the HARDWARE and is baked in at build time, because
+//     it is a property of the module rather than of whoever is flying it. Structure is
+//     [ICAO MFR code: 4][length code: 1][manufacturer serial: 1..15].
+//
+//     The placeholder below is deliberately INVALID, so the module refuses to assert
+//     health until a real serial is set. Revision 2.0 shipped "ODY1P0000000000000000",
+//     which was malformed in two ways -- P is not a valid length code, and the serial
+//     that followed ran to 16 characters against a maximum of 15 -- but looked plausible
+//     enough to ship. It would have broadcast a structurally invalid UAS ID.
+//
+//     Apply for an ICAO manufacturer code at OPSInbox@icao.int.
+//
+//  2. OPERATOR REGISTRATION NUMBER identifies the PERSON and is provisioned at RUNTIME
+//     into NVS. It is never compiled in.
+//
+//     *** THE THREE CHARACTERS AFTER THE HYPHEN ARE SECRET. ***
+//     EASA is explicit that they must not be shared, and Trafikstyrelsen calls the
+//     Danish equivalent a "security code". A full operator ID in this file would publish
+//     that secret to anyone with repository access, and git history would keep it there
+//     after any later "fix". So there is no #define for it, and there never should be.
+//
+//     Provision over the serial console:  SETOPERATOR DNKxxxxxxxxxxxxx-yyy
+//     Only the public 16 characters are broadcast; the secret is stored, never sent.
 // -------------------------------------------------------------------------------------
-// ANSI/CTA-2063-A serial number issued by the manufacturer, or your own if you built
-// the aircraft. Format: 4-char manufacturer code, 1-char length code, then the serial.
-#define UAS_SERIAL_NUMBER   "ODY1P0000000000000000"
+#define UAS_SERIAL_NUMBER   "SET-YOUR-CTA-SERIAL"
 
-// The operator registration number issued by your CAA (FAA, EASA member state, CAA UK).
-#define OPERATOR_ID         "SET-YOUR-OPERATOR-ID"
+#define NVS_NAMESPACE       "odyrid"
+#define NVS_KEY_OPERATOR    "operator"
 
-// Self-declared UA category and class. 1773 g places this aircraft in EU open category
-// A3 / class C3 at best; check your own jurisdiction.
+// Self-declared UA category and class.
+//
+// NOTE: a privately built aircraft in the open category is NOT class-marked. Declaring
+// a C-class here would assert a conformity assessment that a home build has not been
+// through, so the class is left undeclared. See docs section 12.2.
 #define UA_CATEGORY_EU      ODID_CATEGORY_EU_OPEN
-#define UA_CLASS_EU         ODID_CLASS_EU_CLASS_3
+#define UA_CLASS_EU         ODID_CLASS_EU_CLASS_UNDECLARED
 
 #define PIN_AUX_RX          4       // AUX broadcast bus from the flight controller
 
-// Health line back to the flight controller. Driven HIGH only while BOTH radios are
-// advertising AND a Location message has gone out within the last few seconds. The
-// flight controller reads it with a pull-down, so a missing, crashed or silently
-// failed module reads as unhealthy and blocks arming -- which is the point, since
-// flying this aircraft without Remote ID is unlawful (docs section 12.1).
+// Health line back to the flight controller. Driven HIGH only while both radios are
+// advertising, a Location message has gone out recently, the CTA serial is structurally
+// valid, and an operator registration has been provisioned. The flight controller reads
+// it with a pull-down, so a missing or silently failed module reads as unhealthy.
 #define PIN_HEALTH_OUT      5
 
-// Broadcast cadence
 #define LOCATION_PERIOD_MS  1000UL  // 1 Hz, the standard's minimum for dynamic data
 #define STATIC_PERIOD_MS    3000UL  // Basic ID / System / Operator ID
 
@@ -80,12 +120,13 @@ static HardwareSerial AuxSerial(1);
 static ODID_UAS_Data uasData;
 static uint8_t  rxBuf[ODY_MAX_FRAME];
 static uint8_t  rxIdx = 0;
-static uint32_t lastLocationMs = 0;
-static uint32_t lastStaticMs   = 0;
-static uint32_t lastAuxFrameMs = 0;
-static uint8_t  msgCounter[ODID_MSG_COUNTER_AMOUNT] = {0};
+static uint32_t lastLocationMs     = 0;
+static uint32_t lastStaticMs       = 0;
+static uint32_t lastAuxFrameMs     = 0;
 static uint32_t lastLocationSentMs = 0;
+static uint8_t  msgCounter[ODID_MSG_COUNTER_AMOUNT] = {0};
 static bool     operatorIdConfigured = false;
+static bool     ctaSerialValid       = false;
 
 // =====================================================================================
 //  Static message population
@@ -93,16 +134,12 @@ static bool     operatorIdConfigured = false;
 static void buildStaticMessages() {
   odid_initUasData(&uasData);
 
-  // ---- Basic ID --------------------------------------------------------------------
-  uasData.BasicID[0].UAType   = ODID_UATYPE_HELICOPTER_OR_MULTIROTOR;
-  uasData.BasicID[0].IDType   = ODID_IDTYPE_SERIAL_NUMBER;
+  uasData.BasicID[0].UAType = ODID_UATYPE_HELICOPTER_OR_MULTIROTOR;
+  uasData.BasicID[0].IDType = ODID_IDTYPE_SERIAL_NUMBER;
   strncpy(uasData.BasicID[0].UASID, UAS_SERIAL_NUMBER,
           sizeof(uasData.BasicID[0].UASID) - 1);
   uasData.BasicIDValid[0] = 1;
 
-  // ---- System ----------------------------------------------------------------------
-  // OperatorLocation is filled from the home position once the flight controller
-  // reports one; until then the standard's "takeoff location" type is not yet valid.
   uasData.System.OperatorLocationType = ODID_OPERATOR_LOCATION_TYPE_TAKEOFF;
   uasData.System.ClassificationType   = ODID_CLASSIFICATION_TYPE_EU;
   uasData.System.CategoryEU           = UA_CATEGORY_EU;
@@ -113,11 +150,96 @@ static void buildStaticMessages() {
   uasData.System.AreaFloor            = INV_ALT;
   uasData.SystemValid = 1;
 
-  // ---- Operator ID -----------------------------------------------------------------
+  // Operator ID is filled by loadOperatorId() from NVS, never from a constant.
   uasData.OperatorID.OperatorIdType = ODID_OPERATOR_ID;
-  strncpy(uasData.OperatorID.OperatorId, OPERATOR_ID,
+  uasData.OperatorID.OperatorId[0]  = 0;
+  uasData.OperatorIDValid = 0;
+}
+
+// -------------------------------------------------------------------------------------
+//  Operator identity
+//
+//  Only the PUBLIC 16 characters ever reach uasData, so the secret cannot leak into a
+//  broadcast frame even if a future edit gets careless.
+// -------------------------------------------------------------------------------------
+static bool loadOperatorId() {
+  Preferences prefs;
+  if (!prefs.begin(NVS_NAMESPACE, true)) return false;
+
+  char full[ODY_OPERATOR_FULL_LEN + 1] = {0};
+  const size_t n = prefs.getString(NVS_KEY_OPERATOR, full, sizeof(full));
+  prefs.end();
+  if (n == 0) return false;
+
+  char pub[ODY_OPERATOR_PUBLIC_LEN + 1];
+  if (odySplitOperatorId(full, pub, sizeof(pub), nullptr, 0) != ODY_ID_OK) {
+    Serial.println("[ODID] stored operator ID is malformed");
+    return false;
+  }
+
+  // Non-strict: the Luhn implementation is validated against a single published
+  // example, so a checksum disagreement must not silently disable Remote ID.
+  const uint8_t v = odyValidateOperatorIdPublic(pub, false);
+  if (v != ODY_ID_OK) {
+    Serial.printf("[ODID] stored operator ID is invalid: %s\n", odyIdResultText(v));
+    return false;
+  }
+  if (odyValidateOperatorIdPublic(pub, true) != ODY_ID_OK) {
+    Serial.println("[ODID] NOTE: check character does not match the Luhn mod 36 "
+                   "implementation. Broadcasting anyway -- verify the identifier "
+                   "against your authority's specification.");
+  }
+
+  strncpy(uasData.OperatorID.OperatorId, pub,
           sizeof(uasData.OperatorID.OperatorId) - 1);
   uasData.OperatorIDValid = 1;
+  Serial.printf("[ODID] operator ID loaded: %s (secret withheld)\n", pub);
+  return true;
+}
+
+// Provisioning console. Deliberately never echoes the secret.
+static void serviceProvisioning() {
+  static char line[64];
+  static uint8_t len = 0;
+
+  while (Serial.available()) {
+    const char c = (char)Serial.read();
+    if (c == '\r') continue;
+    if (c != '\n') {
+      if (len < sizeof(line) - 1) line[len++] = c;
+      continue;
+    }
+    line[len] = '\0';
+    len = 0;
+
+    if (strncmp(line, "SETOPERATOR ", 12) == 0) {
+      const char* value = line + 12;
+      const uint8_t v = odyValidateOperatorIdFull(value, false);
+      if (v != ODY_ID_OK) {
+        Serial.printf("[ODID] rejected: %s\n", odyIdResultText(v));
+      } else {
+        Preferences prefs;
+        if (prefs.begin(NVS_NAMESPACE, false)) {
+          prefs.putString(NVS_KEY_OPERATOR, value);
+          prefs.end();
+          operatorIdConfigured = loadOperatorId();
+          Serial.println("[ODID] operator ID stored.");
+        }
+      }
+      // Scrub the buffer so the secret does not linger in RAM.
+      memset(line, 0, sizeof(line));
+
+    } else if (strcmp(line, "STATUS") == 0) {
+      Serial.printf("[ODID] cta=%s (%s)  operator=%s  broadcasting=%s\n",
+                    UAS_SERIAL_NUMBER,
+                    odyIdResultText(odyValidateCtaSerial(UAS_SERIAL_NUMBER)),
+                    uasData.OperatorIDValid ? uasData.OperatorID.OperatorId : "<unset>",
+                    odidTransportHealthy() ? "yes" : "no");
+
+    } else if (line[0]) {
+      Serial.println("[ODID] commands: SETOPERATOR <16char-sec> | STATUS");
+    }
+  }
 }
 
 // =====================================================================================
@@ -128,8 +250,6 @@ static void applyAuxPosition(const AuxPositionPayload& p, uint32_t nowMs) {
 
   ODID_Location_data& loc = uasData.Location;
 
-  // Status. The standard distinguishes ground, airborne and emergency; the flight
-  // controller's state maps onto that directly.
   if (p.emergency) {
     loc.Status = ODID_STATUS_EMERGENCY;
   } else if (odyMotorsAreLive(p.flightState)) {
@@ -138,35 +258,34 @@ static void applyAuxPosition(const AuxPositionPayload& p, uint32_t nowMs) {
     loc.Status = ODID_STATUS_GROUND;
   }
 
-  loc.Direction      = (float)p.headingCentideg / 100.0f;
+  loc.Direction       = (float)p.headingCentideg / 100.0f;
   loc.SpeedHorizontal = (float)p.groundSpeedCmS / 100.0f;
-  loc.SpeedVertical  = INV_SPEED_V;              // not carried on the AUX frame
-  loc.Latitude       = (double)p.latitude1e7  / 1e7;
-  loc.Longitude      = (double)p.longitude1e7 / 1e7;
-  loc.AltitudeBaro   = INV_ALT;
-  loc.AltitudeGeo    = (float)p.altitudeMslMm / 1000.0f;
-  loc.HeightType     = ODID_HEIGHT_REF_OVER_TAKEOFF;
-  loc.Height         = (float)p.altitudeAglMm / 1000.0f;
+  loc.SpeedVertical   = INV_SPEED_V;
+  loc.Latitude        = (double)p.latitude1e7  / 1e7;
+  loc.Longitude       = (double)p.longitude1e7 / 1e7;
+  loc.AltitudeBaro    = INV_ALT;
+  loc.AltitudeGeo     = (float)p.altitudeMslMm / 1000.0f;
+  loc.HeightType      = ODID_HEIGHT_REF_OVER_TAKEOFF;
+  loc.Height          = (float)p.altitudeAglMm / 1000.0f;
 
-  // Accuracy fields. Reporting UNKNOWN is permitted and is honest; claiming a tighter
-  // figure than the BN-220 delivers would be worse than saying nothing.
-  loc.HorizAccuracy  = (p.satellites >= 9) ? ODID_HOR_ACC_3_METER
-                     : (p.satellites >= 6) ? ODID_HOR_ACC_10_METER
-                                           : ODID_HOR_ACC_UNKNOWN;
-  loc.VertAccuracy   = ODID_VER_ACC_UNKNOWN;
-  loc.BaroAccuracy   = ODID_VER_ACC_UNKNOWN;
-  loc.SpeedAccuracy  = ODID_SPEED_ACC_UNKNOWN;
-  loc.TSAccuracy     = ODID_TIME_ACC_UNKNOWN;
-  loc.TimeStamp      = (float)((nowMs / 100u) % 36000u) / 10.0f;   // tenths past the hour
+  // Reporting UNKNOWN accuracy is permitted and honest; claiming tighter figures than
+  // a BN-220 delivers would be worse than saying nothing.
+  loc.HorizAccuracy = (p.satellites >= 9) ? ODID_HOR_ACC_3_METER
+                    : (p.satellites >= 6) ? ODID_HOR_ACC_10_METER
+                                          : ODID_HOR_ACC_UNKNOWN;
+  loc.VertAccuracy  = ODID_VER_ACC_UNKNOWN;
+  loc.BaroAccuracy  = ODID_VER_ACC_UNKNOWN;
+  loc.SpeedAccuracy = ODID_SPEED_ACC_UNKNOWN;
+  loc.TSAccuracy    = ODID_TIME_ACC_UNKNOWN;
+  loc.TimeStamp     = (float)((nowMs / 100u) % 36000u) / 10.0f;
 
   uasData.LocationValid = 1;
 
-  // Latch the takeoff location the first time we see a valid airborne fix.
-  if (!uasData.System.OperatorLatitude && p.satellites >= 6) {
-    uasData.System.OperatorLatitude  = loc.Latitude;
-    uasData.System.OperatorLongitude = loc.Longitude;
+  if (uasData.System.OperatorLatitude == 0.0 && p.satellites >= 6) {
+    uasData.System.OperatorLatitude    = loc.Latitude;
+    uasData.System.OperatorLongitude   = loc.Longitude;
     uasData.System.OperatorAltitudeGeo = loc.AltitudeGeo;
-    uasData.System.Timestamp = (uint32_t)(nowMs / 1000u);
+    uasData.System.Timestamp           = (uint32_t)(nowMs / 1000u);
   }
 }
 
@@ -216,16 +335,6 @@ static void broadcastLocation() {
   lastLocationSentMs = millis();
 }
 
-// Asserts the health line only when the module is genuinely doing its job. A module
-// that boots, fails to bring up BLE and then sits there must NOT report healthy.
-static void updateHealthLine(uint32_t nowMs) {
-  const bool broadcasting = odidTransportHealthy()
-                         && lastLocationSentMs != 0
-                         && (uint32_t)(nowMs - lastLocationSentMs) < 3000u;
-  digitalWrite(PIN_HEALTH_OUT,
-               (broadcasting && operatorIdConfigured) ? HIGH : LOW);
-}
-
 static void broadcastStatic() {
   ODID_BasicID_encoded basic;
   if (encodeBasicIDMessage(&basic, &uasData.BasicID[0]) == ODID_SUCCESS) {
@@ -241,12 +350,24 @@ static void broadcastStatic() {
                       msgCounter[ODID_MSG_COUNTER_SYSTEM]++);
   }
 
-  ODID_OperatorID_encoded op;
-  if (encodeOperatorIDMessage(&op, &uasData.OperatorID) == ODID_SUCCESS) {
-    odidTransportSend(ODID_MESSAGETYPE_OPERATOR_ID,
-                      (const uint8_t*)&op, sizeof(op),
-                      msgCounter[ODID_MSG_COUNTER_OPERATOR_ID]++);
+  // Only transmitted once a valid operator registration has been provisioned.
+  if (uasData.OperatorIDValid) {
+    ODID_OperatorID_encoded op;
+    if (encodeOperatorIDMessage(&op, &uasData.OperatorID) == ODID_SUCCESS) {
+      odidTransportSend(ODID_MESSAGETYPE_OPERATOR_ID,
+                        (const uint8_t*)&op, sizeof(op),
+                        msgCounter[ODID_MSG_COUNTER_OPERATOR_ID]++);
+    }
   }
+}
+
+// Asserts the health line only when the module is genuinely doing its job.
+static void updateHealthLine(uint32_t nowMs) {
+  const bool broadcasting = odidTransportHealthy()
+                         && lastLocationSentMs != 0
+                         && (uint32_t)(nowMs - lastLocationSentMs) < 3000u;
+  digitalWrite(PIN_HEALTH_OUT,
+               (broadcasting && operatorIdConfigured && ctaSerialValid) ? HIGH : LOW);
 }
 
 // =====================================================================================
@@ -258,31 +379,44 @@ void setup() {
   pinMode(PIN_HEALTH_OUT, OUTPUT);
   digitalWrite(PIN_HEALTH_OUT, LOW);
 
-  operatorIdConfigured = (strcmp(OPERATOR_ID, "SET-YOUR-OPERATOR-ID") != 0);
-  if (!operatorIdConfigured) {
-    Serial.println("*** WARNING: OPERATOR_ID is still the placeholder. ***");
-    Serial.println("*** Broadcasting a placeholder ID is a regulatory violation. ***");
-    Serial.println("*** The health line stays LOW, so the aircraft will refuse to arm. ***");
-  }
-
   AuxSerial.begin(115200, SERIAL_8N1, PIN_AUX_RX, -1);   // receive only
 
   buildStaticMessages();
   odidTransportBegin();
 
-  Serial.printf("Serial: %s\nOperator: %s\n", UAS_SERIAL_NUMBER, OPERATOR_ID);
+  const uint8_t serialCheck = odyValidateCtaSerial(UAS_SERIAL_NUMBER);
+  ctaSerialValid = (serialCheck == ODY_ID_OK);
+  if (!ctaSerialValid) {
+    Serial.printf("*** CTA-2063-A serial invalid: %s ***\n", odyIdResultText(serialCheck));
+    Serial.println("*** Set UAS_SERIAL_NUMBER in the identity configuration. ***");
+  } else {
+    Serial.printf("CTA serial: %s\n", UAS_SERIAL_NUMBER);
+  }
+
+  operatorIdConfigured = loadOperatorId();
+  if (!operatorIdConfigured) {
+    Serial.println("*** No operator registration number provisioned. ***");
+    Serial.println("*** Provision with:  SETOPERATOR DNKxxxxxxxxxxxxx-yyy ***");
+  }
+
+  if (!ctaSerialValid || !operatorIdConfigured) {
+    Serial.println("*** Health line stays LOW -- the flight controller will refuse "
+                   "to arm. ***");
+  }
 }
 
 void loop() {
   const uint32_t nowMs = millis();
+
   serviceAuxBus(nowMs);
+  serviceProvisioning();
 
   // If the AUX bus goes quiet the position we hold is stale. The standard requires the
   // broadcast to continue, so keep transmitting, but mark the fix invalid rather than
   // repeating a position the aircraft has long since left.
   if (lastAuxFrameMs != 0 && (uint32_t)(nowMs - lastAuxFrameMs) > 5000u) {
-    uasData.Location.Latitude  = INV_LAT;
-    uasData.Location.Longitude = INV_LON;
+    uasData.Location.Latitude      = INV_LAT;
+    uasData.Location.Longitude     = INV_LON;
     uasData.Location.HorizAccuracy = ODID_HOR_ACC_UNKNOWN;
   }
 
