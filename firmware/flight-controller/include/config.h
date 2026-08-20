@@ -17,11 +17,82 @@
 #include <stdint.h>
 
 // =====================================================================================
-//  1. AIRFRAME
+//  1. AIRFRAME AND PROPELLER CONFIGURATION
+//
+//  ------------------------------------------------------------------------------------
+//  PROP_BLADES IS THE ONE SWITCH. Set it and everything downstream follows.
+//  ------------------------------------------------------------------------------------
+//
+//  Blade count changes far more than the propellers. It moves the all-up weight, the
+//  peak thrust, the hover point, the power loading, the cruise current that sizes the
+//  return-to-home reserve, and -- most importantly -- the gyro notch frequency, because
+//  a 2-blade propeller must spin about 21% faster than a 3-blade for the same thrust.
+//
+//  Before this switch existed those five constants had to be changed together by hand.
+//  Changing four of them and forgetting the notch would leave the filter attenuating
+//  empty spectrum while still adding phase lag in the control band, which is worse than
+//  having no notch at all. That is exactly the kind of coupled edit a person gets wrong
+//  once and never notices.
+//
+//  Which to choose is a real decision, not a default to accept blindly -- see docs
+//  section 3.2. Briefly: two blades give ~10% more endurance and range, three give
+//  ~13% more thrust and a lower hover point. The common "three blades for wind"
+//  argument does not hold for this aircraft; the wind-limited mission is
+//  endurance-limited, not thrust-limited.
+//
+//  Override from the build system with -DPROP_BLADES=3 rather than editing this file,
+//  so a configuration change shows up in the build log.
 // =====================================================================================
 #define AIRFRAME_NAME             "Odyssey-10 Pro"
-#define AIRFRAME_AUW_G            1584.0f   // all-up weight, grams (see docs section 3)
-#define MOTOR_MAX_THRUST_G        1230.0f   // per motor, MODELLED at 6S / 9x5x2 -- verify
+
+#ifndef PROP_BLADES
+#define PROP_BLADES               2        // 2 (default) or 3
+#endif
+
+#define PROP_DIAMETER_IN          9
+#define PROP_PITCH_IN             5
+
+#if PROP_BLADES == 2
+  // 9x5x2. Modelled figures -- verify on a thrust stand, see docs section 11.2.
+  #define PROP_MASS_G_EACH        7.0f
+  #define MOTOR_MAX_THRUST_G      1230.0f  // per motor at 6S
+  #define PROP_AUW_DEFAULT_G      1584.0f  // all-up weight, grams
+  #define PROP_NOTCH_DEFAULT_HZ   120.0f   // hover fundamental ~124 Hz
+  #define CRUISE_CURRENT_A        9.7f     // CRUISE, not hover -- see section 5
+  #define PROP_POWER_LOADING_GW   8.90f    // hover, g/W
+  #define PROP_PEAK_PACK_A        51.0f    // full throttle, whole aircraft
+  #define PROP_CONFIG_NAME        "9x5x2 two-blade"
+
+#elif PROP_BLADES == 3
+  // 9x5x3. Same motors and ESC; only the propellers differ.
+  #define PROP_MASS_G_EACH        9.0f
+  #define MOTOR_MAX_THRUST_G      1400.0f
+  #define PROP_AUW_DEFAULT_G      1592.0f
+  #define PROP_NOTCH_DEFAULT_HZ   100.0f   // hover fundamental ~104 Hz
+  #define CRUISE_CURRENT_A        10.7f
+  #define PROP_POWER_LOADING_GW   8.07f
+  #define PROP_PEAK_PACK_A        67.0f
+  #define PROP_CONFIG_NAME        "9x5x3 three-blade"
+
+#else
+  #error "PROP_BLADES must be 2 or 3. Other blade counts are not characterised."
+#endif
+
+// The notch is the one constant the documentation actively tells you to replace with a
+// measurement, so it takes an override. PROP_BLADES only supplies the starting point.
+//
+//     -DNOTCH_CENTER_HZ=108.0f
+//
+// after reading the real peak off a BlackBox gyro trace at hover.
+#ifndef NOTCH_CENTER_HZ
+#define NOTCH_CENTER_HZ           PROP_NOTCH_DEFAULT_HZ
+#endif
+
+// All-up weight takes an override too, because payload changes it and the energy budget
+// depends on it. PROP_BLADES supplies the empty-with-reserve figure.
+#ifndef AIRFRAME_AUW_G
+#define AIRFRAME_AUW_G            PROP_AUW_DEFAULT_G
+#endif
 
 // =====================================================================================
 //  2. BATTERY  --  FIX FOR FINDING 1
@@ -74,26 +145,20 @@
 
 // Dynamic bi-quad gyro notch.
 //
-// Raised from 80 Hz when the airframe moved to the 387 mm 9-inch frame. A smaller disc
-// needs more shaft speed for the same thrust, so the hover fundamental moved up.
+// NOTCH_CENTER_HZ is set by PROP_BLADES in section 1, because blade count is what moves
+// it: a 2-blade propeller spins about 21% faster than a 3-blade for the same thrust.
 //
-// TWO INDEPENDENT ESTIMATES DISAGREE, which is worth knowing before trusting either:
+//   2-blade   momentum theory 124 Hz | scaling 121 Hz -> set 120 Hz
+//   3-blade   momentum theory 104 Hz | scaling  ~-    -> set 100 Hz
 //
-//   momentum theory from hover thrust and disc area .... about 124 Hz
-//   scaling the 3-blade figure by sqrt(Ct3/Ct2) ........ about 121 Hz
+// At Q = 4 the notch is -3 dB roughly 15 Hz either side, so a 120 Hz notch does
+// essentially nothing for a 104 Hz peak. The propeller and the notch are a matched
+// pair; that is why they are set together rather than separately.
 //
-// These agree to within 3%, unlike the 3-blade case where two methods differed by 7%.
-// 120 Hz is set from them.
-//
-// NOTE THAT BLADE COUNT MOVES THIS. A 2-blade propeller must spin roughly 21% faster
-// than a 3-blade for the same thrust, so switching propellers moves the notch by more
-// than the frame change did. If you fit 3-blade propellers, this belongs near 100 Hz.
-//
-// MEASURE IT. Take a BlackBox gyro trace at hover, find the actual peak, and set this
-// from the data. The 6 mm arms on this frame are also less stiff than the 7-8 mm arms
-// previously specified, which moves the structural resonance independently of the
-// propellers, so neither model above accounts for it.
-#define NOTCH_CENTER_HZ           120.0f
+// MEASURE IT. Take a BlackBox gyro trace at a stable hover, find the actual peak, and
+// override NOTCH_CENTER_HZ from the data. None of the models account for the frame
+// itself: the 6 mm arms on this airframe are less stiff than the 7-8 mm arms originally
+// specified, which moves the structural resonance independently of the propellers.
 #define NOTCH_Q                   4.0f
 
 // Complementary filter weighting for the attitude estimate
@@ -168,13 +233,16 @@
 // beacon is armed on touchdown.
 #define RECOVERY_RADIUS_M         15.0f
 
-// Current drawn while flying home AT CRUISE SPEED. This budgets the mAh the return
-// leg will cost, so it must be the CRUISE figure, not the hover one.
+// CRUISE_CURRENT_A is set by PROP_BLADES in section 1.
 //
-// Revisions 2.2 to 2.4 set this from hover power, which is about 10% lower. That made
-// the return-to-home energy budget optimistic: the aircraft would believe it could
-// reach home on slightly less charge than the trip actually costs. Corrected here.
-#define CRUISE_CURRENT_A          9.7f
+// It is the current drawn while flying home AT CRUISE SPEED, and it budgets the charge
+// the return leg will cost. It must therefore be the cruise figure, not the hover one.
+//
+// Revisions 2.2 to 2.4 set it from hover power, about 10% lower, which made the
+// return-to-home energy budget optimistic: the aircraft believed it could reach home on
+// less charge than the trip actually costs. Binding it to PROP_BLADES also stops the
+// two configurations sharing one figure, which they should not -- three blades cost
+// about 10% more current at cruise.
 
 // =====================================================================================
 //  6. FAILSAFE AND LANDING
@@ -384,6 +452,32 @@ static_assert(TOUCHDOWN_TOF_M < TOUCHDOWN_VETO_AGL_M,
               "Touchdown threshold must sit below the veto altitude");
 static_assert(FLIGHT_LOOP_HZ % BLACKBOX_LOG_HZ == 0,
               "BlackBox rate must divide the flight loop rate evenly");
+
+// ---- PROP_BLADES coherence -----------------------------------------------------------
+// These exist because the whole point of the switch is that the constants move TOGETHER.
+// If someone overrides one by hand and leaves the rest, the build should stop.
+static_assert(PROP_BLADES == 2 || PROP_BLADES == 3,
+              "PROP_BLADES must be 2 or 3");
+static_assert(NOTCH_CENTER_HZ < FLIGHT_LOOP_HZ / 2.0f,
+              "Notch centre is above Nyquist for the flight loop rate");
+// Sanity band only, NOT a tight coupling to PROP_BLADES. The documentation tells you to
+// override this from a measurement, and a real hover peak could land anywhere sensible;
+// an assertion that second-guessed the measurement would be worse than none.
+static_assert(NOTCH_CENTER_HZ > 50.0f && NOTCH_CENTER_HZ < 200.0f,
+              "Notch centre is outside any plausible motor-noise band for this airframe");
+static_assert(PROP_BLADES != 2 || MOTOR_MAX_THRUST_G < 1300.0f,
+              "A 2-blade build cannot reach the 3-blade thrust figure");
+static_assert(PROP_BLADES != 3 || MOTOR_MAX_THRUST_G > 1300.0f,
+              "A 3-blade build should carry the higher thrust figure");
+static_assert(4.0f * MOTOR_MAX_THRUST_G / AIRFRAME_AUW_G > 2.0f,
+              "Thrust-to-weight below 2:1 is not safely flyable -- check AIRFRAME_AUW_G "
+              "if you have overridden it for payload");
+static_assert(AIRFRAME_AUW_G > 1000.0f && AIRFRAME_AUW_G < 4000.0f,
+              "All-up weight is implausible for this airframe");
+static_assert(CRUISE_CURRENT_A > 0.0f && CRUISE_CURRENT_A < 30.0f,
+              "Cruise current is implausible -- it budgets the return-to-home reserve");
+static_assert(PROP_PEAK_PACK_A < 90.0f,
+              "Peak pack current exceeds the XT90-S continuous rating");
 #endif
 
 #endif // ODY_CONFIG_H

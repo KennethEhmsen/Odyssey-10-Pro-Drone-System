@@ -131,10 +131,97 @@ def write(path, text):
 
 
 def config_defines(text):
-    """Extracts #define NAME VALUE pairs, ignoring function-like macros."""
+    """
+    Extracts #define NAME VALUE pairs by regex.
+
+    This is the FALLBACK. It cannot see through #if / #elif, so once config.h grew the
+    PROP_BLADES switch it would happily return the 3-blade values for a 2-blade build --
+    both branches are present in the text and the last one wins. Use resolved_defines()
+    instead wherever correctness matters.
+    """
     out = {}
-    for m in re.finditer(r"^#define\s+([A-Z0-9_]+)\s+([^\n/]+)", text, re.M):
+    for m in re.finditer(r"^\s*#define\s+([A-Z0-9_]+)\s+([^\n/]+)", text, re.M):
         out[m.group(1)] = m.group(2).strip()
+    return out
+
+
+# Arithmetic-only evaluator for macro expansions like "(3.30f * 6)". Restricted to
+# characters that cannot express anything but a number, so there is nothing to escape.
+_ARITH_OK = set("0123456789.+-*/() \t")
+
+
+def _eval_numeric(expr):
+    expr = re.sub(r"(?<=[\d.])[fFuUlL]+", "", expr).strip()
+    if not expr or not set(expr) <= _ARITH_OK:
+        return None
+    try:
+        return float(eval(expr, {"__builtins__": {}}, {}))
+    except Exception:
+        return None
+
+
+_RESOLVED_CACHE = {}
+
+
+def resolved_defines(extra_flags=()):
+    """
+    Returns config.h constants as NUMBERS, resolved by the real C preprocessor.
+
+    config.h selects most of the propulsion constants through a #if on PROP_BLADES, and
+    routes two of them through an #ifndef indirection so they can be overridden. Neither
+    is visible to a regex, and guessing wrong would mean the checker validates the
+    documentation against constants the firmware is not actually compiled with.
+
+    So the preprocessor does the work: a probe file is expanded with the same include
+    path the firmware uses, and the expansions are evaluated as arithmetic. Passing
+    extra_flags lets a caller ask what a different build would produce, for example
+    ("-DPROP_BLADES=3",).
+    """
+    key = tuple(extra_flags)
+    if key in _RESOLVED_CACHE:
+        return _RESOLVED_CACHE[key]
+
+    import shutil, subprocess, tempfile
+
+    names = sorted(set(config_defines(read(CONFIG_H)).keys()))
+    cc = shutil.which("gcc") or shutil.which("g++") or shutil.which("clang")
+    if not cc or not names:
+        return {}
+
+    lines = ['#include "config.h"']
+    for n in names:
+        # The label is QUOTED so the preprocessor leaves it alone -- an unquoted label
+        # gets expanded too, and the output comes back as "ODYVAL 2 2" with no way to
+        # tell which constant it belonged to.
+        lines.append(f'ODYVAL "{n}" {n}')
+    probe = "\n".join(lines) + "\n"
+
+    with tempfile.TemporaryDirectory() as td:
+        src = Path(td) / "probe.cpp"
+        src.write_text(probe, encoding="utf-8")
+        try:
+            r = subprocess.run(
+                [cc, "-E", "-x", "c++", str(src),
+                 "-I", str(CONFIG_H.parent), "-I", str(ROOT / "shared"), *extra_flags],
+                capture_output=True, text=True, timeout=60)
+        except Exception:
+            return {}
+
+    out = {}
+    for line in r.stdout.splitlines():
+        if not line.startswith("ODYVAL "):
+            continue
+        m = re.match(r'ODYVAL\s+"([A-Z0-9_]+)"\s+(.*)$', line)
+        if not m:
+            continue
+        name, expansion = m.group(1), m.group(2)
+        if expansion.strip() == name:       # macro did not expand to anything numeric
+            continue
+        v = _eval_numeric(expansion)
+        if v is not None:
+            out[name] = v
+
+    _RESOLVED_CACHE[key] = out
     return out
 
 
@@ -302,10 +389,14 @@ def check_bom(rep, fix):
 # Each entry: (label, how to derive the expected value from config.h, regex over the
 # spec whose group(1) must equal it).
 def spec_constants(defines):
-    cells = int(defines["CELL_COUNT"])
+    resolved = resolved_defines()
+    cells = int(resolved.get("CELL_COUNT", defines["CELL_COUNT"]))
 
     def volts(key):
-        return float(defines[key.replace("PACK", "CELL")].rstrip("f")) * cells
+        cell = key.replace("PACK", "CELL")
+        if cell in resolved:
+            return resolved[cell] * cells
+        return float(defines[cell].rstrip("f")) * cells
 
     return [
         # The pack column of the threshold table must be cell voltage x CELL_COUNT.
@@ -319,7 +410,7 @@ def spec_constants(defines):
          r"\|\s*Warning\s*\|\s*3\.40 V\s*\|\s*([\d.]+) V"),
         ("launch minimum", f"{volts('PACK_LAUNCH_MIN_V'):.2f}",
          r"\|\s*Launch minimum\s*\|\s*3\.85 V\s*\|\s*([\d.]+) V"),
-        ("all-up weight", str(int(float(defines["AIRFRAME_AUW_G"].rstrip("f")))),
+        ("all-up weight", str(int(_config_value(defines, "AIRFRAME_AUW_G"))),
          r"\*\*All-up weight \(AUW\)\*\*\s*\|\s*\*\*(\d+) g\*\*"),
     ]
 
@@ -354,8 +445,8 @@ def check_spec_constants(rep, fix):
         write(SPEC, spec)
 
     # Thrust-to-weight must follow from the two masses rather than being asserted.
-    auw = float(defines["AIRFRAME_AUW_G"].rstrip("f"))
-    thrust = float(defines["MOTOR_MAX_THRUST_G"].rstrip("f")) * 4.0
+    auw = _config_value(defines, "AIRFRAME_AUW_G")
+    thrust = _config_value(defines, "MOTOR_MAX_THRUST_G") * 4.0
     twr = thrust / auw
     m = re.search(r"thrust-to-weight ratio of ([\d.]+):1", spec)
     if m and abs(float(m.group(1)) - twr) > 0.02:
@@ -683,7 +774,10 @@ PROSE_SCALE = {
 
 
 def _config_value(defines, name):
-    """Resolves a config.h constant to a float, following the per-cell derivations."""
+    """Resolves a config.h constant to a float, preferring the preprocessed value."""
+    resolved = resolved_defines()
+    if name in resolved:
+        return resolved[name]
     if name in defines:
         # Strip the C literal suffixes: 1.5f, 400u, 500UL and so on.
         raw = defines[name].strip().rstrip("fFuUlL")
@@ -874,6 +968,74 @@ def check_readme(rep, fix):
 
 
 # =====================================================================================
+#  CHECK: both PROP_BLADES configurations stay coherent
+#
+#  The switch exists so five coupled constants move together. This verifies they
+#  actually do -- that the 3-blade build is not silently identical to the 2-blade one,
+#  which is what a mistyped #elif would produce, and that neither drifts into nonsense.
+# =====================================================================================
+def check_prop_configs(rep, fix):
+    rep.checks_run += 1
+
+    two   = resolved_defines()
+    three = resolved_defines(("-DPROP_BLADES=3",))
+    if not two or not three:
+        rep.problem("prop-configs", "no C preprocessor available to resolve config.h",
+                    severity="warn")
+        return
+
+    if two.get("PROP_BLADES") != 2:
+        rep.problem("prop-configs",
+                    "the DEFAULT build is not 2-blade -- PROP_BLADES defaults to "
+                    f"{two.get('PROP_BLADES')}")
+
+    # Every one of these must differ between the two builds. If any matches, the switch
+    # is not actually switching it and one configuration is flying on the other's number.
+    MUST_DIFFER = ["MOTOR_MAX_THRUST_G", "AIRFRAME_AUW_G", "NOTCH_CENTER_HZ",
+                   "CRUISE_CURRENT_A", "PROP_POWER_LOADING_GW", "PROP_PEAK_PACK_A",
+                   "PROP_MASS_G_EACH"]
+    for name in MUST_DIFFER:
+        a, b = two.get(name), three.get(name)
+        if a is None or b is None:
+            rep.problem("prop-configs", f"{name} is not defined in both configurations")
+        elif abs(a - b) < 1e-9:
+            rep.problem("prop-configs",
+                        f"{name} is {a:g} in BOTH configurations -- PROP_BLADES is not "
+                        f"switching it")
+
+    # Directional sanity: three blades give more thrust, weigh more, draw more, and
+    # produce a LOWER hover fundamental because they spin slower for the same thrust.
+    def cmp(name, expect, why):
+        a, b = two.get(name), three.get(name)
+        if a is None or b is None:
+            return
+        ok = (b > a) if expect == "greater" else (b < a)
+        if not ok:
+            rep.problem("prop-configs",
+                        f"{name}: 3-blade should be {expect} than 2-blade ({why}), "
+                        f"got {a:g} and {b:g}")
+
+    cmp("MOTOR_MAX_THRUST_G",    "greater", "more blade area")
+    cmp("AIRFRAME_AUW_G",        "greater", "heavier propellers")
+    cmp("CRUISE_CURRENT_A",      "greater", "lower efficiency")
+    cmp("PROP_PEAK_PACK_A",      "greater", "more thrust costs more current")
+    cmp("PROP_MASS_G_EACH",      "greater", "an extra blade")
+    cmp("NOTCH_CENTER_HZ",       "less",    "slower shaft speed for the same thrust")
+    cmp("PROP_POWER_LOADING_GW", "less",    "three blades are less efficient")
+
+    for label, d in (("2-blade", two), ("3-blade", three)):
+        auw, thrust = d.get("AIRFRAME_AUW_G"), d.get("MOTOR_MAX_THRUST_G")
+        if auw and thrust:
+            twr = 4 * thrust / auw
+            if twr < 2.0:
+                rep.problem("prop-configs",
+                            f"{label}: thrust-to-weight {twr:.2f}:1 is below the 2:1 floor")
+
+    rep.note = getattr(rep, "note", [])
+    rep.note.append("prop-configs: 2-blade and 3-blade builds both coherent and distinct")
+
+
+# =====================================================================================
 #  Registry
 # =====================================================================================
 CHECKS = [
@@ -898,6 +1060,8 @@ CHECKS = [
     ("readme", "README badge counts and revision match reality", check_readme),
     ("prose-constants", "numbers stated in prose match the constants they quote",
      check_prose_constants),
+    ("prop-configs", "both PROP_BLADES builds are coherent, distinct, and default to 2",
+     check_prop_configs),
 ]
 
 

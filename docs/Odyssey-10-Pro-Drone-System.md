@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 2.5 — propulsion and energy matched to the 9-inch airframe
+**Document revision:** 2.6 — propeller configuration is a build switch
 
 ---
 
@@ -19,7 +19,7 @@ below has been recomputed:
 | | Was (10-inch) | Now (9-inch) |
 | --- | --- | --- |
 | Frame | 420–450 mm, 7–8 mm arms, 286 g | 387 mm, 6 mm arms, 230 g |
-| Propellers | 10x5x3, 48 g | **9x5x2, 28 g** (3-blade supported, see 3.2) |
+| Propellers | 10x5x3, 48 g | **9x5x2, 28 g** (`PROP_BLADES` switch, see 3.2) |
 | All-up weight | 1773 g | **1584 g** |
 | Thrust per motor | 1750 g | **1230 g** |
 | Thrust-to-weight | 3.95:1 | **3.11:1** |
@@ -298,18 +298,49 @@ before the mixer starts trading attitude authority for climb. If you fly this ai
 manually and aggressively, or in gusty conditions close to obstacles, three blades are
 the better choice and the 1.4 km of range is a fair price.
 
-**If you fit three blades, change three things** in `config.h`, or the aircraft will be
-flying on figures that no longer describe it:
+**Switching is one build flag.** Blade count changes seven constants, so it is a
+compile-time switch rather than a set of edits:
 
-```c
-#define MOTOR_MAX_THRUST_G   1400.0f   // was 1230
-#define AIRFRAME_AUW_G       1592.0f   // was 1584
-#define NOTCH_CENTER_HZ      100.0f    // was 120  <-- the one that matters
+```bash
+pio run -e odyssey-fc                          # 2-blade, the default
+pio run -e odyssey-fc -- -DPROP_BLADES=3       # 3-blade
 ```
 
-The notch is not optional bookkeeping. Section 8.3 explains why: at Q = 4 a 120 Hz notch
-does essentially nothing for the 104 Hz peak that three blades produce, so the filter
-would add phase lag in the control band while attenuating nothing.
+`PROP_BLADES` in `config.h` selects everything downstream — propeller mass, peak thrust,
+all-up weight, gyro notch centre, cruise current, power loading and peak pack current.
+Setting it to anything other than 2 or 3 stops the build with an `#error`, because no
+other blade count has been characterised.
+
+This is a switch rather than documentation because the constants are **coupled**, and
+the coupling is not obvious. Changing thrust and weight but forgetting the notch would
+leave the filter attenuating empty spectrum while still adding phase lag in the control
+band — worse than having no notch at all, and invisible until the aircraft flies badly
+for no apparent reason. Section 8.3 explains why a 120 Hz notch does essentially nothing
+for the 104 Hz peak three blades produce.
+
+Two constants accept an override, because measurement should beat a model:
+
+```bash
+-DNOTCH_CENTER_HZ=108.0f     # after reading the real peak off a BlackBox trace
+-DAIRFRAME_AUW_G=1750.0f     # after adding payload
+```
+
+Compile-time assertions catch an incoherent combination — a thrust-to-weight ratio below
+2:1, a notch outside any plausible motor-noise band, an implausible all-up weight — and
+`tools/check_consistency.py` verifies that both configurations stay distinct and that
+the default is still 2-blade.
+
+**The firmware prints its configuration at boot**, because two builds are otherwise
+indistinguishable once flashed:
+
+```
+Propellers : 9x5x2 two-blade  (PROP_BLADES=2)
+Airframe   : AUW 1584 g, 1230 g/motor, TWR 3.11:1
+Gyro notch : 120 Hz, Q 4.0  (modelled default -- measure and override)
+Energy     : cruise 9.7 A, peak 51 A
+```
+
+Check that against the propellers actually fitted before they go on.
 
 **Peak current, which sizes the ESC.** Momentum theory with a figure of merit of 0.55
 and a combined motor/ESC efficiency of 0.78 puts full-throttle draw at about 374 W per

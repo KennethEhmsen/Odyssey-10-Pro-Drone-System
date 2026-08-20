@@ -1028,7 +1028,21 @@ void setup() {
   Serial.begin(115200);
   delay(200);
   Serial.println("\n=== " AIRFRAME_NAME " -- ESP32-P4 avionics ===");
-  Serial.printf("Battery profile: %dS, warn %.1f V, critical %.1f V\n",
+
+  // Two builds are otherwise indistinguishable once flashed, and flying the wrong one
+  // puts the gyro notch ~20 Hz off the actual motor peak and budgets the return-to-home
+  // reserve from the wrong cruise current. Print the configuration so it can be checked
+  // against the propellers actually fitted, before they go on.
+  Serial.printf("Propellers : %s  (PROP_BLADES=%d)\n", PROP_CONFIG_NAME, PROP_BLADES);
+  Serial.printf("Airframe   : AUW %.0f g, %.0f g/motor, TWR %.2f:1\n",
+                AIRFRAME_AUW_G, MOTOR_MAX_THRUST_G,
+                4.0f * MOTOR_MAX_THRUST_G / AIRFRAME_AUW_G);
+  Serial.printf("Gyro notch : %.0f Hz, Q %.1f%s\n", NOTCH_CENTER_HZ, NOTCH_Q,
+                (NOTCH_CENTER_HZ == PROP_NOTCH_DEFAULT_HZ)
+                    ? "  (modelled default -- measure and override)" : "  (overridden)");
+  Serial.printf("Energy     : cruise %.1f A, peak %.0f A\n",
+                CRUISE_CURRENT_A, PROP_PEAK_PACK_A);
+  Serial.printf("Battery    : %dS, warn %.1f V, critical %.1f V\n",
                 CELL_COUNT, PACK_WARN_V, PACK_CRITICAL_V);
 
   // ---- Outputs first, so nothing spins while the rest of the stack comes up --------

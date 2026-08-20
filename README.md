@@ -2,7 +2,7 @@
 
 [![host-tests](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml/badge.svg?branch=main)](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml)
 [![assertions](https://img.shields.io/badge/host_assertions-145-blue)](tools/host_tests/)
-[![consistency](https://img.shields.io/badge/consistency_checks-14-blue)](tools/check_consistency.py)
+[![consistency](https://img.shields.io/badge/consistency_checks-15-blue)](tools/check_consistency.py)
 [![decoder](https://img.shields.io/badge/RID_decoder_tests-80-blue)](android/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-ESP32--P4%20%7C%20C3%20%7C%20C6-lightgrey)](firmware/)
@@ -10,7 +10,7 @@
 Autonomous long-range 9-inch quadcopter. ESP32-P4 dual-core RISC-V avionics, integrated
 perception, kinetic recovery and safety stack.
 
-**Status:** revision 2.5 — propulsion and energy matched to the 9-inch airframe. All
+**Status:** revision 2.6 — propeller configuration is a build switch. All
 eighteen defects found in the revision 1.0 review are fixed. See
 [`docs/review-findings-resolution.md`](docs/review-findings-resolution.md) for the
 finding-by-finding index, or section 13 of the specification.
@@ -83,7 +83,13 @@ Three things to settle before your first flight:
    including to home builds), or your authority requires it for any other reason. See
    specification section 12.1.
 
-2. **`firmware/flight-controller/include/config.h`** — confirm `CELL_COUNT` matches your
+2. **`firmware/flight-controller/include/config.h`** — set `PROP_BLADES` to 2 or 3 to
+   match the propellers you are fitting. It defaults to **2**, and it drives seven
+   coupled constants including the gyro notch frequency, so it is a switch rather than
+   a set of manual edits. Build the other configuration with
+   `pio run -- -DPROP_BLADES=3`. The firmware prints which one it is at boot.
+
+   Then confirm `CELL_COUNT` matches your
    pack. Every battery threshold derives from it. Getting this wrong is what finding 1
    was, and it is the difference between a working failsafe and an aircraft that flies
    until the pack collapses.
