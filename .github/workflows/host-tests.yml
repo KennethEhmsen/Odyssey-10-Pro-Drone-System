@@ -23,6 +23,12 @@
 #    * fetch-depth 1, and no toolchain install -- g++ is preinstalled on the runner.
 #    * timeout-minutes as a hard backstop against a hung job draining the quota.
 #
+#  These properties are ENFORCED by the `workflow-cost` check in
+#  tools/check_consistency.py, which parses this file's YAML and fails if a Windows or
+#  macOS runner, a schedule trigger or a build matrix appears. That check runs as the
+#  first step below and in the pre-push hook, so a regression is caught before a push
+#  rather than after one.
+#
 #  The tests build and run in well under 30 seconds.
 #
 #  The pre-push hook runs the same checks locally before every push, so CI is the
@@ -92,23 +98,3 @@ jobs:
         env:
           EXTRA_CXXFLAGS: -Werror
         run: sh tools/host_tests/run_tests.sh
-
-      # Guards the cost properties above against a well-meaning future edit.
-      - name: Assert the workflow stays cheap
-        if: always()
-        run: |
-          set -e
-          f=.github/workflows/host-tests.yml
-          if grep -qE 'runs-on:.*(windows|macos)' "$f"; then
-            echo "::error file=$f::Windows (2x) or macOS (10x) runner added -- this workflow must stay Linux-only"
-            exit 1
-          fi
-          if grep -qE '^\s*schedule:' "$f"; then
-            echo "::error file=$f::A schedule trigger burns quota with no change to test"
-            exit 1
-          fi
-          if grep -qE '^\s*strategy:' "$f"; then
-            echo "::error file=$f::A build matrix multiplies the minute cost"
-            exit 1
-          fi
-          echo "Cost guards intact: Linux-only, no schedule, no matrix."

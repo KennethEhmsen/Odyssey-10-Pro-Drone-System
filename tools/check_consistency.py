@@ -554,6 +554,59 @@ def check_arm_gate(rep, fix):
 
 
 # =====================================================================================
+#  CHECK: the CI workflow stays cheap
+#
+#  This was originally a `grep` step inside the workflow itself, and it failed on its
+#  first real run by matching ITS OWN PATTERN -- the line containing
+#  'runs-on:.*(windows|macos)' does, unavoidably, contain that text.
+#
+#  Parsing the YAML structure instead of scanning the text cannot make that mistake,
+#  and putting the guard here means it also runs in the pre-push hook rather than only
+#  after a push has already happened.
+# =====================================================================================
+WORKFLOW = ROOT / ".github" / "workflows" / "host-tests.yml"
+
+
+def check_workflow_cost(rep, fix):
+    rep.checks_run += 1
+    if not WORKFLOW.exists():
+        return
+    try:
+        import yaml
+    except ImportError:
+        rep.problem("workflow-cost", "PyYAML not installed, cannot verify the workflow",
+                    severity="warn")
+        return
+
+    doc = yaml.safe_load(read(WORKFLOW))
+
+    # PyYAML parses the bare key `on:` as the boolean True.
+    triggers = doc.get(True, doc.get("on", {})) or {}
+    if "schedule" in triggers:
+        rep.problem("workflow-cost",
+                    "the workflow has a schedule trigger, which consumes runner time "
+                    "even when nothing has changed")
+
+    for job_name, job in (doc.get("jobs") or {}).items():
+        runs_on = str(job.get("runs-on", "")).lower()
+        if "windows" in runs_on:
+            rep.problem("workflow-cost",
+                        f"job '{job_name}' runs on Windows, billed at 2x the Linux rate")
+        if "macos" in runs_on:
+            rep.problem("workflow-cost",
+                        f"job '{job_name}' runs on macOS, billed at 10x the Linux rate")
+        if "strategy" in job:
+            rep.problem("workflow-cost",
+                        f"job '{job_name}' has a build matrix, multiplying the cost by "
+                        f"the number of combinations")
+        if "timeout-minutes" not in job:
+            rep.problem("workflow-cost",
+                        f"job '{job_name}' has no timeout-minutes, so a hung job runs "
+                        f"until GitHub's 6-hour default",
+                        severity="warn")
+
+
+# =====================================================================================
 #  Registry
 # =====================================================================================
 CHECKS = [
@@ -573,6 +626,8 @@ CHECKS = [
     ("gitattributes", "binary and LF rules are present", check_gitattributes),
     ("arm-gate", "every sensor the arm gate requires is actually reported",
      check_arm_gate),
+    ("workflow-cost", "the CI workflow stays on Linux, unscheduled and unmatrixed",
+     check_workflow_cost),
 ]
 
 
