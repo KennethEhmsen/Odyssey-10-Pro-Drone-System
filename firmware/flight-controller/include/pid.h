@@ -16,6 +16,7 @@
 #define ODY_PID_H
 
 #include <Arduino.h>
+#include "config.h"
 #include "filters.h"
 
 struct PidGains {
@@ -107,9 +108,16 @@ private:
 // -------------------------------------------------------------------------------------
 namespace GainSets {
 
+// Rate gains scale with FRAME_GAIN_SCALE. A smaller airframe has less rotational
+// inertia for the same control authority, so it wants more gain; the scale is a
+// first-order 9/D argument, NOT a tune. Expect to tune these per airframe -- the
+// 9-inch values are the only ones with any flight basis, and even they are a starting
+// point. See docs section 3.2 on characterisation status.
 inline PidGains rollRate() {
   PidGains g;
-  g.kp = 0.85f; g.ki = 0.04f; g.kd = 0.015f;
+  g.kp = 0.85f * FRAME_GAIN_SCALE;
+  g.ki = 0.04f * FRAME_GAIN_SCALE;
+  g.kd = 0.015f * FRAME_GAIN_SCALE;
   g.outMin = -350.0f; g.outMax = 350.0f; g.iMax = 100.0f; g.dTau = 0.010f;
   return g;
 }
@@ -118,7 +126,9 @@ inline PidGains pitchRate() { return rollRate(); }
 
 inline PidGains yawRate() {
   PidGains g;
-  g.kp = 1.80f; g.ki = 0.08f; g.kd = 0.0f;
+  g.kp = 1.80f * FRAME_GAIN_SCALE;
+  g.ki = 0.08f * FRAME_GAIN_SCALE;
+  g.kd = 0.0f;
   g.outMin = -250.0f; g.outMax = 250.0f; g.iMax = 80.0f; g.dTau = 0.010f;
   return g;
 }

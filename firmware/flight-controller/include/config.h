@@ -45,100 +45,238 @@
 // =====================================================================================
 #define AIRFRAME_NAME             "Odyssey-10 Pro"
 
-#ifndef PROP_BLADES
-#define PROP_BLADES               2        // 2 (default) or 3
+// =====================================================================================
+//  THREE SWITCHES, IN DEPENDENCY ORDER
+//
+//      FRAME_SIZE_IN   7, 9 or 10        default 9
+//      MOTOR_CLASS     must suit the frame; each frame has a default
+//      PROP_BLADES     2 or 3            default 2
+//
+//  Everything else is derived. Ten combinations are characterised; anything outside
+//  them stops the build.
+//
+//  ------------------------------------------------------------------------------------
+//  CHARACTERISATION STATUS -- READ THIS BEFORE TRUSTING A NON-DEFAULT BUILD
+//
+//  The 9-inch / 2810 / 2-blade configuration is the one this document was written
+//  around. Its mass budget is itemised against a real BOM, and every figure in the
+//  specification traces to it.
+//
+//  The 7-inch and 10-inch parameter sets are MODELLED, scaled from that anchor by
+//  momentum theory and disc loading. They are coherent and they are a sound starting
+//  point, but no one has flown them. Treat every number in a non-default build as a
+//  hypothesis to be checked on a thrust stand, and expect the PID gains in particular
+//  to need tuning -- FRAME_GAIN_SCALE is a first-order guess from rotational inertia,
+//  not a tune.
+//
+//  A 5-inch airframe was investigated and deliberately excluded: its hover fundamental
+//  lands near 265 Hz, which needs a loop rate above the MPU-6050's 1 kHz output ceiling
+//  to filter honestly. The hardware cannot do it, so pretending otherwise would be
+//  worse than saying no.
+// =====================================================================================
+
+#ifndef FRAME_SIZE_IN
+#define FRAME_SIZE_IN             9        // 7, 9 (default) or 10
 #endif
 
-#define PROP_DIAMETER_IN          9
-#define PROP_PITCH_IN             5
-
 // -------------------------------------------------------------------------------------
-//  MOTOR_CLASS -- the second switch
-//
-//  Same 900 KV winding either way; only the stator changes. See docs section 3.2.
-//
-//    MOTOR_2810   28 mm stator, 52 g. The 8-9 inch class, correct for this airframe.
-//    MOTOR_3110   31 mm stator, 68 g. A 10-11 inch motor. More thermal headroom, at
-//                 64 g and about 0.6 km of range.
-//
-//  A CORRECTION, since revision 2.3 got this backwards. That revision quoted 1300 g for
-//  the 3110 and 1400 g for the 2810 on the same propeller, which had the SMALLER stator
-//  producing MORE thrust. The 1300 came from scaling the 10-inch figure down for a
-//  smaller propeller; the 1400 came from asserting the 2810 was "properly matched".
-//  Only the first was derived from anything.
-//
-//  The physical picture: at 900 KV on 6S a 9-inch propeller is PROP-limited rather than
-//  motor-limited, so both stators reach similar thrust. The 3110 holds RPM slightly
-//  better under load -- about 3% more thrust -- and mostly buys thermal headroom. It
-//  does not buy performance, and it costs mass.
+//  Motor identifiers. Mass and thrust factor come with each; the 900 KV winding is
+//  common to the 9- and 10-inch motors, while the 7-inch 2807 is a 1300 KV part because
+//  a smaller propeller wants more shaft speed.
 // -------------------------------------------------------------------------------------
+#define MOTOR_2807                2807
 #define MOTOR_2810                2810
 #define MOTOR_3110                3110
+#define MOTOR_3115                3115
 
-#ifndef MOTOR_CLASS
-#define MOTOR_CLASS               MOTOR_2810
+// =====================================================================================
+//  FRAME
+// =====================================================================================
+#if FRAME_SIZE_IN == 7
+  #define FRAME_WHEELBASE_MM      295
+  #define PROP_DIAMETER_IN        7
+  #define FRAME_BASE_DRY_G        440.0f   // no motors, propellers or battery
+  #define BATTERY_MASS_G          470.0f   // 6S 3000 mAh 50C
+  #define PACK_CAPACITY_MAH       3000.0f
+  #define PACK_MIN_C_RATE         50       // peak draw is high on a 7-inch
+  #define PAYLOAD_RESERVE_G       100.0f
+  #define FLIGHT_LOOP_HZ          1000     // 180 Hz fundamental needs the headroom
+  #define IMU_DLPF_HZ             260      // must sit above the 180 Hz notch
+  #define FRAME_GAIN_SCALE        1.29f    // ~9/7; smaller airframe, faster response
+  #define FRAME_CRUISE_SPEED_MPS  14.0f
+  #define FRAME_DEFAULT_MOTOR     MOTOR_2807
+  #define FRAME_CONFIG_NAME       "7-inch (295 mm)"
+
+#elif FRAME_SIZE_IN == 9
+  #define FRAME_WHEELBASE_MM      387
+  #define PROP_DIAMETER_IN        9
+  #define FRAME_BASE_DRY_G        538.0f
+  #define BATTERY_MASS_G          640.0f   // 6S 4500 mAh 20C
+  #define PACK_CAPACITY_MAH       4500.0f
+  #define PACK_MIN_C_RATE         20
+  #define PAYLOAD_RESERVE_G       170.0f
+  #define FLIGHT_LOOP_HZ          500
+  #define IMU_DLPF_HZ             184      // must sit above the 120 Hz notch
+  #define FRAME_GAIN_SCALE        1.00f    // the reference airframe
+  #define FRAME_CRUISE_SPEED_MPS  12.0f
+  #define FRAME_DEFAULT_MOTOR     MOTOR_2810
+  #define FRAME_CONFIG_NAME       "9-inch (387 mm)"
+
+#elif FRAME_SIZE_IN == 10
+  #define FRAME_WHEELBASE_MM      430
+  #define PROP_DIAMETER_IN        10
+  #define FRAME_BASE_DRY_G        594.0f
+  #define BATTERY_MASS_G          640.0f   // 6S 4500 mAh 30C
+  #define PACK_CAPACITY_MAH       4500.0f
+  #define PACK_MIN_C_RATE         30
+  #define PAYLOAD_RESERVE_G       200.0f
+  #define FLIGHT_LOOP_HZ          500
+  #define IMU_DLPF_HZ             184      // must sit above the 105 Hz notch
+  #define FRAME_GAIN_SCALE        0.90f    // ~9/10; larger airframe, slower response
+  #define FRAME_CRUISE_SPEED_MPS  12.0f
+  #define FRAME_DEFAULT_MOTOR     MOTOR_3115
+  #define FRAME_CONFIG_NAME       "10-inch (430 mm)"
+
+#else
+  #error "FRAME_SIZE_IN must be 7, 9 or 10. A 5-inch needs a loop rate the MPU-6050 cannot feed."
 #endif
 
-#if MOTOR_CLASS == MOTOR_2810
+#define PROP_PITCH_IN             5
+
+// =====================================================================================
+//  MOTOR
+// =====================================================================================
+#ifndef MOTOR_CLASS
+#define MOTOR_CLASS               FRAME_DEFAULT_MOTOR
+#endif
+
+#if MOTOR_CLASS == MOTOR_2807
+  #define MOTOR_MASS_G_EACH       45.0f
+  #define MOTOR_STATOR_MM         28
+  #define MOTOR_KV                1300
+  #define MOTOR_THRUST_FACTOR     1.000f
+  #define MOTOR_CONFIG_NAME       "2807 1300 KV"
+
+#elif MOTOR_CLASS == MOTOR_2810
   #define MOTOR_MASS_G_EACH       52.0f
   #define MOTOR_STATOR_MM         28
+  #define MOTOR_KV                900
   #define MOTOR_THRUST_FACTOR     1.000f   // reference
-  #define MOTOR_CONFIG_NAME       "2810 (28 mm stator)"
+  #define MOTOR_CONFIG_NAME       "2810 900 KV"
 
 #elif MOTOR_CLASS == MOTOR_3110
   #define MOTOR_MASS_G_EACH       68.0f
   #define MOTOR_STATOR_MM         31
-  #define MOTOR_THRUST_FACTOR     1.033f   // ~23% more stator, ~3% more thrust
-  #define MOTOR_CONFIG_NAME       "3110 (31 mm stator)"
+  #define MOTOR_KV                900
+  #define MOTOR_THRUST_FACTOR     1.033f
+  #define MOTOR_CONFIG_NAME       "3110 900 KV"
+
+#elif MOTOR_CLASS == MOTOR_3115
+  #define MOTOR_MASS_G_EACH       78.0f
+  #define MOTOR_STATOR_MM         31       // 31 mm diameter, 15 mm tall
+  #define MOTOR_KV                900
+  #define MOTOR_THRUST_FACTOR     1.070f
+  #define MOTOR_CONFIG_NAME       "3115 900 KV"
 
 #else
-  #error "MOTOR_CLASS must be MOTOR_2810 or MOTOR_3110. Nothing else is characterised."
+  #error "MOTOR_CLASS must be MOTOR_2807, MOTOR_2810, MOTOR_3110 or MOTOR_3115."
 #endif
 
 // -------------------------------------------------------------------------------------
-//  PROP_BLADES -- per-propeller figures, quoted against the reference 2810 motor
+//  Frame / motor compatibility.
+//
+//  A 2807 on a 10-inch frame is under-stator'd and a 3115 on a 7-inch is dead weight, so
+//  the invalid pairings stop the build rather than producing plausible-looking numbers
+//  for an aircraft nobody should build.
 // -------------------------------------------------------------------------------------
-#if PROP_BLADES == 2
-  // 9x5x2. Modelled figures -- verify on a thrust stand, see docs section 11.2.
-  #define PROP_MASS_G_EACH        7.0f
-  #define PROP_BASE_THRUST_G      1230.0f  // per motor at 6S, on the reference 2810
-  #define PROP_NOTCH_DEFAULT_HZ   120.0f   // hover fundamental ~124 Hz
-  #define PROP_POWER_LOADING_GW   8.90f    // hover, g/W
-  #define PROP_BASE_PEAK_A        51.0f    // full throttle, whole aircraft
-  #define PROP_CONFIG_NAME        "9x5x2 two-blade"
+#if FRAME_SIZE_IN == 7 && MOTOR_CLASS != MOTOR_2807
+  #error "7-inch: only MOTOR_2807 is characterised."
+#endif
+#if FRAME_SIZE_IN == 9 && MOTOR_CLASS != MOTOR_2810 && MOTOR_CLASS != MOTOR_3110
+  #error "9-inch: only MOTOR_2810 or MOTOR_3110 are characterised."
+#endif
+#if FRAME_SIZE_IN == 10 && MOTOR_CLASS != MOTOR_3110 && MOTOR_CLASS != MOTOR_3115
+  #error "10-inch: only MOTOR_3110 or MOTOR_3115 are characterised."
+#endif
 
-#elif PROP_BLADES == 3
-  // 9x5x3. Same motors and ESC; only the propellers differ.
-  #define PROP_MASS_G_EACH        9.0f
-  #define PROP_BASE_THRUST_G      1400.0f
-  #define PROP_NOTCH_DEFAULT_HZ   100.0f   // hover fundamental ~104 Hz
-  #define PROP_POWER_LOADING_GW   8.07f
-  #define PROP_BASE_PEAK_A        67.0f
-  #define PROP_CONFIG_NAME        "9x5x3 three-blade"
+// =====================================================================================
+//  PROPELLER
+//
+//  Figures are quoted against each frame's DEFAULT motor and scaled by
+//  MOTOR_THRUST_FACTOR below.
+// =====================================================================================
+#ifndef PROP_BLADES
+#define PROP_BLADES               2        // 2 (default) or 3
+#endif
 
-#else
+#if PROP_BLADES != 2 && PROP_BLADES != 3
   #error "PROP_BLADES must be 2 or 3. Other blade counts are not characterised."
 #endif
 
-// -------------------------------------------------------------------------------------
-//  DERIVED -- so the four combinations cannot disagree with each other
-//
-//  Tabulating 2 motors x 2 propellers = 4 sets of numbers by hand would be four chances
-//  to mistype one. These are computed instead, which also means an AIRFRAME_AUW_G
-//  override for payload flows through to the cruise current automatically.
-// -------------------------------------------------------------------------------------
-#define AIRFRAME_BASE_DRY_G       1178.0f  // everything except motors and propellers
-#define PAYLOAD_RESERVE_G         170.0f
+#if FRAME_SIZE_IN == 7
+  #if PROP_BLADES == 2
+    #define PROP_MASS_G_EACH      5.0f
+    #define PROP_BASE_THRUST_G    1350.0f
+    #define PROP_NOTCH_DEFAULT_HZ 180.0f
+    #define PROP_POWER_LOADING_GW 7.92f
+    #define PROP_BASE_PEAK_A      75.0f
+  #else
+    #define PROP_MASS_G_EACH      6.0f
+    #define PROP_BASE_THRUST_G    1530.0f
+    #define PROP_NOTCH_DEFAULT_HZ 150.0f
+    #define PROP_POWER_LOADING_GW 7.17f
+    #define PROP_BASE_PEAK_A      99.0f
+  #endif
+
+#elif FRAME_SIZE_IN == 9
+  #if PROP_BLADES == 2
+    #define PROP_MASS_G_EACH      7.0f
+    #define PROP_BASE_THRUST_G    1230.0f
+    #define PROP_NOTCH_DEFAULT_HZ 120.0f
+    #define PROP_POWER_LOADING_GW 8.90f
+    #define PROP_BASE_PEAK_A      51.0f
+  #else
+    #define PROP_MASS_G_EACH      9.0f
+    #define PROP_BASE_THRUST_G    1400.0f
+    #define PROP_NOTCH_DEFAULT_HZ 100.0f
+    #define PROP_POWER_LOADING_GW 8.05f
+    #define PROP_BASE_PEAK_A      67.0f
+  #endif
+
+#else   // 10 inch
+  #if PROP_BLADES == 2
+    #define PROP_MASS_G_EACH      10.0f
+    #define PROP_BASE_THRUST_G    1500.0f
+    #define PROP_NOTCH_DEFAULT_HZ 105.0f
+    #define PROP_POWER_LOADING_GW 9.42f
+    #define PROP_BASE_PEAK_A      65.0f
+  #else
+    #define PROP_MASS_G_EACH      12.0f
+    #define PROP_BASE_THRUST_G    1750.0f
+    #define PROP_NOTCH_DEFAULT_HZ 90.0f
+    #define PROP_POWER_LOADING_GW 8.52f
+    #define PROP_BASE_PEAK_A      89.0f
+  #endif
+#endif
+
+#define PROP_CONFIG_NAME          (PROP_BLADES == 2 ? "2-blade" : "3-blade")
+
+// =====================================================================================
+//  DERIVED -- so ten combinations cannot disagree with each other
+// =====================================================================================
 #define AVIONICS_POWER_W          18.0f    // FC, VTX, camera, BEC losses
 #define CRUISE_POWER_FACTOR       1.10f    // cruise costs ~10% more than hover
+#define CONNECTOR_RATING_A        90.0f    // XT90-S continuous
 
-#define PROP_AUW_DEFAULT_G        (AIRFRAME_BASE_DRY_G                  \
+#define PROP_AUW_DEFAULT_G        (FRAME_BASE_DRY_G                     \
                                  + 4.0f * MOTOR_MASS_G_EACH             \
                                  + 4.0f * PROP_MASS_G_EACH              \
+                                 + BATTERY_MASS_G                       \
                                  + PAYLOAD_RESERVE_G)
 
 #define MOTOR_MAX_THRUST_G        (PROP_BASE_THRUST_G * MOTOR_THRUST_FACTOR)
 #define PROP_PEAK_PACK_A          (PROP_BASE_PEAK_A * MOTOR_THRUST_FACTOR)
+#define PACK_MAX_DISCHARGE_A      (PACK_CAPACITY_MAH / 1000.0f * PACK_MIN_C_RATE)
 
 // The notch is the one constant the documentation actively tells you to replace with a
 // measurement, so it takes an override. PROP_BLADES only supplies the starting point.
@@ -180,7 +318,8 @@
 #define PACK_RESERVE_V            (CELL_RESERVE_V   * CELL_COUNT)   //  0.60 V
 
 // Pack capacity and the fraction of it we are willing to spend in flight.
-#define PACK_CAPACITY_MAH         4500.0f
+// PACK_CAPACITY_MAH and PACK_MIN_C_RATE are set by FRAME_SIZE_IN in section 1 --
+// a 7-inch needs a 50C pack for its peak draw, a 9-inch only 20C.
 #define PACK_USABLE_FRACTION      0.80f
 #define PACK_USABLE_MAH           (PACK_CAPACITY_MAH * PACK_USABLE_FRACTION)
 
@@ -199,7 +338,9 @@
 // =====================================================================================
 //  3. FLIGHT CONTROL LOOP
 // =====================================================================================
-#define FLIGHT_LOOP_HZ            500
+// FLIGHT_LOOP_HZ is set by FRAME_SIZE_IN in section 1. A 7-inch runs at 1000 Hz
+// because its hover fundamental is near 180 Hz, and a 500 Hz loop puts that
+// uncomfortably close to Nyquist.
 #define FLIGHT_LOOP_DT            (1.0f / (float)FLIGHT_LOOP_HZ)
 #define FLIGHT_LOOP_PERIOD_US     (1000000u / FLIGHT_LOOP_HZ)
 #define TELEM_TASK_HZ             50
@@ -280,7 +421,7 @@
 //  ran no battery check at all once entered, so the aircraft hovered until the pack
 //  was flat. The parameters below drive a real position controller.
 // =====================================================================================
-#define RTH_CRUISE_SPEED_MPS      12.0f
+#define RTH_CRUISE_SPEED_MPS      FRAME_CRUISE_SPEED_MPS
 #define RTH_APPROACH_SPEED_MPS    3.0f
 #define RTH_SAFE_ALTITUDE_M       30.0f    // climb to this AGL before translating
 #define RTH_ARRIVAL_RADIUS_M      5.0f
@@ -527,10 +668,35 @@ static_assert(FLIGHT_LOOP_HZ % BLACKBOX_LOG_HZ == 0,
 // ---- PROP_BLADES coherence -----------------------------------------------------------
 // These exist because the whole point of the switch is that the constants move TOGETHER.
 // If someone overrides one by hand and leaves the rest, the build should stop.
+static_assert(FRAME_SIZE_IN == 7 || FRAME_SIZE_IN == 9 || FRAME_SIZE_IN == 10,
+              "FRAME_SIZE_IN must be 7, 9 or 10");
+static_assert(PROP_DIAMETER_IN == FRAME_SIZE_IN,
+              "Propeller diameter must match the frame size");
 static_assert(PROP_BLADES == 2 || PROP_BLADES == 3,
               "PROP_BLADES must be 2 or 3");
-static_assert(MOTOR_CLASS == MOTOR_2810 || MOTOR_CLASS == MOTOR_3110,
-              "MOTOR_CLASS must be MOTOR_2810 or MOTOR_3110");
+// The notch must be filterable at the configured loop rate. This is the assertion that
+// excluded a 5-inch airframe: its ~265 Hz fundamental needs a loop the MPU-6050 cannot
+// feed, and a notch above Nyquist filters an alias rather than the noise.
+// The anti-alias filter must sit ABOVE the peak the notch is aimed at, or it removes
+// that peak itself and the notch filters nothing while the DLPF's phase lag stays in
+// the control band. A 30% margin keeps the notch centre off the DLPF's -3 dB knee.
+//
+// This assertion exists because the real thing happened: the DLPF was set to 94 Hz when
+// the notch was 80 Hz, the notch then moved to 120 Hz across four revisions, and the
+// DLPF was left behind. Nothing compared them until the build matrix check did.
+static_assert(IMU_DLPF_HZ > PROP_NOTCH_DEFAULT_HZ * 1.3f,
+              "IMU DLPF must sit at least 30% above the notch centre");
+static_assert(IMU_DLPF_HZ < FLIGHT_LOOP_HZ / 2.0f,
+              "IMU DLPF must sit below Nyquist for the loop rate");
+static_assert(PROP_NOTCH_DEFAULT_HZ < FLIGHT_LOOP_HZ / 2.0f,
+              "Hover fundamental is above Nyquist for this loop rate -- raise "
+              "FLIGHT_LOOP_HZ or the notch will chase an alias");
+static_assert(PROP_PEAK_PACK_A <= PACK_MAX_DISCHARGE_A,
+              "Peak draw exceeds what the specified pack can deliver -- raise "
+              "PACK_MIN_C_RATE for this frame");
+static_assert(MOTOR_CLASS == MOTOR_2807 || MOTOR_CLASS == MOTOR_2810
+           || MOTOR_CLASS == MOTOR_3110 || MOTOR_CLASS == MOTOR_3115,
+              "MOTOR_CLASS is not one of the characterised motors");
 static_assert(MOTOR_MASS_G_EACH > 30.0f && MOTOR_MASS_G_EACH < 120.0f,
               "Motor mass is implausible for this airframe class");
 static_assert(MOTOR_THRUST_FACTOR >= 1.0f && MOTOR_THRUST_FACTOR < 1.2f,
@@ -542,10 +708,11 @@ static_assert(NOTCH_CENTER_HZ < FLIGHT_LOOP_HZ / 2.0f,
 // an assertion that second-guessed the measurement would be worse than none.
 static_assert(NOTCH_CENTER_HZ > 50.0f && NOTCH_CENTER_HZ < 200.0f,
               "Notch centre is outside any plausible motor-noise band for this airframe");
-static_assert(PROP_BLADES != 2 || MOTOR_MAX_THRUST_G < 1330.0f,
-              "A 2-blade build cannot reach the 3-blade thrust figure");
-static_assert(PROP_BLADES != 3 || MOTOR_MAX_THRUST_G > 1330.0f,
-              "A 3-blade build should carry the higher thrust figure");
+// Ordering between 2- and 3-blade is a comparison ACROSS builds, so it cannot be
+// asserted from inside one. tools/check_consistency.py does it. What belongs here is a
+// plausibility band for this frame.
+static_assert(MOTOR_MAX_THRUST_G > 800.0f && MOTOR_MAX_THRUST_G < 2500.0f,
+              "Peak thrust per motor is outside any plausible band for these frames");
 static_assert(4.0f * MOTOR_MAX_THRUST_G / AIRFRAME_AUW_G > 2.0f,
               "Thrust-to-weight below 2:1 is not safely flyable -- check AIRFRAME_AUW_G "
               "if you have overridden it for payload");
@@ -553,8 +720,14 @@ static_assert(AIRFRAME_AUW_G > 1000.0f && AIRFRAME_AUW_G < 4000.0f,
               "All-up weight is implausible for this airframe");
 static_assert(CRUISE_CURRENT_A > 0.0f && CRUISE_CURRENT_A < 30.0f,
               "Cruise current is implausible -- it budgets the return-to-home reserve");
-static_assert(PROP_PEAK_PACK_A < 90.0f,
-              "Peak pack current exceeds the XT90-S continuous rating");
+#if !defined(ACCEPT_CONNECTOR_OVER_RATING)
+static_assert(PROP_PEAK_PACK_A <= CONNECTOR_RATING_A,
+              "Full-throttle draw exceeds the XT90-S 90 A continuous rating. This is a "
+              "BURST condition, not continuous, and the connector will survive brief "
+              "punch-outs -- but you should know about it. Either fit a higher-rated "
+              "connector (AS150), drop to 2-blade propellers, or build with "
+              "-DACCEPT_CONNECTOR_OVER_RATING=1 to acknowledge it deliberately.");
+#endif
 #endif
 
 #endif // ODY_CONFIG_H

@@ -84,10 +84,17 @@ bool SensorHub::initMpu6050() {
   if (!mpu.begin(I2C_ADDR_MPU6050, &Wire)) return false;
   mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
   mpu.setGyroRange(MPU6050_RANGE_500_DEG);
-  // 260 Hz DLPF: above the 250 Hz Nyquist of the 500 Hz loop we would alias motor
-  // noise straight into the rate controller, below ~90 Hz we add phase lag the D term
-  // cannot tolerate. The dynamic notch handles the residual peak.
+  // The DLPF corner comes from FRAME_SIZE_IN, because it has to sit ABOVE the hover
+  // fundamental the notch is aimed at and BELOW the loop's Nyquist. A 7-inch runs its
+  // fundamental near 180 Hz, so a 94 Hz corner would attenuate the very peak the notch
+  // is there to remove -- and add phase lag doing it.
+#if IMU_DLPF_HZ >= 260
+  mpu.setFilterBandwidth(MPU6050_BAND_260_HZ);
+#elif IMU_DLPF_HZ >= 184
+  mpu.setFilterBandwidth(MPU6050_BAND_184_HZ);
+#else
   mpu.setFilterBandwidth(MPU6050_BAND_94_HZ);
+#endif
   return true;
 }
 

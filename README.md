@@ -10,7 +10,7 @@
 Autonomous long-range 9-inch quadcopter. ESP32-P4 dual-core RISC-V avionics, integrated
 perception, kinetic recovery and safety stack.
 
-**Status:** revision 2.7 — motor and propeller are both build switches. All
+**Status:** revision 2.8 — frame, motor and propeller are all build switches. All
 eighteen defects found in the revision 1.0 review are fixed. See
 [`docs/review-findings-resolution.md`](docs/review-findings-resolution.md) for the
 finding-by-finding index, or section 13 of the specification.
@@ -83,17 +83,21 @@ Three things to settle before your first flight:
    including to home builds), or your authority requires it for any other reason. See
    specification section 12.1.
 
-2. **`firmware/flight-controller/include/config.h`** — set `MOTOR_CLASS` and
-   `PROP_BLADES` to match the hardware you are fitting. They default to
-   **2810 + 2-blade** and together drive every coupled constant, including the gyro notch
-   frequency and the cruise current that sizes the return-to-home reserve:
+2. **`firmware/flight-controller/include/config.h`** — set `FRAME_SIZE_IN`,
+   `MOTOR_CLASS` and `PROP_BLADES` to match the hardware you are fitting. They default to
+   **9-inch + 2810 + 2-blade** and together drive every coupled constant: mass, thrust,
+   loop rate, IMU filter corner, gyro notch, PID gain scale, pack capacity, and the
+   cruise current that sizes the return-to-home reserve.
 
    ```bash
-   pio run -- -DMOTOR_CLASS=MOTOR_3110 -DPROP_BLADES=3
+   pio run -- -DFRAME_SIZE_IN=10 -DMOTOR_CLASS=MOTOR_3115 -DPROP_BLADES=3
    ```
 
-   All four combinations are characterised and tested; anything else fails the build.
-   The firmware prints which one it is at boot.
+   Ten combinations across 7, 9 and 10 inch are characterised and tested; anything else
+   fails the build with a specific message. The firmware prints which one it is at boot.
+
+   Only the 9-inch default is backed by a real BOM and the document's analysis — the
+   others are modelled starting points. See specification section 3.2.
 
    Then confirm `CELL_COUNT` matches your
    pack. Every battery threshold derives from it. Getting this wrong is what finding 1

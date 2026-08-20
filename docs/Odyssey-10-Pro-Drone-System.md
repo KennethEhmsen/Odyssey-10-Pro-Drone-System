@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 2.7 — motor and propeller are both build switches
+**Document revision:** 2.8 — frame, motor and propeller are all build switches
 
 ---
 
@@ -322,18 +322,43 @@ before the mixer starts trading attitude authority for climb. If you fly this ai
 manually and aggressively, or in gusty conditions close to obstacles, three blades are
 the better choice and the 1.4 km of range is a fair price.
 
-**Both are build switches.** Motor class and blade count each change several coupled
-constants, so they are compile-time switches rather than sets of edits:
+**Three build switches.** Frame size, motor class and blade count each change several
+coupled constants, so they are compile-time switches rather than sets of edits:
 
 ```bash
-pio run -e odyssey-fc                                      # 2810 + 2-blade, default
-pio run -e odyssey-fc -- -DPROP_BLADES=3                   # 2810 + 3-blade
-pio run -e odyssey-fc -- -DMOTOR_CLASS=MOTOR_3110          # 3110 + 2-blade
-pio run -e odyssey-fc -- -DMOTOR_CLASS=MOTOR_3110 -DPROP_BLADES=3
+pio run -e odyssey-fc                                       # 9-inch, 2810, 2-blade
+pio run -e odyssey-fc -- -DFRAME_SIZE_IN=7
+pio run -e odyssey-fc -- -DFRAME_SIZE_IN=10 -DMOTOR_CLASS=MOTOR_3115 -DPROP_BLADES=3
 ```
 
-All four combinations are characterised, build, and pass the host tests. Anything else
-stops the build with an `#error`.
+| Frame | Motors | Default | Wheelbase | Loop | Notch (2b / 3b) |
+| --- | --- | --- | --- | --- | --- |
+| 7-inch | 2807 | 2807 | 295 mm | 1000 Hz | 180 / 150 Hz |
+| **9-inch** | 2810, 3110 | **2810** | 387 mm | 500 Hz | **120** / 100 Hz |
+| 10-inch | 3110, 3115 | 3115 | 430 mm | 500 Hz | 105 / 90 Hz |
+
+Ten combinations, all building and passing the host tests. Invalid pairings stop the
+build with a specific message — a 2807 on a 10-inch frame is under-stator'd and a 3115 on
+a 7-inch is dead weight, so neither is offered.
+
+> **A 5-inch airframe was investigated and deliberately excluded.** Its hover fundamental
+> lands near 265 Hz, which needs a loop rate above the MPU-6050's 1 kHz output ceiling to
+> filter honestly. The hardware cannot do it, and shipping a configuration whose notch
+> would chase an alias is worse than declining.
+
+> **Characterisation status.** Only the 9-inch / 2810 / 2-blade configuration is backed by
+> an itemised BOM and the analysis in this document. The 7-inch and 10-inch parameter sets
+> are **modelled**, scaled from that anchor by momentum theory and disc loading. They are
+> coherent and they are a reasonable starting point, but nobody has flown them. Treat
+> every figure in a non-default build as a hypothesis for the thrust stand, and expect the
+> PID gains to need tuning — `FRAME_GAIN_SCALE` is a first-order inertia argument, not a
+> tune.
+
+**Three configurations exceed the XT90-S 90 A continuous rating** on a full-throttle burst
+— 7-inch 3-blade at 99 A, and both 10-inch 3-blade builds at 92 and 95 A. That is a burst
+condition rather than continuous and the connector will survive brief punch-outs, but the
+build stops until you either fit an AS150, drop to 2-blade, or acknowledge it with
+`-DACCEPT_CONNECTOR_OVER_RATING=1`.
 
 `PROP_BLADES` supplies the per-propeller figures — mass, base thrust, notch centre,
 power loading. `MOTOR_CLASS` supplies the per-motor figures — mass and thrust factor.
@@ -377,7 +402,8 @@ error had crept back in.
 indistinguishable once flashed:
 
 ```
-Motors     : 2810 (28 mm stator)  (52 g each)
+Frame      : 9-inch (387 mm)
+Motors     : 2810 900 KV  (52 g each)
 Propellers : 9x5x2 two-blade  (PROP_BLADES=2)
 Airframe   : AUW 1584 g, 1230 g/motor, TWR 3.11:1
 Gyro notch : 120 Hz, Q 4.0  (modelled default -- measure and override)
@@ -1165,6 +1191,21 @@ case, where two methods differed by 7%. **120 Hz** is set from them.
 peak. The propeller and the notch are a matched pair; changing one without the other
 leaves the filter attenuating empty spectrum.
 
+> **A defect found while building the frame switch, and worth recording.** The
+> MPU-6050's anti-alias filter was set to 94 Hz back when the notch was at 80 Hz — correct
+> at the time. The notch then moved to 95, 100 and finally 120 Hz as the airframe changed,
+> and **the DLPF never moved with it**.
+>
+> A 94 Hz low-pass sitting *below* a 120 Hz notch is the worst of both: the DLPF
+> attenuates the motor peak itself, so the notch filters spectrum that is already gone,
+> while the DLPF's phase lag stays in the control band where it costs the D term.
+>
+> It survived four revisions because nothing compared the two numbers. The build-matrix
+> check does now, and the corrected values are 260 Hz for the 7-inch and 184 Hz for the
+> 9- and 10-inch — at least 30% above the notch, and below Nyquist for the loop rate.
+> This is precisely the coupled-constant failure the switches exist to prevent, which is
+> a fair argument that they should have existed sooner.
+
 **Measure it.** Take a BlackBox gyro trace at a stable hover, find the actual peak, and
 set `NOTCH_CENTER_HZ` from the data. None of the models above account for the frame
 itself: the 6 mm arms on this airframe are less stiff than the 7–8 mm arms originally
@@ -1852,6 +1893,7 @@ Revision 2.0 introduced or left standing the following, all corrected here.
 | `CRUISE_CURRENT_A` was set from HOVER power since revision 2.2, but it budgets the charge to fly home at CRUISE speed — about 10% more. The RTH energy reserve was therefore optimistic | Corrected to 9.7 A, and §3.3 now states which figure it is and why |
 | The pack was rated 45C against a 15C peak demand, carrying 40 g for capability the aircraft cannot use | Specified as 20C minimum. §3.3 explains that energy per gram, not C-rate, is the constraint on this platform |
 | 3-blade propellers on a long-range platform with thrust to spare | Changed to 9x5x2. About 10% better hover efficiency for ~12% of peak thrust: 24 min hover and 16 km one-way, up from 22 min and 14.1 km |
+| The IMU anti-alias filter was left at 94 Hz while the gyro notch moved from 80 Hz to 120 Hz across four revisions, so the DLPF sat BELOW the notch — attenuating the peak the notch was aimed at, while keeping its phase lag in the control band | Corrected to 260 Hz (7-inch) and 184 Hz (9- and 10-inch), with an assertion requiring 30% clearance above the notch. Found by the build-matrix check in §3.2 |
 | The ESC was rated 50 A per channel against a 16.9 A peak — nearly 3× margin, carried over from the 10-inch build along with 9 g | Right-sized to 40 A/ch (2.4×). §4.3 now shows the sizing arithmetic and records bidirectional DShot as the route to an RPM-tracked notch |
 | Motors were a 3110 (31 mm stator, a 10-11 inch motor) on a 9-inch frame — over-sized and carrying 64 g the airframe did not need | Changed to the 2810 class (28 mm stator, 8-9 inch). The 900 KV winding was already correct, so only the stator changed. AUW 1705 → 1641 g, TWR 3.05 → 3.41:1 |
 | Airframe changed to a 387 mm 9-inch frame after revision 2.1, invalidating the thrust, AUW, TWR, endurance and gyro-notch chain | Recomputed throughout in revision 2.2. The notch moved 80 Hz → 95 Hz, without which the new ~97 Hz motor peak would have passed into the rate controller |

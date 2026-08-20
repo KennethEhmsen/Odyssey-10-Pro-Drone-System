@@ -974,81 +974,101 @@ def check_readme(rep, fix):
 #  actually do -- that the 3-blade build is not silently identical to the 2-blade one,
 #  which is what a mistyped #elif would produce, and that neither drifts into nonsense.
 # =====================================================================================
+#  Frame -> motors that are characterised for it. A 2807 on a 10-inch is under-stator'd
+#  and a 3115 on a 7-inch is dead weight, so those pairings are not offered at all.
+FRAME_MOTORS = {
+    7:  ["MOTOR_2807"],
+    9:  ["MOTOR_2810", "MOTOR_3110"],
+    10: ["MOTOR_3110", "MOTOR_3115"],
+}
+
+
 def check_prop_configs(rep, fix):
     rep.checks_run += 1
 
-    MOTORS = ["MOTOR_2810", "MOTOR_3110"]
-    BLADES = [2, 3]
-
     builds = {}
-    for mc in MOTORS:
-        for pb in BLADES:
-            d = resolved_defines((f"-DMOTOR_CLASS={mc}", f"-DPROP_BLADES={pb}"))
-            if not d:
-                rep.problem("build-configs",
-                            "no C preprocessor available to resolve config.h",
-                            severity="warn")
-                return
-            builds[(mc, pb)] = d
+    for frame, motors in FRAME_MOTORS.items():
+        for mc in motors:
+            for pb in (2, 3):
+                flags = [f"-DFRAME_SIZE_IN={frame}", f"-DMOTOR_CLASS={mc}",
+                         f"-DPROP_BLADES={pb}", "-DACCEPT_CONNECTOR_OVER_RATING=1"]
+                d = resolved_defines(tuple(flags))
+                if not d:
+                    rep.problem("build-configs",
+                                "no C preprocessor available to resolve config.h",
+                                severity="warn")
+                    return
+                builds[(frame, mc, pb)] = d
 
+    # ---- the default must stay the characterised airframe ---------------------------
     default = resolved_defines()
-    if default.get("PROP_BLADES") != 2:
+    if default.get("FRAME_SIZE_IN") != 9:
         rep.problem("build-configs",
-                    f"the default build is not 2-blade (PROP_BLADES="
-                    f"{default.get('PROP_BLADES')})")
-    if default.get("MOTOR_MASS_G_EACH") != builds[("MOTOR_2810", 2)]["MOTOR_MASS_G_EACH"]:
-        rep.problem("build-configs", "the default build is not the 2810 motor")
+                    f"the default frame is not 9-inch "
+                    f"(FRAME_SIZE_IN={default.get('FRAME_SIZE_IN')})")
+    if default.get("PROP_BLADES") != 2:
+        rep.problem("build-configs", "the default build is not 2-blade")
+    if abs(default.get("AIRFRAME_AUW_G", 0) - 1584.0) > 0.5:
+        rep.problem("build-configs",
+                    f"the default AUW is {default.get('AIRFRAME_AUW_G')} g, not the "
+                    f"1584 g the specification is written around")
 
-    # ---- every combination must be internally sane --------------------------------
-    for (mc, pb), d in builds.items():
-        label = f"{mc[6:]}+{pb}b"
+    # ---- every build must be internally sane ----------------------------------------
+    over_connector = []
+    for (frame, mc, pb), d in builds.items():
+        label = f'{frame}" {mc[6:]} {pb}b'
         auw, thrust = d.get("AIRFRAME_AUW_G"), d.get("MOTOR_MAX_THRUST_G")
         if not auw or not thrust:
             rep.problem("build-configs", f"{label}: AUW or thrust missing")
             continue
-        twr = 4 * thrust / auw
-        if twr < 2.0:
-            rep.problem("build-configs",
-                        f"{label}: thrust-to-weight {twr:.2f}:1 is below the 2:1 floor")
-        cA = d.get("CRUISE_CURRENT_A", 0)
-        if not (5.0 < cA < 25.0):
-            rep.problem("build-configs",
-                        f"{label}: cruise current {cA:.1f} A is implausible -- it sizes "
-                        f"the return-to-home reserve")
-        peak = d.get("PROP_PEAK_PACK_A", 0)
-        if peak > 90.0:
-            rep.problem("build-configs",
-                        f"{label}: peak {peak:.0f} A exceeds the XT90-S rating")
 
-    # ---- the switches must actually switch ----------------------------------------
-    #  Blade count moves these, motor class moves those. If a value is identical across
-    #  an axis it is meant to vary on, that switch is not wired up and one build is
-    #  flying on the other's number.
+        twr = 4 * thrust / auw
+        if not (2.0 < twr < 12.0):
+            rep.problem("build-configs", f"{label}: thrust-to-weight {twr:.2f}:1 is "
+                                         f"outside any sane band")
+
+        # The assertion that excluded the 5-inch: a notch above Nyquist chases an alias.
+        notch, loop = d.get("PROP_NOTCH_DEFAULT_HZ", 0), d.get("FLIGHT_LOOP_HZ", 0)
+        if notch >= loop / 2:
+            rep.problem("build-configs",
+                        f"{label}: notch {notch:.0f} Hz is at or above Nyquist for a "
+                        f"{loop:.0f} Hz loop")
+
+        # The DLPF has to pass the peak the notch is aimed at.
+        dlpf = d.get("IMU_DLPF_HZ", 0)
+        if dlpf < notch * 1.3:
+            rep.problem("build-configs",
+                        f"{label}: IMU DLPF {dlpf:.0f} Hz is not 30% clear of the "
+                        f"{notch:.0f} Hz notch -- it would attenuate that peak itself "
+                        f"and leave its phase lag in the control band")
+
+        peak, packA = d.get("PROP_PEAK_PACK_A", 0), d.get("PACK_MAX_DISCHARGE_A", 0)
+        if peak > packA:
+            rep.problem("build-configs",
+                        f"{label}: peak {peak:.0f} A exceeds the {packA:.0f} A pack")
+        if peak > d.get("CONNECTOR_RATING_A", 90):
+            over_connector.append(f"{label} ({peak:.0f} A)")
+
+        cA = d.get("CRUISE_CURRENT_A", 0)
+        if not (4.0 < cA < 30.0):
+            rep.problem("build-configs", f"{label}: cruise current {cA:.1f} A is "
+                                         f"implausible")
+
+    if over_connector:
+        rep.problem("build-configs",
+                    "these exceed the XT90-S 90 A continuous rating on a full-throttle "
+                    "burst and need -DACCEPT_CONNECTOR_OVER_RATING=1 or a bigger "
+                    "connector: " + ", ".join(sorted(over_connector)),
+                    severity="warn")
+
+    # ---- the switches must actually switch -------------------------------------------
     def differs(axis, name, pairs):
         for a, b in pairs:
             if abs(builds[a].get(name, 0) - builds[b].get(name, 0)) < 1e-9:
                 rep.problem("build-configs",
-                            f"{name} is identical across {axis} "
-                            f"({a[0][6:]}+{a[1]}b vs {b[0][6:]}+{b[1]}b) -- "
-                            f"that switch is not driving it")
+                            f"{name} is identical across {axis} -- that switch is not "
+                            f"driving it")
 
-    blade_pairs = [(("MOTOR_2810", 2), ("MOTOR_2810", 3)),
-                   (("MOTOR_3110", 2), ("MOTOR_3110", 3))]
-    motor_pairs = [(("MOTOR_2810", 2), ("MOTOR_3110", 2)),
-                   (("MOTOR_2810", 3), ("MOTOR_3110", 3))]
-
-    for name in ("PROP_MASS_G_EACH", "PROP_NOTCH_DEFAULT_HZ", "PROP_POWER_LOADING_GW",
-                 "PROP_BASE_THRUST_G"):
-        differs("PROP_BLADES", name, blade_pairs)
-    for name in ("MOTOR_MASS_G_EACH", "MOTOR_THRUST_FACTOR"):
-        differs("MOTOR_CLASS", name, motor_pairs)
-
-    # Derived values must move on BOTH axes.
-    for name in ("AIRFRAME_AUW_G", "MOTOR_MAX_THRUST_G", "CRUISE_CURRENT_A"):
-        differs("PROP_BLADES", name, blade_pairs)
-        differs("MOTOR_CLASS", name, motor_pairs)
-
-    # ---- direction of travel --------------------------------------------------------
     def direction(name, pairs, expect, why):
         for a, b in pairs:
             va, vb = builds[a].get(name), builds[b].get(name)
@@ -1057,36 +1077,56 @@ def check_prop_configs(rep, fix):
             ok = (vb > va) if expect == "greater" else (vb < va)
             if not ok:
                 rep.problem("build-configs",
-                            f"{name}: {b[0][6:]}+{b[1]}b should be {expect} than "
-                            f"{a[0][6:]}+{a[1]}b ({why}), got {va:g} and {vb:g}")
+                            f"{name}: {b[0]}\"/{b[1][6:]}/{b[2]}b should be {expect} "
+                            f"than {a[0]}\"/{a[1][6:]}/{a[2]}b ({why}), got "
+                            f"{va:g} and {vb:g}")
 
+    # Blade axis, within each frame and motor.
+    blade_pairs = [((f, m, 2), (f, m, 3))
+                   for f, ms in FRAME_MOTORS.items() for m in ms]
+    for name in ("PROP_MASS_G_EACH", "PROP_BASE_THRUST_G", "PROP_NOTCH_DEFAULT_HZ",
+                 "PROP_POWER_LOADING_GW", "AIRFRAME_AUW_G", "MOTOR_MAX_THRUST_G",
+                 "CRUISE_CURRENT_A"):
+        differs("PROP_BLADES", name, blade_pairs)
     direction("PROP_MASS_G_EACH",      blade_pairs, "greater", "an extra blade")
     direction("MOTOR_MAX_THRUST_G",    blade_pairs, "greater", "more blade area")
-    direction("AIRFRAME_AUW_G",        blade_pairs, "greater", "heavier propellers")
-    direction("CRUISE_CURRENT_A",      blade_pairs, "greater", "lower efficiency")
     direction("PROP_NOTCH_DEFAULT_HZ", blade_pairs, "less",
               "three blades spin slower for the same thrust")
     direction("PROP_POWER_LOADING_GW", blade_pairs, "less", "three blades are less efficient")
 
+    # Motor axis, where a frame offers two.
+    motor_pairs = [((f, ms[0], b), (f, ms[1], b))
+                   for f, ms in FRAME_MOTORS.items() if len(ms) == 2 for b in (2, 3)]
+    for name in ("MOTOR_MASS_G_EACH", "MOTOR_THRUST_FACTOR", "AIRFRAME_AUW_G",
+                 "MOTOR_MAX_THRUST_G"):
+        differs("MOTOR_CLASS", name, motor_pairs)
     direction("MOTOR_MASS_G_EACH",  motor_pairs, "greater", "a larger stator")
-    direction("AIRFRAME_AUW_G",     motor_pairs, "greater", "heavier motors")
     direction("MOTOR_MAX_THRUST_G", motor_pairs, "greater",
               "more stator holds RPM better under load")
-    direction("CRUISE_CURRENT_A",   motor_pairs, "greater", "more mass to lift")
 
-    # The 3110 must not be a big thrust win -- a 9-inch propeller is prop-limited, so a
-    # large gain here would mean the model has drifted back to the revision 2.3 error.
+    # A larger stator must not be modelled as a big thrust win -- these propellers are
+    # prop-limited, and a large gain would mean the revision 2.3 error had returned.
     for a, b in motor_pairs:
         va, vb = builds[a]["MOTOR_MAX_THRUST_G"], builds[b]["MOTOR_MAX_THRUST_G"]
         if vb / va > 1.10:
             rep.problem("build-configs",
-                        f"the 3110 is modelled at {100*(vb/va-1):.0f}% more thrust than "
-                        f"the 2810. A 9-inch propeller is prop-limited; a gain this "
-                        f"large means the stator model is wrong.")
+                        f"the larger stator is modelled at {100*(vb/va-1):.0f}% more "
+                        f"thrust. These propellers are prop-limited; a gain this large "
+                        f"means the stator model is wrong.")
+
+    # Frame axis: bigger frame, bigger everything except notch frequency.
+    frame_pairs = [((7, "MOTOR_2807", b), (9, "MOTOR_2810", b)) for b in (2, 3)] + \
+                  [((9, "MOTOR_3110", b), (10, "MOTOR_3110", b)) for b in (2, 3)]
+    direction("AIRFRAME_AUW_G",        frame_pairs, "greater", "a bigger airframe")
+    direction("PROP_MASS_G_EACH",      frame_pairs, "greater", "a bigger propeller")
+    direction("PROP_NOTCH_DEFAULT_HZ", frame_pairs, "less",
+              "a bigger disc turns slower for the same thrust")
+    direction("FRAME_GAIN_SCALE",      frame_pairs, "less",
+              "a bigger airframe has more rotational inertia")
 
     rep.note = getattr(rep, "note", [])
-    rep.note.append(f"build-configs: {len(builds)} motor x propeller combinations "
-                    f"coherent, distinct and correctly ordered")
+    rep.note.append(f"build-configs: {len(builds)} frame x motor x propeller "
+                    f"combinations coherent, distinct and correctly ordered")
 
 
 # =====================================================================================
@@ -1115,7 +1155,7 @@ CHECKS = [
     ("prose-constants", "numbers stated in prose match the constants they quote",
      check_prose_constants),
     ("build-configs",
-     "all MOTOR_CLASS x PROP_BLADES builds are coherent, distinct and correctly ordered",
+     "every frame x motor x propeller build is coherent, distinct and correctly ordered",
      check_prop_configs),
 ]
 
