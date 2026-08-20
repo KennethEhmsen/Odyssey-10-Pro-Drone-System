@@ -19,7 +19,7 @@ below has been recomputed:
 | | Was (10-inch) | Now (9-inch) |
 | --- | --- | --- |
 | Frame | 420–450 mm, 7–8 mm arms, 286 g | 387 mm, 6 mm arms, 230 g |
-| Propellers | 10x5x3, 48 g | **9x5x2, 28 g** |
+| Propellers | 10x5x3, 48 g | **9x5x2, 28 g** (3-blade supported, see 3.2) |
 | All-up weight | 1773 g | **1584 g** |
 | Thrust per motor | 1750 g | **1230 g** |
 | Thrust-to-weight | 3.95:1 | **3.11:1** |
@@ -268,12 +268,48 @@ section 5.2, and this table has now moved twice.
 | 75% | 761 g | 3043 g | fast cruise |
 | 100% | 1230 g | 4920 g | emergency punch-out |
 
-**Why two blades.** Three blades buy thrust per unit diameter; two buy efficiency. A
-2-blade propeller runs at a higher figure of merit (about 0.60 against 0.55) and weighs
-2 g less each. It gives up roughly 12% of peak thrust — affordable at a thrust-to-weight
-ratio above 3:1 — and returns about 10% in hover efficiency, which on a long-range
-platform is the trade worth making. Fit 3-blade propellers instead if you want wind
-authority and punch over range; the consequences are in section 8.3.
+**Two blades or three?** Both are fully supported and the choice is genuine. The
+default is two, but the reasoning matters more than the default.
+
+| | 9x5x2 (specified) | 9x5x3 |
+| --- | --- | --- |
+| All-up weight | 1584 g | 1592 g |
+| Peak thrust per motor | 1230 g | 1400 g |
+| Thrust-to-weight | 3.11:1 | **3.52:1** |
+| Hover throttle | 51% | **47%** |
+| Hover power | **196 W** | 215 W |
+| Power loading | **8.90 g/W** | 8.07 g/W |
+| Cruise endurance | **22 min** | 20 min |
+| One-way range | **16.0 km** | 14.6 km |
+| Peak pack current | **51 A** | 67 A |
+| **Gyro notch centre** | **120 Hz** | **100 Hz** |
+
+**The common argument for three blades — wind — does not survive checking.** Holding
+position in a 20 m/s wind requires about 1.35× hover thrust, which is 43% of maximum on
+two blades and 38% on three. Neither is close to thrust-limited. And on a 5 km
+out-and-back into an 8 m/s headwind, the round trip needs 25 minutes of cruise against
+22.3 minutes available on two blades and 20.3 on three — so in wind the **two-blade
+configuration has more margin, not less**, because that mission is endurance-limited
+rather than thrust-limited.
+
+**Where three blades genuinely win** is attitude authority: faster control response,
+more punch-out margin, and a hover point 4% lower, which leaves more throttle range
+before the mixer starts trading attitude authority for climb. If you fly this aircraft
+manually and aggressively, or in gusty conditions close to obstacles, three blades are
+the better choice and the 1.4 km of range is a fair price.
+
+**If you fit three blades, change three things** in `config.h`, or the aircraft will be
+flying on figures that no longer describe it:
+
+```c
+#define MOTOR_MAX_THRUST_G   1400.0f   // was 1230
+#define AIRFRAME_AUW_G       1592.0f   // was 1584
+#define NOTCH_CENTER_HZ      100.0f    // was 120  <-- the one that matters
+```
+
+The notch is not optional bookkeeping. Section 8.3 explains why: at Q = 4 a 120 Hz notch
+does essentially nothing for the 104 Hz peak that three blades produce, so the filter
+would add phase lag in the control band while attenuating nothing.
 
 **Peak current, which sizes the ESC.** Momentum theory with a figure of merit of 0.55
 and a combined motor/ESC efficiency of 0.78 puts full-throttle draw at about 374 W per

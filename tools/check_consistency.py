@@ -21,6 +21,13 @@ representation, and --fix rewrites the DOCUMENTATION to match. It never edits fi
 to satisfy a document, because a document cannot be compiled or tested.
 
 Checks that cannot be resolved mechanically are reported and never auto-fixed.
+
+Coverage note: `spec-constants` handles values in table cells, whose shape is
+predictable. `prose-constants` handles values asserted in sentences and formula blocks,
+which is where the CRUISE_CURRENT_A error hid for three revisions -- the constant moved
+and the prose kept quoting the old figure. Those patterns are explicit rather than
+generic, so the check reports how many claims it verified; if that number stops growing
+while the document does, the check is falling behind.
 """
 
 import argparse
@@ -80,6 +87,13 @@ class Report:
                 tag = "ERROR" if sev == "error" else "warn "
                 hint = "  (fixable with --fix)" if fixable else ""
                 print(f"  {tag} [{check}] {msg}{hint}")
+
+        if getattr(self, "note", None):
+            print()
+            print("NOTES")
+            print("-----")
+            for n in self.note:
+                print(f"  {n}")
 
         print()
         print("=" * 78)
@@ -613,6 +627,122 @@ def check_workflow_cost(rep, fix):
 
 
 # =====================================================================================
+#  CHECK: numbers asserted in PROSE match the constants they claim to quote
+#
+#  The spec-constants check covers values that sit in tables with a predictable shape.
+#  It does not cover a sentence like "CRUISE_CURRENT_A in config.h is set to 9.7 A", or a
+#  formula block that writes "I_cruise = 9.7 A" -- and both of those went stale during
+#  the airframe rework, one of them for three revisions.
+#
+#  That mattered: the stale one hid a real defect. CRUISE_CURRENT_A was set from hover
+#  power rather than cruise power, so the return-to-home energy reserve was optimistic,
+#  and the prose kept quoting the old figure while the constant moved underneath it.
+#
+#  Each entry below is an EXPLICIT pattern rather than a generic scan. A generic scan
+#  over prose produces false positives, and a check nobody trusts is a check nobody
+#  runs. The cost is that coverage has to be extended by hand, so the check reports how
+#  many claims it verified -- if that number stops growing while the document does, the
+#  check is falling behind.
+# =====================================================================================
+
+#  (where it lives, regex with ONE capture group, config.h constant, tolerance)
+PROSE_CLAIMS = [
+    ("5.2 energy formula",
+     r"I_cruise\s*=\s*([\d.]+)\s*A",                       "CRUISE_CURRENT_A", 0.05),
+    ("3.3 cruise current",
+     r"`CRUISE_CURRENT_A`[\s\S]{0,80}?set to \*{0,2}([\d.]+)\*{0,2}\s*A",
+                                                            "CRUISE_CURRENT_A", 0.05),
+    ("5.2 critical cutoff",
+     r"V_req\s*=\s*V_critical[^\n]*\n\s*=\s*([\d.]+) V",   "PACK_CRITICAL_V",  0.01),
+    ("8.3 notch centre",
+     r"The notch centre is \*\*([\d.]+) Hz\*\*",            "NOTCH_CENTER_HZ",  0.01),
+    ("5.9 free-fall threshold",
+     r"acceleration magnitude below \*\*([\d.]+) m/s",      "FREEFALL_ACCEL_MPS2", 0.01),
+    ("5.9 free-fall hold",
+     r"held\s*\ncontinuously for \*\*(\d+) ms\*\*",         "FREEFALL_HOLD_MS", 0.5),
+    ("5.9 parachute minimum altitude",
+     r"\*\*Minimum deployment altitude, (\d+) m AGL",       "PARACHUTE_MIN_AGL_M", 0.01),
+    ("5.7 touchdown ToF threshold",
+     r"AGL_tof\s*<=\s*([\d.]+) m",                          "TOUCHDOWN_TOF_M",  0.001),
+    ("5.7 touchdown veto altitude",
+     r"AGL_any\s*>\s*([\d.]+) m",                           "TOUCHDOWN_VETO_AGL_M", 0.001),
+    ("5.8 arm throttle threshold",
+     r"Throttle stick at minimum \(≤ (\d+) µs\)",           "ARM_THROTTLE_MAX_US", 0.5),
+    ("5.4 CRSF timeout",
+     r"CRSF gap of more than (\d+) ms",                     "CRSF_TIMEOUT_MS",  0.5),
+    ("6.2 obstacle brake distance",
+     r"d <= ([\d.]+) m\s+hard brake",                       "OBSTACLE_STOP_CM", 0.01),
+    ("6.3 flare engage altitude",
+     r"Active below ([\d.]+) m AGL",                        "FLARE_ENGAGE_AGL_M", 0.01),
+]
+
+# Constants stored in different units from how the prose states them.
+PROSE_SCALE = {
+    "OBSTACLE_STOP_CM": 0.01,      # centimetres in code, metres in prose
+}
+
+
+def _config_value(defines, name):
+    """Resolves a config.h constant to a float, following the per-cell derivations."""
+    if name in defines:
+        # Strip the C literal suffixes: 1.5f, 400u, 500UL and so on.
+        raw = defines[name].strip().rstrip("fFuUlL")
+        try:
+            return float(raw)
+        except ValueError:
+            pass
+    # PACK_* values are products of a per-cell constant and CELL_COUNT.
+    if name.startswith("PACK_") and name.endswith("_V"):
+        cell = name.replace("PACK_", "CELL_")
+        if cell in defines and "CELL_COUNT" in defines:
+            return float(defines[cell].rstrip("f")) * int(defines["CELL_COUNT"])
+    return None
+
+
+def check_prose_constants(rep, fix):
+    rep.checks_run += 1
+    defines = config_defines(read(CONFIG_H))
+    spec = read(SPEC)
+    verified = 0
+
+    for where, pattern, const, tol in PROSE_CLAIMS:
+        expected = _config_value(defines, const)
+        if expected is None:
+            rep.problem("prose-constants",
+                        f"{where}: cannot resolve {const} from config.h", severity="warn")
+            continue
+
+        expected *= PROSE_SCALE.get(const, 1.0)
+
+        m = re.search(pattern, spec)
+        if not m:
+            # A claim that has vanished is as much a drift signal as one gone stale --
+            # the prose may have been reworded around it.
+            rep.problem("prose-constants",
+                        f"{where}: the sentence quoting {const} is no longer present. "
+                        f"Either it was reworded (update the pattern) or the figure was "
+                        f"dropped.", severity="warn")
+            continue
+
+        try:
+            stated = float(m.group(1))
+        except ValueError:
+            rep.problem("prose-constants", f"{where}: could not parse '{m.group(1)}'")
+            continue
+
+        if abs(stated - expected) > tol:
+            rep.problem("prose-constants",
+                        f"{where}: prose says {m.group(1)} but {const} is "
+                        f"{expected:g}")
+        else:
+            verified += 1
+
+    if verified:
+        rep.note = getattr(rep, "note", [])
+        rep.note.append(f"prose-constants: {verified}/{len(PROSE_CLAIMS)} claims verified")
+
+
+# =====================================================================================
 #  CHECK: README badges and revision agree with reality
 #
 #  Badges that carry numbers rot. A badge claiming "135 assertions" after the suite has
@@ -766,6 +896,8 @@ CHECKS = [
     ("workflow-cost", "the CI workflow stays on Linux, unscheduled and unmatrixed",
      check_workflow_cost),
     ("readme", "README badge counts and revision match reality", check_readme),
+    ("prose-constants", "numbers stated in prose match the constants they quote",
+     check_prose_constants),
 ]
 
 
