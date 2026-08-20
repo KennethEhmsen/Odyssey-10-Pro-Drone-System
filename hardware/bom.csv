@@ -1,9 +1,9 @@
 Category,Component,Key Specifications,Qty,Unit Price USD,Total USD,Mass g,Primary Function,Notes
 Airframe,RJXHOBBY Mark4 V2 387 mm carbon frame,387 mm wheelbase / 3K carbon / 6 mm arms / 9 inch,1,55.00,55.00,230,Structural chassis and motor mounting,"Mass includes standoffs, gel dampers and hardware"
 Propulsion,2810 / 2812 brushless motor,"900 KV, 28 mm stator, 4S-6S, M5 shaft",4,22.00,88.00,208,Primary thrust generation,52 g each installed. 28 mm stator is the 8-9 inch class; the 3110 previously specified is a 10-11 inch motor
-Propellers,HQProp / Gemfan 9x5x3,"9 inch, glass-nylon, 2 CW + 2 CCW, props-out",2 pair,6.00,12.00,36,Aerodynamic lift,9 g per propeller / 4 fitted plus spares
+Propellers,HQProp / Gemfan 9x5x2,"9 inch, TWO blade, glass-nylon, 2 CW + 2 CCW, props-out",2 pair,6.00,12.00,28,Aerodynamic lift,7 g each. Two blades for cruise efficiency; a 3-blade is the option if you want wind authority over range
 Drive,4-in-1 ESC (BLHeli_32 / AM32),"40 A cont. / 50 A burst per channel, 6S, DShot300",1,38.00,38.00,25,Motor commutation and power delivery,Sized from 16.9 A peak per motor (2.4x margin). The 50 A rating previously specified was for the 3110 / 10-inch build
-Main Battery,6S LiPo pack,22.2 V nominal / 4500 mAh / 45C,1,110.00,110.00,680,Primary flight energy source,6S2P 21700 Li-ion alternative is 8400 mAh / 790 g
+Main Battery,6S LiPo pack,"22.2 V nominal, 4500 mAh, 20C minimum",1,110.00,110.00,640,Primary flight energy source,"Peak draw is 15C, so 20C is ample. The 45C previously specified cost 40 g for capability the aircraft cannot use. Li-ion 6S2P alternative: 8400 mAh / 870 g, see docs 3.3"
 Main MCU,ESP32-P4 RISC-V dev board,Dual-core 400 MHz / 3.3 V / no radio,1,14.00,14.00,9,Central flight controller,NO Wi-Fi and NO Bluetooth - see the Remote ID line
 Primary IMU,InvenSense MPU-6050 breakout,+/-500 deg/s gyro / +/-8 g accel / I2C,1,3.50,3.50,2,Attitude and angular rate sensing,Polled at 500 Hz by the flight core only
 Backup IMU,ICM-42688-P breakout,Low-noise 6-axis / redundant failover,1,4.00,4.00,2,Sensor fault detection and voting,Cross-checked at 50 Hz (sensors.cpp)

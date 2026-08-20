@@ -20,8 +20,8 @@
 //  1. AIRFRAME
 // =====================================================================================
 #define AIRFRAME_NAME             "Odyssey-10 Pro"
-#define AIRFRAME_AUW_G            1632.0f   // all-up weight, grams (see docs section 3)
-#define MOTOR_MAX_THRUST_G        1400.0f   // per motor, MODELLED at 6S / 9x5x3 -- verify
+#define AIRFRAME_AUW_G            1584.0f   // all-up weight, grams (see docs section 3)
+#define MOTOR_MAX_THRUST_G        1230.0f   // per motor, MODELLED at 6S / 9x5x2 -- verify
 
 // =====================================================================================
 //  2. BATTERY  --  FIX FOR FINDING 1
@@ -79,19 +79,21 @@
 //
 // TWO INDEPENDENT ESTIMATES DISAGREE, which is worth knowing before trusting either:
 //
-//   scaling the 10-inch figure by (10/9)^2 ............. about  97 Hz
-//   momentum theory from hover thrust and disc area .... about 105 Hz
+//   momentum theory from hover thrust and disc area .... about 124 Hz
+//   scaling the 3-blade figure by sqrt(Ct3/Ct2) ........ about 121 Hz
 //
-// A 7% spread. 100 Hz is set as the midpoint, NOT because it is known to be right but
-// because it is the least-wrong single number available without data. At Q = 4 the
-// notch is -3 dB about 12 Hz either side, so 100 Hz covers roughly 94-106 Hz -- which
-// spans both estimates, but only just.
+// These agree to within 3%, unlike the 3-blade case where two methods differed by 7%.
+// 120 Hz is set from them.
+//
+// NOTE THAT BLADE COUNT MOVES THIS. A 2-blade propeller must spin roughly 21% faster
+// than a 3-blade for the same thrust, so switching propellers moves the notch by more
+// than the frame change did. If you fit 3-blade propellers, this belongs near 100 Hz.
 //
 // MEASURE IT. Take a BlackBox gyro trace at hover, find the actual peak, and set this
 // from the data. The 6 mm arms on this frame are also less stiff than the 7-8 mm arms
 // previously specified, which moves the structural resonance independently of the
 // propellers, so neither model above accounts for it.
-#define NOTCH_CENTER_HZ           100.0f
+#define NOTCH_CENTER_HZ           120.0f
 #define NOTCH_Q                   4.0f
 
 // Complementary filter weighting for the attitude estimate
@@ -166,8 +168,13 @@
 // beacon is armed on touchdown.
 #define RECOVERY_RADIUS_M         15.0f
 
-// Nominal cruise current, used to budget the mAh required to fly home.
-#define CRUISE_CURRENT_A          10.0f
+// Current drawn while flying home AT CRUISE SPEED. This budgets the mAh the return
+// leg will cost, so it must be the CRUISE figure, not the hover one.
+//
+// Revisions 2.2 to 2.4 set this from hover power, which is about 10% lower. That made
+// the return-to-home energy budget optimistic: the aircraft would believe it could
+// reach home on slightly less charge than the trip actually costs. Corrected here.
+#define CRUISE_CURRENT_A          9.7f
 
 // =====================================================================================
 //  6. FAILSAFE AND LANDING

@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 2.4 — propulsion chain matched to the 9-inch airframe
+**Document revision:** 2.5 — propulsion and energy matched to the 9-inch airframe
 
 ---
 
@@ -19,14 +19,15 @@ below has been recomputed:
 | | Was (10-inch) | Now (9-inch) |
 | --- | --- | --- |
 | Frame | 420–450 mm, 7–8 mm arms, 286 g | 387 mm, 6 mm arms, 230 g |
-| Propellers | 10x5x3, 48 g | 9x5x3, 36 g |
-| All-up weight | 1773 g | **1632 g** |
-| Thrust per motor | 1750 g | **1400 g** |
-| Thrust-to-weight | 3.95:1 | **3.43:1** |
-| Hover throttle | ~44% | **~48%** |
+| Propellers | 10x5x3, 48 g | **9x5x2, 28 g** |
+| All-up weight | 1773 g | **1584 g** |
+| Thrust per motor | 1750 g | **1230 g** |
+| Thrust-to-weight | 3.95:1 | **3.11:1** |
+| Hover throttle | ~44% | **~51%** |
 | Motors | 3110, 68 g each | **2810, 52 g each** |
 | ESC | 50 A/ch, 34 g | **40 A/ch, 25 g** |
-| Gyro notch centre | 80 Hz | **100 Hz** |
+| Pack | 4500 mAh 45C, 680 g | **4500 mAh 20C, 640 g** |
+| Gyro notch centre | 80 Hz | **120 Hz** |
 
 The notch change is the one that matters for safety. A smaller disc needs more shaft
 speed for the same thrust, moving the hover fundamental up out of the old notch — at
@@ -41,6 +42,12 @@ The motors changed with the frame. A 3110 is a 31 mm stator — a 10–11 inch m
 The ESC followed the motors. Peak draw is **16.9 A per motor**, so the 50 A per-channel
 rating carried over from the 10-inch build was nearly three times what the aircraft can
 actually pull. 40 A per channel keeps a 2.4× margin and saves 9 g.
+
+The propellers and pack followed the mission. Three blades buy thrust per unit diameter;
+two blades buy efficiency — and with thrust-to-weight already above 3:1 there was thrust
+to trade for endurance. The pack was rated 45C against a **15C** peak demand, so 40 g was
+being carried for capability the aircraft cannot use. Together those give **24 minutes of
+hover and a 16 km one-way range**, up from 22 minutes and 14.1 km.
 
 The reference images are in `hardware/`.
 
@@ -161,9 +168,9 @@ $514.50 did not match its own line items, which summed to $512.50.
 | --- | --- | --- | --- | --- | --- | --- |
 | Airframe | RJXHOBBY Mark4 V2 387 mm | 387 mm wheelbase, 3K carbon, 6 mm arms | 1 | $55.00 | $55.00 | 230 g |
 | Propulsion | 2810 / 2812 brushless motor | 900 KV, 28 mm stator, 4S–6S | 4 | $22.00 | $88.00 | 208 g |
-| Propellers | HQProp / Gemfan 9x5x3 | 9 in, 2 CW + 2 CCW, props-out | 2 pr | $6.00 | $12.00 | 36 g |
+| Propellers | HQProp / Gemfan 9x5x2 | 9 in **two-blade**, 2 CW + 2 CCW, props-out | 2 pr | $6.00 | $12.00 | 28 g |
 | Drive | 4-in-1 ESC (BLHeli_32 / AM32) | 40 A cont., 50 A burst per ch., 6S | 1 | $38.00 | $38.00 | 25 g |
-| Main battery | 6S LiPo pack | 22.2 V nom, 4500 mAh, 45C | 1 | $110.00 | $110.00 | 680 g |
+| Main battery | 6S LiPo pack | 22.2 V nom, 4500 mAh, **20C min** | 1 | $110.00 | $110.00 | 640 g |
 | Main MCU | ESP32-P4 dev board | Dual-core 400 MHz, **no radio** | 1 | $14.00 | $14.00 | 9 g |
 | Primary IMU | InvenSense MPU-6050 | ±500 °/s, ±8 g, I2C | 1 | $3.50 | $3.50 | 2 g |
 | Backup IMU | ICM-42688-P | Low-noise 6-axis, voting | 1 | $4.00 | $4.00 | 2 g |
@@ -191,7 +198,7 @@ $514.50 did not match its own line items, which summed to $512.50.
 cover the Schottky diode-OR and the main-power-sense divider that the beacon redesign in
 section 7 requires.
 
-Airborne dry mass is 1462 g (the second SX1278 module is the ground station radio and
+Airborne dry mass is 1414 g (the second SX1278 module is the ground station radio and
 does not fly). See section 3.1.
 
 ---
@@ -207,9 +214,9 @@ quoted 1850 g against a grouped estimate that did not reconcile with its own par
 | --- | --- |
 | Frame, standoffs, gel dampers, hardware | 230 g |
 | 4× 2810 motors (52 g each installed) | 208 g |
-| 4× 9x5x3 propellers | 36 g |
+| 4× 9x5x2 propellers | 28 g |
 | 4-in-1 ESC | 25 g |
-| 6S 4500 mAh LiPo pack | 680 g |
+| 6S 4500 mAh LiPo pack | 640 g |
 | Avionics stack (P4, IMUs, baro, SD) | 18 g |
 | Navigation sensors (GNSS + mast, compass, LiDAR, ToF, INA226) | 26 g |
 | Radios (LoRa air unit, ExpressLRS RX, Remote ID module) | 13 g |
@@ -218,14 +225,14 @@ quoted 1850 g against a grouped estimate that did not reconcile with its own par
 | Parachute subsystem | 55 g |
 | Beacon subsystem (node, 1S cell, latch) | 24 g |
 | Wiring, connectors, capacitors, hardware | 88 g |
-| **Dry mass** | **1462 g** |
+| **Dry mass** | **1414 g** |
 | Payload reserve | 170 g |
-| **All-up weight (AUW)** | **1632 g** |
+| **All-up weight (AUW)** | **1584 g** |
 
 ### 3.2 Thrust and throttle response
 
-Maximum static thrust per motor at 6S with a 9x5x3 propeller is **1400 g**, giving 5600 g
-total and a **thrust-to-weight ratio of 3.43:1**.
+Maximum static thrust per motor at 6S with a 9x5x2 propeller is **1230 g**, giving 4920 g
+total and a **thrust-to-weight ratio of 3.11:1**.
 
 **Why the motor changed.** Revisions up to 2.2 specified a 3110 — a 31 mm stator, which
 is a 10–11 inch motor. On a 387 mm 9-inch frame that is over-sized: it carries mass the
@@ -253,24 +260,32 @@ section 5.2, and this table has now moved twice.
 | Throttle | Thrust/motor | Total | Note |
 | --- | --- | --- | --- |
 | 0% | 0 g | 0 g | |
-| 20% | 95 g | 381 g | |
-| 30% | 187 g | 750 g | |
-| 40% | 303 g | 1212 g | |
-| **48%** | **408 g** | **1632 g** | **hover equilibrium = AUW** |
-| 60% | 597 g | 2386 g | |
-| 75% | 866 g | 3464 g | fast cruise |
-| 100% | 1400 g | 5600 g | emergency punch-out |
+| 20% | 84 g | 335 g | |
+| 30% | 165 g | 659 g | |
+| 40% | 266 g | 1065 g | |
+| **51%** | **396 g** | **1584 g** | **hover equilibrium = AUW** |
+| 60% | 524 g | 2096 g | |
+| 75% | 761 g | 3043 g | fast cruise |
+| 100% | 1230 g | 4920 g | emergency punch-out |
+
+**Why two blades.** Three blades buy thrust per unit diameter; two buy efficiency. A
+2-blade propeller runs at a higher figure of merit (about 0.60 against 0.55) and weighs
+2 g less each. It gives up roughly 12% of peak thrust — affordable at a thrust-to-weight
+ratio above 3:1 — and returns about 10% in hover efficiency, which on a long-range
+platform is the trade worth making. Fit 3-blade propellers instead if you want wind
+authority and punch over range; the consequences are in section 8.3.
 
 **Peak current, which sizes the ESC.** Momentum theory with a figure of merit of 0.55
 and a combined motor/ESC efficiency of 0.78 puts full-throttle draw at about 374 W per
-motor — **16.9 A per motor at 22.2 V, or 67 A for the aircraft**. Hover sits at about
-2.7 A per motor. Section 4.3 sizes the ESC from those figures.
+motor on 3-blade propellers — **16.9 A per motor at 22.2 V, or 67 A for the aircraft**.
+Two-blade propellers draw less, about 51 A for the aircraft. The ESC in section 4.3 is
+sized on the higher figure so that either propeller can be fitted.
 
 **If you have already bought 3110s**, fly them. They will work on 9-inch propellers — the
-aircraft is 64 g heavier (AUW 1696 g) and the thrust-to-weight lands near 3.07:1
-instead of 3.43:1,
-which is still ample for a cruiser. Set `AIRFRAME_AUW_G` to 1696 and
-`MOTOR_MAX_THRUST_G` to 1300 in `config.h` and the rest of the chain follows.
+aircraft is 64 g heavier (AUW 1648 g) and the thrust-to-weight lands near 2.99:1
+instead of 3.11:1,
+which is still ample for a cruiser. Set `AIRFRAME_AUW_G` to 1648 and
+`MOTOR_MAX_THRUST_G` to 1230 in `config.h` and the rest of the chain follows.
 
 **Propeller clearance.** At a 387 mm wheelbase, adjacent motor hubs sit about 274 mm
 apart. A 9-inch propeller (229 mm) leaves roughly 22 mm of tip clearance per side; a
@@ -279,23 +294,36 @@ apart. A 9-inch propeller (229 mm) leaves roughly 22 mm of tip clearance per sid
 
 ### 3.3 Endurance and range
 
-Assumptions: hover power loading 7.97 g/W; avionics, VTX and BEC losses 18 W; usable pack
+Assumptions: hover power loading 8.90 g/W; avionics, VTX and BEC losses 18 W; usable pack
 fraction 80% for LiPo and 85% for Li-ion.
 
-Power loading fell from the 8.5 g/W used for the 10-inch airframe. Total disc area dropped
-from 0.203 m² to 0.164 m², and induced power scales with the square root of disc loading,
-so the smaller propellers cost efficiency — but the lighter motors give some of it back.
-Hover power is about 223 W.
-
-| Configuration | Hover | Cruise @ 12 m/s | One-way range | Practical radius |
-| --- | --- | --- | --- | --- |
-| 6S 4500 mAh LiPo (1632 g) | 22 min | 20 min | 14.1 km | ~5.6 km |
-| 6S2P 8400 mAh Li-ion (1742 g) | 39 min | 35 min | 25.5 km | ~10.2 km |
+| Configuration | Mass | Hover | Cruise @ 12 m/s | One-way | Radius | TWR |
+| --- | --- | --- | --- | --- | --- | --- |
+| **6S 4500 mAh LiPo (specified)** | 640 g | **24 min** | **22 min** | **16.0 km** | **~6.4 km** | 3.11:1 |
+| 6S2P 8400 mAh Li-ion | 870 g | 40 min | 37 min | 26.4 km | ~10.6 km | 2.71:1 |
 
 Practical radius is roughly 40% of one-way range, because the return leg must be flown on
 the same pack and the energy budget in section 5.2 holds a reserve back for the descent.
-`CRUISE_CURRENT_A` in `config.h` is set to 10.0 A, matching the 223 W hover figure at
-22.2 V; correct it after your own bench measurement.
+
+**On the pack C-rating.** Peak draw is 51 A on two-blade propellers, or 67 A on three —
+**15C on a 4500 mAh pack**. The 45C previously specified was rated at 202 A, three times
+anything the aircraft can pull, and cost 40 g for the privilege. A 20C pack is ample and
+widens the choice considerably. C-rate is not the constraint on this platform; energy per
+gram is.
+
+**On the Li-ion option.** It nearly doubles the range and is genuinely attractive for a
+long-range mission, but read the two caveats first. Thrust-to-weight falls to **2.71:1**,
+which noticeably reduces authority in wind and in a recovery. And a Molicel P42A 2P pack
+derated to a realistic 30 A per cell supplies about 60 A, so a 51 A peak sits at **85%
+utilisation** — acceptable for brief punch-outs, but it is not a pack to fly aggressively,
+and cold weather makes it worse.
+
+`CRUISE_CURRENT_A` in `config.h` is set to **9.7 A**, which is the cruise figure, not the
+8.8 A hover figure. That distinction matters: the constant budgets the charge needed to
+fly home at cruise speed, so using hover current would make the return-to-home reserve
+optimistic. Revisions 2.2 to 2.4 had it wrong; see section 5.2.
+
+Correct all of these after your own bench measurement.
 
 ## 4. Frame Dynamics, Motor Layout and Rotation
 
@@ -380,9 +408,20 @@ not timidity: published ESC ratings are typically measured with forced airflow o
 durations, and this is a hover-heavy long-range profile where thermal soak matters more
 than burst capability.
 
-At full throttle the pack sees about 67 A. The XT90-S is rated 90 A continuous (75%
-utilised) and a 6S 4500 mAh 45C pack can deliver roughly 202 A (33% utilised), so neither
-is the binding constraint.
+At full throttle the pack sees about 67 A on three-blade propellers, or 51 A on the
+specified two-blade. The XT90-S is rated 90 A continuous, and a 6S 4500 mAh 20C pack
+delivers 90 A:
+
+| | 2-blade (51 A) | 3-blade (67 A) |
+| --- | --- | --- |
+| XT90-S, 90 A | 57% | 74% |
+| Pack, 20C = 90 A | 57% | 74% |
+| ESC, 4 x 40 A = 160 A | 32% | 42% |
+
+Dropping the pack from 45C to 20C moved it from a third utilised to roughly two thirds at
+peak on three-blade propellers. That is still comfortable headroom for brief punch-outs,
+but it is no longer the irrelevance it was — if you fit three-blade propellers and fly
+aggressively in the cold, specify 30C instead.
 
 **Protocol.** The firmware drives the ESC with **analog PWM at 400 Hz, 12-bit** via the
 ESP32 LEDC peripheral:
@@ -517,12 +556,17 @@ V_req    = V_critical + (t_return * V_burn) + V_reserve
 load-independent, so unlike voltage it does not false-trigger on a punch-out:
 
 ```
-mAh_req  = I_cruise * 1000 * (t_return / 3600)      I_cruise = 10.5 A
+mAh_req  = I_cruise * 1000 * (t_return / 3600)      I_cruise = 9.7 A
 mAh_left = (pack_capacity * 0.80) - mAh_consumed
 ```
 
 The aircraft is considered able to reach home only if the filtered voltage exceeds
 `V_req` **and** at least 120% of `mAh_req` remains.
+
+> **Corrected in revision 2.5.** `CRUISE_CURRENT_A` had been set from *hover* power
+> since revision 2.2. The return leg is flown at cruise speed, which costs about 10%
+> more, so the aircraft was budgeting slightly less charge for the trip home than it
+> actually needs. Now set from the cruise figure.
 
 **Debouncing.** Revision 1.0 compared a single, unfiltered ADC sample against the
 threshold, and the resulting state changes were irreversible. A momentary sag under
@@ -988,34 +1032,40 @@ motors spinning at hover throttle, not just on a bench.
 
 ### 8.3 Vibration isolation
 
-The IMU stack sits on polyurethane gel. The notch centre was **raised from 80 Hz to
-100 Hz** when the airframe moved to the 387 mm 9-inch frame.
+The IMU stack sits on polyurethane gel. The notch centre is **120 Hz**, raised from the
+original 80 Hz in two steps as the airframe and then the propellers changed.
 
-**Two independent estimates disagree, and that is the important part.**
+**Blade count moves this more than the frame did.** A 2-blade propeller must spin about
+21% faster than a 3-blade for the same thrust, because it has less blade area to work
+with. That shifts the hover fundamental proportionally:
 
-| Method | Hover fundamental |
-| --- | --- |
-| Scale the 10-inch figure by (10/9)² | ~97 Hz |
-| Momentum theory from hover thrust and disc area | ~105 Hz |
+| Configuration | Hover shaft speed | Fundamental |
+| --- | --- | --- |
+| 10-inch, 3-blade (original) | ~5300 rpm | ~88 Hz |
+| 9-inch, 3-blade | ~6260 rpm | ~104 Hz |
+| **9-inch, 2-blade (specified)** | **~7470 rpm** | **~124 Hz** |
 
-A 7% spread. 100 Hz is set as the midpoint — **not because it is known to be right**, but
-because it is the least-wrong single number available without data. At Q = 4 the notch is
-−3 dB roughly 12 Hz either side, so 100 Hz covers about 94–106 Hz. That spans both
-estimates, but only just: if the truth sits at either edge, half the notch is being spent
-on nothing.
+Two independent methods now agree to within 3% — momentum theory gives 124 Hz and
+scaling the 3-blade figure by √(Ct₃/Ct₂) gives 121 Hz. That is better than the 3-blade
+case, where two methods differed by 7%. **120 Hz** is set from them.
 
-For context, the original 80 Hz setting was −3 dB by 90 Hz, so it would have left a
-~100 Hz peak essentially unattenuated and fed it straight into the rate controller.
+**If you fit 3-blade propellers, move this back to about 100 Hz.** At Q = 4 the notch is
+−3 dB roughly 15 Hz either side, so a 120 Hz notch does essentially nothing for a 104 Hz
+peak. The propeller and the notch are a matched pair; changing one without the other
+leaves the filter attenuating empty spectrum.
 
 **Measure it.** Take a BlackBox gyro trace at a stable hover, find the actual peak, and
-set `NOTCH_CENTER_HZ` from the data. Neither model above accounts for the frame itself:
-the 6 mm arms on this airframe are less stiff than the 7–8 mm arms previously specified,
-which moves the structural resonance independently of the propellers. Blade-pass energy
-sits near twice the fundamental, around 200 Hz, which the notch does not target.
+set `NOTCH_CENTER_HZ` from the data. None of the models above account for the frame
+itself: the 6 mm arms on this airframe are less stiff than the 7–8 mm arms originally
+specified, which moves the structural resonance independently of the propellers.
+Blade-pass energy sits near twice the fundamental, around 250 Hz, which the notch does
+not target.
 
-This is the one number in the specification where a modelled value is actively risky
-rather than merely approximate, because a notch in the wrong place is worse than no
-notch — it adds phase lag in the control band while attenuating nothing.
+This remains the one number in the specification where a modelled value is actively risky
+rather than merely approximate, because a notch in the wrong place is worse than no notch
+— it adds phase lag in the control band while attenuating nothing. Section 4.3 records
+bidirectional DShot as the change that would remove the guesswork entirely, by letting
+the notch track measured RPM.
 
 ### 8.4 Radio frequency plan
 
@@ -1688,6 +1738,9 @@ Revision 2.0 introduced or left standing the following, all corrected here.
 | §12 implied that broadcasting OpenDroneID messages constitutes compliance | §12.4 added, listing what EU 2019/945 Part 6 additionally requires |
 | Nothing checked that the specification and the firmware still agreed with each other — the failure mode behind findings 1, 2, 16 and 18 | `tools/check_consistency.py` added: 12 automated checks with `--fix` for the mechanically correctable ones, wired into the pre-push hook and CI |
 | Remote ID was a **blocking** arm condition, imposing on a privately built A3 aircraft a requirement that attaches to class-marked C1/C2/C3 aircraft — it would have grounded a legal airframe | `REQUIRE_REMOTE_ID_TO_ARM` added to `config.h`, defaulting to 0. Remote ID is optional unless the operator opts in; §12.1 documents when to |
+| `CRUISE_CURRENT_A` was set from HOVER power since revision 2.2, but it budgets the charge to fly home at CRUISE speed — about 10% more. The RTH energy reserve was therefore optimistic | Corrected to 9.7 A, and §3.3 now states which figure it is and why |
+| The pack was rated 45C against a 15C peak demand, carrying 40 g for capability the aircraft cannot use | Specified as 20C minimum. §3.3 explains that energy per gram, not C-rate, is the constraint on this platform |
+| 3-blade propellers on a long-range platform with thrust to spare | Changed to 9x5x2. About 10% better hover efficiency for ~12% of peak thrust: 24 min hover and 16 km one-way, up from 22 min and 14.1 km |
 | The ESC was rated 50 A per channel against a 16.9 A peak — nearly 3× margin, carried over from the 10-inch build along with 9 g | Right-sized to 40 A/ch (2.4×). §4.3 now shows the sizing arithmetic and records bidirectional DShot as the route to an RPM-tracked notch |
 | Motors were a 3110 (31 mm stator, a 10-11 inch motor) on a 9-inch frame — over-sized and carrying 64 g the airframe did not need | Changed to the 2810 class (28 mm stator, 8-9 inch). The 900 KV winding was already correct, so only the stator changed. AUW 1705 → 1641 g, TWR 3.05 → 3.41:1 |
 | Airframe changed to a 387 mm 9-inch frame after revision 2.1, invalidating the thrust, AUW, TWR, endurance and gyro-notch chain | Recomputed throughout in revision 2.2. The notch moved 80 Hz → 95 Hz, without which the new ~97 Hz motor peak would have passed into the rate controller |

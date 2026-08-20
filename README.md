@@ -10,7 +10,7 @@
 Autonomous long-range 9-inch quadcopter. ESP32-P4 dual-core RISC-V avionics, integrated
 perception, kinetic recovery and safety stack.
 
-**Status:** revision 2.4 — propulsion chain matched to the 9-inch airframe. All
+**Status:** revision 2.5 — propulsion and energy matched to the 9-inch airframe. All
 eighteen defects found in the revision 1.0 review are fixed. See
 [`docs/review-findings-resolution.md`](docs/review-findings-resolution.md) for the
 finding-by-finding index, or section 13 of the specification.
@@ -249,7 +249,7 @@ airtime, so the "LoRa RC link" the original design described would have needed m
 
 ## Safety
 
-This is a 1.6 kg aircraft with four 9-inch propellers and a 6S pack. It can hurt
+This is a 1.58 kg aircraft with four 9-inch propellers and a 6S pack. It can hurt
 someone.
 
 - Complete the commissioning checklist in section 11 before the first flight. It is not
