@@ -91,12 +91,17 @@
 //  diagram in the original document contradicted it on all four motors, which would
 //  have inverted the yaw sign and produced an uncommanded flat spin (finding 2).
 //
-//                          FRONT
-//        M4 front-left CCW  \   /  M2 front-right CW
-//                            \ /
-//                            / \
-//        M3 rear-left  CW   /   \  M1 rear-right CCW
-//                           REAR
+/*
+ *                          FRONT
+ *        M4 front-left CCW  \   /  M2 front-right CW
+ *                            \ /
+ *                            / \
+ *        M3 rear-left  CW   /   \  M1 rear-right CCW
+ *                           REAR
+ *
+ *  (Block comment deliberately: a `//` line ending in a backslash is a line
+ *   continuation, so the diagonal would silently swallow the line beneath it.)
+ */
 //
 //  Props-out (reversed rotation): the blade crossing the front of each motor travels
 //  away from the airframe centreline. For the front-right motor that is clockwise

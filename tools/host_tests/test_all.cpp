@@ -2,8 +2,7 @@
 //  Odyssey-10 Pro -- host-side verification of the safety-critical algorithms
 //  ------------------------------------------------------------------------------------
 //  Build and run:
-//      g++ -std=c++17 -I . -I ../../shared -I ../../firmware/flight-controller/include \
-//          -include arduino_shim.h test_all.cpp -o test_all && ./test_all
+//      sh run_tests.sh
 //
 //  These tests exist because several of the review findings were defects that no amount
 //  of reading the code would reliably catch, but that a two-line assertion catches every

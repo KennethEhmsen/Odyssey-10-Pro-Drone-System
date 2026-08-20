@@ -1,0 +1,23 @@
+#!/bin/sh
+# Runs the host verification before every push. Zero CI quota, zero cost.
+#
+# Enable with:   git config core.hooksPath tools/git-hooks
+# Bypass once:   git push --no-verify
+set -e
+root=$(git rev-parse --show-toplevel)
+
+# Only bother if something that affects the tests actually changed.
+if git diff --quiet --exit-code @{u}.. -- firmware shared tools/host_tests 2>/dev/null; then
+    exit 0
+fi
+
+echo "pre-push: running host verification..."
+if ! sh "$root/tools/host_tests/run_tests.sh" > /tmp/ody-tests.$$ 2>&1; then
+    tail -40 /tmp/ody-tests.$$
+    rm -f /tmp/ody-tests.$$
+    echo
+    echo "pre-push: tests FAILED -- push aborted. Use --no-verify to override."
+    exit 1
+fi
+tail -3 /tmp/ody-tests.$$
+rm -f /tmp/ody-tests.$$

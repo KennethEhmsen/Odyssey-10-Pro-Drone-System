@@ -1,0 +1,101 @@
+# =====================================================================================
+#  Host verification tests
+#  ------------------------------------------------------------------------------------
+#  COST
+#
+#  This repository is PRIVATE, so Actions minutes come out of the account's monthly
+#  included quota (GitHub Free: 2,000 min/month; Pro: 3,000). It is billed only if the
+#  account's spending limit is raised above its default of $0 -- at $0, Actions simply
+#  stops running once the quota is exhausted and no charge is possible.
+#
+#  Everything below is shaped to keep the quota cost near zero:
+#
+#    * ubuntu-latest only. Linux consumes minutes at 1x; Windows is 2x and macOS 10x.
+#      Never add those runners to this workflow.
+#    * No `schedule:` trigger. Cron burns minutes even when nothing has changed.
+#    * Path filters, so editing documentation does not spend a minute.
+#    * concurrency + cancel-in-progress, so a burst of pushes runs once, not N times.
+#    * One job, no matrix.
+#    * fetch-depth 1, and no toolchain install -- g++ is preinstalled on the runner.
+#    * timeout-minutes as a hard backstop against a hung job draining the quota.
+#
+#  The tests build and run in well under 30 seconds, but GitHub rounds each job UP to
+#  the nearest minute, so budget ~1 minute per triggering push. At 2,000 minutes that
+#  is roughly 2,000 pushes a month before the quota is even a consideration.
+#
+#  If you want literally zero quota usage, use the local hook instead and delete this
+#  file:  git config core.hooksPath tools/git-hooks
+# =====================================================================================
+
+name: host-tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firmware/**'
+      - 'shared/**'
+      - 'tools/host_tests/**'
+      - '.github/workflows/host-tests.yml'
+  pull_request:
+    paths:
+      - 'firmware/**'
+      - 'shared/**'
+      - 'tools/host_tests/**'
+      - '.github/workflows/host-tests.yml'
+  # Manual trigger, for when you want to run it against an unchanged tree.
+  workflow_dispatch:
+
+# Least privilege: this workflow only ever reads the repository.
+permissions:
+  contents: read
+
+# A second push to the same branch cancels the first run rather than paying for both.
+concurrency:
+  group: host-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Verify safety-critical algorithms
+    runs-on: ubuntu-latest      # 1x minute multiplier -- do not change
+    timeout-minutes: 5          # backstop; the real runtime is seconds
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1        # no history needed, and it is faster
+
+      - name: Compiler version
+        run: g++ --version
+
+      # Warnings are escalated to errors here but NOT in run_tests.sh, so a new
+      # compiler release introducing a new diagnostic breaks CI rather than blocking
+      # everyone's local runs. The -Wcomment class in particular matters: a `//`
+      # comment ending in a backslash silently swallows the following line, which is
+      # exactly the sort of latent trap this project exists to avoid.
+      - name: Build and run host tests
+        env:
+          EXTRA_CXXFLAGS: -Werror
+        run: sh tools/host_tests/run_tests.sh
+
+      # Guards the cost properties above against a well-meaning future edit.
+      - name: Assert the workflow stays cheap
+        if: always()
+        run: |
+          set -e
+          f=.github/workflows/host-tests.yml
+          if grep -qE 'runs-on:.*(windows|macos)' "$f"; then
+            echo "::error file=$f::Windows (2x) or macOS (10x) runner added -- this workflow must stay Linux-only"
+            exit 1
+          fi
+          if grep -qE '^\s*schedule:' "$f"; then
+            echo "::error file=$f::A schedule trigger burns quota with no change to test"
+            exit 1
+          fi
+          if grep -qE '^\s*strategy:' "$f"; then
+            echo "::error file=$f::A build matrix multiplies the minute cost"
+            exit 1
+          fi
+          echo "Cost guards intact: Linux-only, no schedule, no matrix."
