@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 2.3 — motors matched to the 9-inch airframe
+**Document revision:** 2.4 — propulsion chain matched to the 9-inch airframe
 
 ---
 
@@ -20,11 +20,12 @@ below has been recomputed:
 | --- | --- | --- |
 | Frame | 420–450 mm, 7–8 mm arms, 286 g | 387 mm, 6 mm arms, 230 g |
 | Propellers | 10x5x3, 48 g | 9x5x3, 36 g |
-| All-up weight | 1773 g | **1641 g** |
+| All-up weight | 1773 g | **1632 g** |
 | Thrust per motor | 1750 g | **1400 g** |
-| Thrust-to-weight | 3.95:1 | **3.41:1** |
+| Thrust-to-weight | 3.95:1 | **3.43:1** |
 | Hover throttle | ~44% | **~48%** |
 | Motors | 3110, 68 g each | **2810, 52 g each** |
+| ESC | 50 A/ch, 34 g | **40 A/ch, 25 g** |
 | Gyro notch centre | 80 Hz | **100 Hz** |
 
 The notch change is the one that matters for safety. A smaller disc needs more shaft
@@ -36,6 +37,10 @@ why the new figure carries more uncertainty than a single number suggests.
 The motors changed with the frame. A 3110 is a 31 mm stator — a 10–11 inch motor. The
 28 mm 2810 class is the 8–9 inch class, and it is the **stator** that was wrong, not the
 900 KV winding, which is already correct for a 9-inch propeller on 6S.
+
+The ESC followed the motors. Peak draw is **16.9 A per motor**, so the 50 A per-channel
+rating carried over from the 10-inch build was nearly three times what the aircraft can
+actually pull. 40 A per channel keeps a 2.4× margin and saves 9 g.
 
 The reference images are in `hardware/`.
 
@@ -157,7 +162,7 @@ $514.50 did not match its own line items, which summed to $512.50.
 | Airframe | RJXHOBBY Mark4 V2 387 mm | 387 mm wheelbase, 3K carbon, 6 mm arms | 1 | $55.00 | $55.00 | 230 g |
 | Propulsion | 2810 / 2812 brushless motor | 900 KV, 28 mm stator, 4S–6S | 4 | $22.00 | $88.00 | 208 g |
 | Propellers | HQProp / Gemfan 9x5x3 | 9 in, 2 CW + 2 CCW, props-out | 2 pr | $6.00 | $12.00 | 36 g |
-| Drive | 4-in-1 ESC (BLHeli_32) | 50 A cont., 60 A burst, 6S | 1 | $45.00 | $45.00 | 34 g |
+| Drive | 4-in-1 ESC (BLHeli_32 / AM32) | 40 A cont., 50 A burst per ch., 6S | 1 | $38.00 | $38.00 | 25 g |
 | Main battery | 6S LiPo pack | 22.2 V nom, 4500 mAh, 45C | 1 | $110.00 | $110.00 | 680 g |
 | Main MCU | ESP32-P4 dev board | Dual-core 400 MHz, **no radio** | 1 | $14.00 | $14.00 | 9 g |
 | Primary IMU | InvenSense MPU-6050 | ±500 °/s, ±8 g, I2C | 1 | $3.50 | $3.50 | 2 g |
@@ -180,13 +185,13 @@ $514.50 did not match its own line items, which summed to $512.50.
 | Beacon battery | 1S LiPo cell | 3.7 V 800 mAh with PCM | 1 | $6.00 | $6.00 | 16 g |
 | Power latch | SI2301DS P-FET + 2N3904 | Latching solid-state switch | 1 | $2.50 | $2.50 | 2 g |
 | Wiring/passives | XT90-S, caps, TVS, Schottky | 1000 µF 35 V, SMBJ28A, BAT54C | 1 lot | $16.00 | $16.00 | 88 g |
-| **Master total** | | | | | **$540.50** | |
+| **Master total** | | | | | **$533.50** | |
 
 **Rows added in this revision** are shown in bold. The wiring lot increased by $1.50 to
 cover the Schottky diode-OR and the main-power-sense divider that the beacon redesign in
 section 7 requires.
 
-Airborne dry mass is 1471 g (the second SX1278 module is the ground station radio and
+Airborne dry mass is 1462 g (the second SX1278 module is the ground station radio and
 does not fly). See section 3.1.
 
 ---
@@ -203,7 +208,7 @@ quoted 1850 g against a grouped estimate that did not reconcile with its own par
 | Frame, standoffs, gel dampers, hardware | 230 g |
 | 4× 2810 motors (52 g each installed) | 208 g |
 | 4× 9x5x3 propellers | 36 g |
-| 4-in-1 ESC | 34 g |
+| 4-in-1 ESC | 25 g |
 | 6S 4500 mAh LiPo pack | 680 g |
 | Avionics stack (P4, IMUs, baro, SD) | 18 g |
 | Navigation sensors (GNSS + mast, compass, LiDAR, ToF, INA226) | 26 g |
@@ -213,14 +218,14 @@ quoted 1850 g against a grouped estimate that did not reconcile with its own par
 | Parachute subsystem | 55 g |
 | Beacon subsystem (node, 1S cell, latch) | 24 g |
 | Wiring, connectors, capacitors, hardware | 88 g |
-| **Dry mass** | **1471 g** |
+| **Dry mass** | **1462 g** |
 | Payload reserve | 170 g |
-| **All-up weight (AUW)** | **1641 g** |
+| **All-up weight (AUW)** | **1632 g** |
 
 ### 3.2 Thrust and throttle response
 
 Maximum static thrust per motor at 6S with a 9x5x3 propeller is **1400 g**, giving 5600 g
-total and a **thrust-to-weight ratio of 3.41:1**.
+total and a **thrust-to-weight ratio of 3.43:1**.
 
 **Why the motor changed.** Revisions up to 2.2 specified a 3110 — a 31 mm stator, which
 is a 10–11 inch motor. On a 387 mm 9-inch frame that is over-sized: it carries mass the
@@ -251,14 +256,20 @@ section 5.2, and this table has now moved twice.
 | 20% | 95 g | 381 g | |
 | 30% | 187 g | 750 g | |
 | 40% | 303 g | 1212 g | |
-| **48%** | **411 g** | **1644 g** | **hover equilibrium = AUW** |
+| **48%** | **408 g** | **1632 g** | **hover equilibrium = AUW** |
 | 60% | 597 g | 2386 g | |
 | 75% | 866 g | 3464 g | fast cruise |
 | 100% | 1400 g | 5600 g | emergency punch-out |
 
+**Peak current, which sizes the ESC.** Momentum theory with a figure of merit of 0.55
+and a combined motor/ESC efficiency of 0.78 puts full-throttle draw at about 374 W per
+motor — **16.9 A per motor at 22.2 V, or 67 A for the aircraft**. Hover sits at about
+2.7 A per motor. Section 4.3 sizes the ESC from those figures.
+
 **If you have already bought 3110s**, fly them. They will work on 9-inch propellers — the
-aircraft is 64 g heavier and the thrust-to-weight lands near 3.05:1 instead of 3.41:1,
-which is still ample for a cruiser. Set `AIRFRAME_AUW_G` to 1705 and
+aircraft is 64 g heavier (AUW 1696 g) and the thrust-to-weight lands near 3.07:1
+instead of 3.43:1,
+which is still ample for a cruiser. Set `AIRFRAME_AUW_G` to 1696 and
 `MOTOR_MAX_THRUST_G` to 1300 in `config.h` and the rest of the chain follows.
 
 **Propeller clearance.** At a 387 mm wheelbase, adjacent motor hubs sit about 274 mm
@@ -268,22 +279,22 @@ apart. A 9-inch propeller (229 mm) leaves roughly 22 mm of tip clearance per sid
 
 ### 3.3 Endurance and range
 
-Assumptions: hover power loading 7.95 g/W; avionics, VTX and BEC losses 18 W; usable pack
+Assumptions: hover power loading 7.97 g/W; avionics, VTX and BEC losses 18 W; usable pack
 fraction 80% for LiPo and 85% for Li-ion.
 
 Power loading fell from the 8.5 g/W used for the 10-inch airframe. Total disc area dropped
 from 0.203 m² to 0.164 m², and induced power scales with the square root of disc loading,
 so the smaller propellers cost efficiency — but the lighter motors give some of it back.
-Hover power is about 224 W.
+Hover power is about 223 W.
 
 | Configuration | Hover | Cruise @ 12 m/s | One-way range | Practical radius |
 | --- | --- | --- | --- | --- |
-| 6S 4500 mAh LiPo (1641 g) | 21 min | 19 min | 14.0 km | ~5.6 km |
-| 6S2P 8400 mAh Li-ion (1751 g) | 39 min | 35 min | 25.4 km | ~10.2 km |
+| 6S 4500 mAh LiPo (1632 g) | 22 min | 20 min | 14.1 km | ~5.6 km |
+| 6S2P 8400 mAh Li-ion (1742 g) | 39 min | 35 min | 25.5 km | ~10.2 km |
 
 Practical radius is roughly 40% of one-way range, because the return leg must be flown on
 the same pack and the energy budget in section 5.2 holds a reserve back for the descent.
-`CRUISE_CURRENT_A` in `config.h` is set to 10.1 A, matching the 224 W hover figure at
+`CRUISE_CURRENT_A` in `config.h` is set to 10.0 A, matching the 223 W hover figure at
 22.2 V; correct it after your own bench measurement.
 
 ## 4. Frame Dynamics, Motor Layout and Rotation
@@ -352,10 +363,29 @@ Diagonally opposite motors always share a rotation direction. This is what makes
 control work: spinning up one diagonal pair and slowing the other produces a net torque
 about the yaw axis with no net change in thrust.
 
-### 4.3 ESC protocol
+### 4.3 ESC selection and protocol
 
-The ESC is a BLHeli_32 4-in-1 capable of DShot300. The firmware drives it with **analog
-PWM at 400 Hz, 12-bit resolution** via the ESP32 LEDC peripheral:
+**Sizing.** Peak draw is 16.9 A per motor at full throttle (section 3.2), and hover sits
+near 2.7 A. The specified ESC is **40 A continuous, 50 A burst, per channel**:
+
+| Rating | Margin on 16.9 A peak | |
+| --- | --- | --- |
+| 30 A/ch | 1.8× | thin once ESC ratings are derated for still air |
+| 35 A/ch | 2.1× | workable |
+| **40 A/ch** | **2.4×** | **specified** |
+| 50 A/ch | 3.0× | what revisions up to 2.3 carried over from the 10-inch build |
+
+Note that 4-in-1 ratings are **per channel**, not for the aircraft. The 2.4× margin is
+not timidity: published ESC ratings are typically measured with forced airflow over short
+durations, and this is a hover-heavy long-range profile where thermal soak matters more
+than burst capability.
+
+At full throttle the pack sees about 67 A. The XT90-S is rated 90 A continuous (75%
+utilised) and a 6S 4500 mAh 45C pack can deliver roughly 202 A (33% utilised), so neither
+is the binding constraint.
+
+**Protocol.** The firmware drives the ESC with **analog PWM at 400 Hz, 12-bit** via the
+ESP32 LEDC peripheral:
 
 - 1000 µs = 1638 counts (disarmed / minimum)
 - 1068 µs = 1750 counts (armed idle, propellers turning)
@@ -363,10 +393,21 @@ PWM at 400 Hz, 12-bit resolution** via the ESP32 LEDC peripheral:
 
 Revision 1.0 was internally inconsistent here — the BOM and placement diagram said
 "DShot ESC" while the architecture and firmware used 400 Hz PWM. Analog PWM is retained
-because it is what the code implements and it is adequate at a 500 Hz loop rate;
-**configure the ESC for PWM input and calibrate its endpoints** during commissioning.
-Migrating to DShot300 would remove the calibration step and add per-motor telemetry, and
-is a reasonable future change.
+because it is what the code implements and it is adequate at a 500 Hz loop rate.
+**Configure the ESC for PWM input and calibrate its endpoints** during commissioning.
+
+**Why DShot is worth doing later.** The specified ESC supports DShot300 and, on AM32 or
+recent BLHeli_32 builds, **bidirectional DShot**, which returns per-motor RPM telemetry.
+That is not merely tidier — it would resolve the single largest open uncertainty in this
+document. Section 8.3 sets the gyro notch to 100 Hz from two models that disagree by 7%,
+because there is no measurement to settle it. With RPM telemetry the notch could **track
+the actual shaft speed** rather than sitting at a fixed estimate, which is how modern
+flight controllers handle it and which removes the failure mode entirely.
+
+That is future work, not implemented. Bidirectional DShot needs tight timing on the
+ESP32-P4 (RMT or a dedicated peripheral) and the firmware currently has neither. It is
+recorded here because it is the highest-value next change to the propulsion stack, not
+because it is done.
 
 ### 4.4 Mixer and desaturation
 
@@ -1647,6 +1688,7 @@ Revision 2.0 introduced or left standing the following, all corrected here.
 | §12 implied that broadcasting OpenDroneID messages constitutes compliance | §12.4 added, listing what EU 2019/945 Part 6 additionally requires |
 | Nothing checked that the specification and the firmware still agreed with each other — the failure mode behind findings 1, 2, 16 and 18 | `tools/check_consistency.py` added: 12 automated checks with `--fix` for the mechanically correctable ones, wired into the pre-push hook and CI |
 | Remote ID was a **blocking** arm condition, imposing on a privately built A3 aircraft a requirement that attaches to class-marked C1/C2/C3 aircraft — it would have grounded a legal airframe | `REQUIRE_REMOTE_ID_TO_ARM` added to `config.h`, defaulting to 0. Remote ID is optional unless the operator opts in; §12.1 documents when to |
+| The ESC was rated 50 A per channel against a 16.9 A peak — nearly 3× margin, carried over from the 10-inch build along with 9 g | Right-sized to 40 A/ch (2.4×). §4.3 now shows the sizing arithmetic and records bidirectional DShot as the route to an RPM-tracked notch |
 | Motors were a 3110 (31 mm stator, a 10-11 inch motor) on a 9-inch frame — over-sized and carrying 64 g the airframe did not need | Changed to the 2810 class (28 mm stator, 8-9 inch). The 900 KV winding was already correct, so only the stator changed. AUW 1705 → 1641 g, TWR 3.05 → 3.41:1 |
 | Airframe changed to a 387 mm 9-inch frame after revision 2.1, invalidating the thrust, AUW, TWR, endurance and gyro-notch chain | Recomputed throughout in revision 2.2. The notch moved 80 Hz → 95 Hz, without which the new ~97 Hz motor peak would have passed into the rate controller |
 | The Basic ID message hard-coded `SERIAL_NUMBER`, forcing the CTA-2063-A route and an ICAO manufacturer code application that a privately built aircraft does not need | `UAS_ID_TYPE` added, defaulting to `CAA_REGISTRATION_ID`. `odyValidateCaaRegistration()` and 10 host assertions added; §12.3 documents both routes |

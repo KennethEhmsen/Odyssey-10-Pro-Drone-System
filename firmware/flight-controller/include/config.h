@@ -20,7 +20,7 @@
 //  1. AIRFRAME
 // =====================================================================================
 #define AIRFRAME_NAME             "Odyssey-10 Pro"
-#define AIRFRAME_AUW_G            1641.0f   // all-up weight, grams (see docs section 3)
+#define AIRFRAME_AUW_G            1632.0f   // all-up weight, grams (see docs section 3)
 #define MOTOR_MAX_THRUST_G        1400.0f   // per motor, MODELLED at 6S / 9x5x3 -- verify
 
 // =====================================================================================
@@ -167,7 +167,7 @@
 #define RECOVERY_RADIUS_M         15.0f
 
 // Nominal cruise current, used to budget the mAh required to fly home.
-#define CRUISE_CURRENT_A          10.1f
+#define CRUISE_CURRENT_A          10.0f
 
 // =====================================================================================
 //  6. FAILSAFE AND LANDING
