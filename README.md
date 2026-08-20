@@ -99,6 +99,31 @@ sh tools/host_tests/run_tests.sh
 98 assertions, each naming the review finding it guards. Several reproduce the original
 defect next to the fix, so the difference is demonstrated rather than claimed.
 
+### Automatically, before every push
+
+```bash
+git config core.hooksPath tools/git-hooks
+```
+
+The `pre-push` hook runs the suite and aborts the push if anything fails, but only when
+something under `firmware/`, `shared/` or `tools/host_tests/` actually changed. This
+costs nothing and needs no network. Bypass a single push with `git push --no-verify`.
+
+### In CI
+
+`.github/workflows/host-tests.yml` exists but its **automatic triggers are disabled**.
+The first run on this private repository came back with *"The job was not started
+because recent account payments have failed or your spending limit needs to be
+increased"* — so nothing was billed, but nothing ran either. A permanently red X on
+every commit is worse than no CI, so push and pull_request triggers are commented out
+and only `workflow_dispatch` remains.
+
+Actions minutes are **free and unlimited on public repositories** and come out of a
+monthly quota on private ones. To re-enable, either resolve the billing state or make
+the repository public, then uncomment the two trigger blocks. The cost controls
+(Linux-only runner, path filters, no schedule, no matrix, cancel-in-progress, and a
+guard step that fails if any of those are removed) are already in place.
+
 ---
 
 ## Regenerating the Word document

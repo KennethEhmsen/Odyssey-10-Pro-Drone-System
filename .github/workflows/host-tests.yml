@@ -29,21 +29,40 @@
 
 name: host-tests
 
+# ------------------------------------------------------------------------------------
+#  AUTOMATIC TRIGGERS ARE DISABLED.
+#
+#  On 2026-08-20 this repository's first run came back with:
+#      "The job was not started because recent account payments have failed or your
+#       spending limit needs to be increased."
+#
+#  The job never started, so nothing was billed -- but nothing ran either. Leaving the
+#  push trigger enabled would just paint a red X on every commit for a job that cannot
+#  execute, which is worse than having no CI at all.
+#
+#  Until the billing state is resolved (or the repository is made public, where Actions
+#  minutes are unlimited and free), verification runs locally through the pre-push hook:
+#      git config core.hooksPath tools/git-hooks
+#
+#  TO RE-ENABLE: uncomment the push and pull_request blocks below. Nothing else needs
+#  to change -- the cost controls documented above are all still in place.
+# ------------------------------------------------------------------------------------
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'firmware/**'
-      - 'shared/**'
-      - 'tools/host_tests/**'
-      - '.github/workflows/host-tests.yml'
-  pull_request:
-    paths:
-      - 'firmware/**'
-      - 'shared/**'
-      - 'tools/host_tests/**'
-      - '.github/workflows/host-tests.yml'
-  # Manual trigger, for when you want to run it against an unchanged tree.
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'firmware/**'
+  #     - 'shared/**'
+  #     - 'tools/host_tests/**'
+  #     - '.github/workflows/host-tests.yml'
+  # pull_request:
+  #   paths:
+  #     - 'firmware/**'
+  #     - 'shared/**'
+  #     - 'tools/host_tests/**'
+  #     - '.github/workflows/host-tests.yml'
+
+  # Manual only, so a run happens when you ask for one and never by surprise.
   workflow_dispatch:
 
 # Least privilege: this workflow only ever reads the repository.
