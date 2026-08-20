@@ -7,10 +7,10 @@
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-ESP32--P4%20%7C%20C3%20%7C%20C6-lightgrey)](firmware/)
 
-Autonomous long-range 10-inch quadcopter. ESP32-P4 dual-core RISC-V avionics, integrated
+Autonomous long-range 9-inch quadcopter. ESP32-P4 dual-core RISC-V avionics, integrated
 perception, kinetic recovery and safety stack.
 
-**Status:** revision 2.1 — engineering review applied, regulatory position corrected. All
+**Status:** revision 2.2 — re-based on the 387 mm 9-inch airframe. All
 eighteen defects found in the revision 1.0 review are fixed. See
 [`docs/review-findings-resolution.md`](docs/review-findings-resolution.md) for the
 finding-by-finding index, or section 13 of the specification.
@@ -249,7 +249,7 @@ airtime, so the "LoRa RC link" the original design described would have needed m
 
 ## Safety
 
-This is a 1.77 kg aircraft with four 10-inch propellers and a 6S pack. It can hurt
+This is a 1.7 kg aircraft with four 9-inch propellers and a 6S pack. It can hurt
 someone.
 
 - Complete the commissioning checklist in section 11 before the first flight. It is not

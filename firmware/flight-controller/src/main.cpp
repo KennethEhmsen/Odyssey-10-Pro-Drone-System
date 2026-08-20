@@ -482,7 +482,7 @@ static void TaskFlightLoop(void* /*arg*/) {
 //
 //  The original arm path required only PREFLIGHT_OK + home lock + the button. The
 //  global currentRC retained the last received throttle across flights, so arming with
-//  the stick up drove all four 10-inch props to ~82% instantly.
+//  the stick up drove all four props to ~82% instantly.
 //
 //  Every condition is now checked, every failure is reported to the pilot through the
 //  telemetry armBlockFlags field, and the physical button must be held deliberately.

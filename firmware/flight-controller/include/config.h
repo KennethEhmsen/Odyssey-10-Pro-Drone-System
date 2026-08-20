@@ -20,8 +20,8 @@
 //  1. AIRFRAME
 // =====================================================================================
 #define AIRFRAME_NAME             "Odyssey-10 Pro"
-#define AIRFRAME_AUW_G            1773.0f   // all-up weight, grams (see docs section 3)
-#define MOTOR_MAX_THRUST_G        1750.0f   // per motor, bench-verified at 6S / 10x5x3
+#define AIRFRAME_AUW_G            1705.0f   // all-up weight, grams (see docs section 3)
+#define MOTOR_MAX_THRUST_G        1300.0f   // per motor, MODELLED at 6S / 9x5x3 -- verify
 
 // =====================================================================================
 //  2. BATTERY  --  FIX FOR FINDING 1
@@ -72,8 +72,18 @@
 #define TELEM_TASK_HZ             50
 #define BLACKBOX_LOG_HZ           100
 
-// Dynamic bi-quad gyro notch
-#define NOTCH_CENTER_HZ           80.0f
+// Dynamic bi-quad gyro notch.
+//
+// Raised from 80 Hz when the airframe moved to the 387 mm 9-inch frame. A smaller disc
+// needs roughly (10/9)^2 more shaft speed for the same thrust, moving the hover
+// fundamental from about 78 Hz to about 97 Hz. At Q = 4 an 80 Hz notch is already -3 dB
+// by 90 Hz, so the old setting would have passed the new peak straight through into the
+// rate controller.
+//
+// This figure is MODELLED. Confirm it from a BlackBox gyro trace on your own build and
+// retune -- the 6 mm arms on this frame are also less stiff than the 7-8 mm arms
+// previously specified, which moves the structural resonance as well.
+#define NOTCH_CENTER_HZ           95.0f
 #define NOTCH_Q                   4.0f
 
 // Complementary filter weighting for the attitude estimate
@@ -149,7 +159,7 @@
 #define RECOVERY_RADIUS_M         15.0f
 
 // Nominal cruise current, used to budget the mAh required to fly home.
-#define CRUISE_CURRENT_A          10.5f
+#define CRUISE_CURRENT_A          10.7f
 
 // =====================================================================================
 //  6. FAILSAFE AND LANDING
@@ -223,7 +233,7 @@
 //
 //  The original arm path checked only PREFLIGHT_OK + home lock + button. currentRC
 //  retained the last received throttle across flights, so arming with a raised stick
-//  drove all four 10-inch props to ~82% instantly.
+//  drove all four props to ~82% instantly.
 // =====================================================================================
 // -------------------------------------------------------------------------------
 //  REMOTE ID POLICY

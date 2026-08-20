@@ -79,7 +79,7 @@ static uint8_t  rxBuf[ODY_MAX_FRAME];
 //      bool armed = (tIn.flightState == 3 || tIn.flightState == 4);
 //
 //  Those two ordinals were ARMED and RTH_NAVIGATING. It omitted AWAITING_LAND_PERMIT
-//  and FAILSAFE_LANDING -- states in which the aircraft is airborne with four 10-inch
+//  and FAILSAFE_LANDING -- states in which the aircraft is airborne with all four
 //  propellers turning. The operator saw "disarmed" at exactly the moment section 5
 //  expects them to approve a landing, and might walk up to a live aircraft.
 //

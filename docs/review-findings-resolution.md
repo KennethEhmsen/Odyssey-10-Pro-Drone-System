@@ -161,7 +161,7 @@ Arming required only `PREFLIGHT_OK`, a home lock and the button. `currentRC` was
 updated by every received packet and never reset on disarm, so a stale throttle of 2000
 survived across flights. Pressing the arm button applied
 `map(2000, 1000, 2000, PWM_ARM_IDLE, PWM_MAX-300) = 2976` on the very next 2 ms
-iteration — all four 10-inch propellers to roughly 82% throttle, with the aircraft
+iteration — all four propellers to roughly 82% throttle, with the aircraft
 possibly in someone's hands.
 
 **Now:** Eight conditions, each reported to the pilot as a bitmask in telemetry so a
