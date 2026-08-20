@@ -29,3 +29,6 @@
 
 # Collapse generated documents in diffs -- the Markdown is the source of truth.
 docs/*.docx -diff
+
+# Git hooks have no extension but must keep LF to remain executable on Unix.
+tools/git-hooks/* text eol=lf
