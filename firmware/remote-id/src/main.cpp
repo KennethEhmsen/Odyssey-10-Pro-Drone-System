@@ -64,17 +64,25 @@
 //
 //  Two identifiers, handled very differently. See identity.h for the full explanation.
 //
-//  1. CTA-2063-A SERIAL identifies the HARDWARE and is baked in at build time, because
-//     it is a property of the module rather than of whoever is flying it. Structure is
-//     [ICAO MFR code: 4][length code: 1][manufacturer serial: 1..15].
+//  1. UAS ID identifies the AIRCRAFT. There are two practical routes and you almost
+//     certainly want the second one.
 //
-//     The placeholder below is deliberately INVALID, so the module refuses to assert
-//     health until a real serial is set. Revision 2.0 shipped "ODY1P0000000000000000",
-//     which was malformed in two ways -- P is not a valid length code, and the serial
-//     that followed ran to 16 characters against a maximum of 15 -- but looked plausible
-//     enough to ship. It would have broadcast a structurally invalid UAS ID.
+//     ODY_UAS_ID_CTA_SERIAL
+//         A CTA-2063-A serial: [ICAO MFR code: 4][length code: 1][serial: 1..15].
+//         The 4-character manufacturer code is issued by ICAO to MANUFACTURERS.
+//         Use this if you are manufacturing airframes or Remote ID modules for
+//         others -- or if you fitted a BOUGHT Remote ID module, in which case it
+//         already carries a serial from its own manufacturer and you apply for
+//         nothing.
 //
-//     Apply for an ICAO manufacturer code at OPSInbox@icao.int.
+//     ODY_UAS_ID_CAA_REGISTRATION   <-- DEFAULT, and the route for a home build
+//         The registration issued by your civil aviation authority. Needs no ICAO
+//         involvement at all.
+//
+//     Revision 2.1 hard-coded the CTA route and told you to write to
+//     OPSInbox@icao.int. For a privately built aircraft that was wrong: building one
+//     aircraft for yourself does not make you a manufacturer, and there is nothing to
+//     apply for.
 //
 //  2. OPERATOR REGISTRATION NUMBER identifies the PERSON and is provisioned at RUNTIME
 //     into NVS. It is never compiled in.
@@ -88,7 +96,21 @@
 //     Provision over the serial console:  SETOPERATOR DNKxxxxxxxxxxxxx-yyy
 //     Only the public 16 characters are broadcast; the secret is stored, never sent.
 // -------------------------------------------------------------------------------------
-#define UAS_SERIAL_NUMBER   "SET-YOUR-CTA-SERIAL"
+#define ODY_UAS_ID_CAA_REGISTRATION  0
+#define ODY_UAS_ID_CTA_SERIAL        1
+
+// Which identifier this aircraft broadcasts in the Basic ID message.
+#define UAS_ID_TYPE          ODY_UAS_ID_CAA_REGISTRATION
+
+// Used when UAS_ID_TYPE is ODY_UAS_ID_CAA_REGISTRATION.
+// In the EU open category a privately built aircraft is not individually registered --
+// the OPERATOR is. The operator registration is therefore the identifier in practice,
+// and the Operator ID message (type 5) carries it as well. If your authority issues a
+// distinct per-aircraft registration, put that here instead.
+#define UAS_CAA_REGISTRATION "SET-YOUR-CAA-REGISTRATION"
+
+// Used when UAS_ID_TYPE is ODY_UAS_ID_CTA_SERIAL. Left deliberately invalid.
+#define UAS_SERIAL_NUMBER    "SET-YOUR-CTA-SERIAL"
 
 #define NVS_NAMESPACE       "odyrid"
 #define NVS_KEY_OPERATOR    "operator"
@@ -126,7 +148,7 @@ static uint32_t lastAuxFrameMs     = 0;
 static uint32_t lastLocationSentMs = 0;
 static uint8_t  msgCounter[ODID_MSG_COUNTER_AMOUNT] = {0};
 static bool     operatorIdConfigured = false;
-static bool     ctaSerialValid       = false;
+static bool     uasIdValid           = false;
 
 // =====================================================================================
 //  Static message population
@@ -135,9 +157,15 @@ static void buildStaticMessages() {
   odid_initUasData(&uasData);
 
   uasData.BasicID[0].UAType = ODID_UATYPE_HELICOPTER_OR_MULTIROTOR;
+#if UAS_ID_TYPE == ODY_UAS_ID_CTA_SERIAL
   uasData.BasicID[0].IDType = ODID_IDTYPE_SERIAL_NUMBER;
   strncpy(uasData.BasicID[0].UASID, UAS_SERIAL_NUMBER,
           sizeof(uasData.BasicID[0].UASID) - 1);
+#else
+  uasData.BasicID[0].IDType = ODID_IDTYPE_CAA_REGISTRATION_ID;
+  strncpy(uasData.BasicID[0].UASID, UAS_CAA_REGISTRATION,
+          sizeof(uasData.BasicID[0].UASID) - 1);
+#endif
   uasData.BasicIDValid[0] = 1;
 
   uasData.System.OperatorLocationType = ODID_OPERATOR_LOCATION_TYPE_TAKEOFF;
@@ -230,9 +258,14 @@ static void serviceProvisioning() {
       memset(line, 0, sizeof(line));
 
     } else if (strcmp(line, "STATUS") == 0) {
-      Serial.printf("[ODID] cta=%s (%s)  operator=%s  broadcasting=%s\n",
-                    UAS_SERIAL_NUMBER,
+      Serial.printf("[ODID] uas_id=%s (%s, %s)  operator=%s  broadcasting=%s\n",
+#if UAS_ID_TYPE == ODY_UAS_ID_CTA_SERIAL
+                    UAS_SERIAL_NUMBER, "CTA-2063-A serial",
                     odyIdResultText(odyValidateCtaSerial(UAS_SERIAL_NUMBER)),
+#else
+                    UAS_CAA_REGISTRATION, "CAA registration",
+                    odyIdResultText(odyValidateCaaRegistration(UAS_CAA_REGISTRATION)),
+#endif
                     uasData.OperatorIDValid ? uasData.OperatorID.OperatorId : "<unset>",
                     odidTransportHealthy() ? "yes" : "no");
 
@@ -327,7 +360,7 @@ static void serviceAuxBus(uint32_t nowMs) {
 //  Broadcast
 // =====================================================================================
 static void broadcastLocation() {
-  if (!ctaSerialValid) return;      // see broadcastStatic()
+  if (!uasIdValid) return;      // see broadcastStatic()
   ODID_Location_encoded enc;
   if (encodeLocationMessage(&enc, &uasData.Location) != ODID_SUCCESS) return;
   odidTransportSend(ODID_MESSAGETYPE_LOCATION,
@@ -337,10 +370,9 @@ static void broadcastLocation() {
 }
 
 static void broadcastStatic() {
-  // A structurally invalid UAS ID is worse than no broadcast: a receiver logs a
-  // malformed identifier that cannot be traced back to anyone. Stay silent instead,
-  // and say so on the console.
-  if (!ctaSerialValid) return;
+  // An invalid UAS ID is worse than no broadcast: a receiver logs an identifier that
+  // cannot be traced back to anyone. Stay silent instead.
+  if (!uasIdValid) return;
 
   ODID_BasicID_encoded basic;
   if (encodeBasicIDMessage(&basic, &uasData.BasicID[0]) == ODID_SUCCESS) {
@@ -373,7 +405,7 @@ static void updateHealthLine(uint32_t nowMs) {
                          && lastLocationSentMs != 0
                          && (uint32_t)(nowMs - lastLocationSentMs) < 3000u;
   digitalWrite(PIN_HEALTH_OUT,
-               (broadcasting && operatorIdConfigured && ctaSerialValid) ? HIGH : LOW);
+               (broadcasting && operatorIdConfigured && uasIdValid) ? HIGH : LOW);
 }
 
 // =====================================================================================
@@ -390,14 +422,28 @@ void setup() {
   buildStaticMessages();
   odidTransportBegin();
 
-  const uint8_t serialCheck = odyValidateCtaSerial(UAS_SERIAL_NUMBER);
-  ctaSerialValid = (serialCheck == ODY_ID_OK);
-  if (!ctaSerialValid) {
-    Serial.printf("*** CTA-2063-A serial invalid: %s ***\n", odyIdResultText(serialCheck));
-    Serial.println("*** Set UAS_SERIAL_NUMBER in the identity configuration. ***");
+#if UAS_ID_TYPE == ODY_UAS_ID_CTA_SERIAL
+  const uint8_t idCheck = odyValidateCtaSerial(UAS_SERIAL_NUMBER);
+  uasIdValid = (idCheck == ODY_ID_OK);
+  if (!uasIdValid) {
+    Serial.printf("*** CTA-2063-A serial invalid: %s ***\n", odyIdResultText(idCheck));
+    Serial.println("*** Set UAS_SERIAL_NUMBER, or switch UAS_ID_TYPE to");
+    Serial.println("*** ODY_UAS_ID_CAA_REGISTRATION if this is a home build -- that");
+    Serial.println("*** route needs no ICAO manufacturer code. ***");
   } else {
-    Serial.printf("CTA serial: %s\n", UAS_SERIAL_NUMBER);
+    Serial.printf("UAS ID (CTA-2063-A serial): %s\n", UAS_SERIAL_NUMBER);
   }
+#else
+  const uint8_t idCheck = odyValidateCaaRegistration(UAS_CAA_REGISTRATION);
+  uasIdValid = (idCheck == ODY_ID_OK);
+  if (!uasIdValid) {
+    Serial.printf("*** CAA registration invalid: %s ***\n", odyIdResultText(idCheck));
+    Serial.println("*** Set UAS_CAA_REGISTRATION to the registration issued by your");
+    Serial.println("*** civil aviation authority. No ICAO application is involved. ***");
+  } else {
+    Serial.printf("UAS ID (CAA registration): %s\n", UAS_CAA_REGISTRATION);
+  }
+#endif
 
   operatorIdConfigured = loadOperatorId();
   if (!operatorIdConfigured) {
@@ -405,7 +451,7 @@ void setup() {
     Serial.println("*** Provision with:  SETOPERATOR DNKxxxxxxxxxxxxx-yyy ***");
   }
 
-  if (!ctaSerialValid || !operatorIdConfigured) {
+  if (!uasIdValid || !operatorIdConfigured) {
     Serial.println("*** Remote ID is NOT broadcasting. ***");
     Serial.println("*** The health line stays LOW. Whether that blocks arming depends");
     Serial.println("*** on REQUIRE_REMOTE_ID_TO_ARM in the flight controller's config.h,");

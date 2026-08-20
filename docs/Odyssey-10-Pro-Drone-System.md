@@ -1378,6 +1378,20 @@ in January 2027 that the airframe has no room, no spare UART and no power budget
 Direct Remote ID involves two completely different identifiers. Conflating them is a
 common and consequential mistake, and revision 2.0 partly did.
 
+**Which identifier to broadcast.** ASTM F3411 defines four UAS ID types, and the Basic
+ID message declares which one it carries. Two matter here:
+
+| ID type | What it is | Who needs it |
+| --- | --- | --- |
+| **`CAA_REGISTRATION_ID`** (default) | The registration your civil aviation authority issued | **A home build.** No ICAO involvement whatsoever |
+| `SERIAL_NUMBER` | A CTA-2063-A serial, under an ICAO manufacturer code | Manufacturers — or a bought Remote ID module, which already carries its maker's serial |
+
+> Revision 2.1 hard-coded the serial-number type and instructed the builder to apply to
+> ICAO at `OPSInbox@icao.int`. **That is not necessary for a privately built aircraft.**
+> ICAO issues manufacturer codes to manufacturers; building one aircraft for yourself
+> does not make you one. `UAS_ID_TYPE` in `firmware/remote-id/src/main.cpp` now selects
+> the route and defaults to the CAA registration.
+
 **CTA-2063-A serial number — identifies the HARDWARE**
 
 ```
@@ -1392,7 +1406,8 @@ Permitted characters are 0–9 and A–Z **excluding I and O**, so a serial cann
 misread as containing 1 or 0. A 4 + 1 + 15 = 20 character serial fills OpenDroneID's
 20-byte UAS ID field exactly, which is why the design uses the full length.
 
-Apply for an ICAO manufacturer code at `OPSInbox@icao.int`.
+Only relevant if you are manufacturing. Manufacturer codes come from ICAO at
+`OPSInbox@icao.int` — but see the note above before assuming you need one.
 
 > Revision 2.0 shipped `ODY1P0000000000000000` as the placeholder. It was malformed in
 > two ways — `P` is not a valid length code, and the serial that followed ran to 16
@@ -1548,6 +1563,7 @@ Revision 2.0 introduced or left standing the following, all corrected here.
 | §12 implied that broadcasting OpenDroneID messages constitutes compliance | §12.4 added, listing what EU 2019/945 Part 6 additionally requires |
 | Nothing checked that the specification and the firmware still agreed with each other — the failure mode behind findings 1, 2, 16 and 18 | `tools/check_consistency.py` added: 12 automated checks with `--fix` for the mechanically correctable ones, wired into the pre-push hook and CI |
 | Remote ID was a **blocking** arm condition, imposing on a privately built A3 aircraft a requirement that attaches to class-marked C1/C2/C3 aircraft — it would have grounded a legal airframe | `REQUIRE_REMOTE_ID_TO_ARM` added to `config.h`, defaulting to 0. Remote ID is optional unless the operator opts in; §12.1 documents when to |
+| The Basic ID message hard-coded `SERIAL_NUMBER`, forcing the CTA-2063-A route and an ICAO manufacturer code application that a privately built aircraft does not need | `UAS_ID_TYPE` added, defaulting to `CAA_REGISTRATION_ID`. `odyValidateCaaRegistration()` and 10 host assertions added; §12.3 documents both routes |
 
 ---
 

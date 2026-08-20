@@ -114,8 +114,21 @@ against a record of `device_uuid`, `manufacturing_sequence`, `cta_serial`,
 
 **Manufacturer code application:** `OPSInbox@icao.int`, providing company name,
 manufacturer's common name, headquarters address, contact name, telephone, email and
-website. ICAO assigns codes to aircraft and UAS manufacturers.
+website. ICAO assigns codes to aircraft and UAS **manufacturers**.
 See <https://www.icao.int/operational-safety/doc-8643-aircraft-type-designators/manufacturers-codes>
+
+> **You almost certainly do not need to do this.** These notes were written around
+> *building a product*; a personal build is a different situation. ICAO issues
+> manufacturer codes to manufacturers, and there are three routes for a DIY aircraft, of
+> which only one involves ICAO:
+>
+> | Situation | What you use | ICAO application? |
+> | --- | --- | --- |
+> | Home build, broadcasting voluntarily or for the specific category | `CAA_REGISTRATION_ID` with your authority-issued registration | **No** |
+> | You fitted a bought Remote ID module | The module's own CTA serial, from its maker | **No** |
+> | You are manufacturing modules or airframes for others | Your own CTA serial | Yes |
+>
+> This project defaults to the first row. See specification section 12.3.
 
 ### Operator registration number — identifies the person
 
@@ -210,7 +223,8 @@ handles it.
 
 1. Define the regulatory profile — Denmark/EU rather than FAA.
 2. **Define the CTA-2063-A serial-number database and generator.**
-3. Apply to ICAO for the 4-character manufacturer code.
+3. ~~Apply to ICAO for the 4-character manufacturer code.~~ Only if you are
+   manufacturing for others. A home build uses its CAA registration instead.
 4. Select MCU and GNSS architecture.
 5. Integrate OpenDroneID.
 6. Design the flight-controller → Remote ID telemetry path.
@@ -224,9 +238,11 @@ Steps 2 and 7 come first because they can be fully specified before buying hardw
 and they give a solid identity/provisioning layer to build on.
 
 > **Status in this project:** steps 2 and 7 are implemented in
-> `firmware/remote-id/src/identity.{h,cpp}` with 34 host assertions in
-> `tools/host_tests/test_all.cpp`. Step 5 is implemented against the reference encoder,
-> step 6 uses the AUX broadcast bus. Steps 3, 9, 10 and 11 are outstanding.
+> `firmware/remote-id/src/identity.{h,cpp}` with 44 host assertions in
+> `tools/host_tests/test_all.cpp`, covering the CTA serial, the CAA registration route
+> and the operator ID. Step 5 is implemented against the reference encoder; step 6 uses
+> the AUX broadcast bus. Step 3 is **not applicable** to a home build. Steps 9, 10 and
+> 11 are outstanding.
 >
 > The Luhn mod-36 implementation reproduces EASA's published example but has been
 > validated against **that one vector only** — see the confidence warning in

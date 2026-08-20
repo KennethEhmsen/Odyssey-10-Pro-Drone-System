@@ -1,7 +1,7 @@
 # Odyssey-10 Pro
 
 [![host-tests](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml/badge.svg?branch=main)](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml)
-[![assertions](https://img.shields.io/badge/host_assertions-135-blue)](tools/host_tests/)
+[![assertions](https://img.shields.io/badge/host_assertions-145-blue)](tools/host_tests/)
 [![consistency](https://img.shields.io/badge/consistency_checks-13-blue)](tools/check_consistency.py)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-ESP32--P4%20%7C%20C3%20%7C%20C6-lightgrey)](firmware/)
@@ -86,18 +86,26 @@ Three things to settle before your first flight:
    was, and it is the difference between a working failsafe and an aircraft that flies
    until the pack collapses.
 
-3. **If you are fitting the Remote ID module**, set `UAS_SERIAL_NUMBER` in
-   `firmware/remote-id/src/main.cpp` to your CTA-2063-A serial, and provision your
-   operator registration at runtime over the serial console:
+3. **If you are fitting the Remote ID module**, set `UAS_CAA_REGISTRATION` in
+   `firmware/remote-id/src/main.cpp` to the registration issued by your civil aviation
+   authority, then provision your operator registration at runtime over the serial
+   console:
 
    ```
    SETOPERATOR DNKxxxxxxxxxxxxx-yyy
    ```
 
+   **You do not need an ICAO manufacturer code.** `UAS_ID_TYPE` defaults to
+   `ODY_UAS_ID_CAA_REGISTRATION`, which broadcasts your CAA registration and involves
+   ICAO not at all. The alternative, `ODY_UAS_ID_CTA_SERIAL`, requires a 4-character
+   code that ICAO issues to *manufacturers* — building one aircraft for yourself is not
+   that, and a bought Remote ID module already carries its own serial from whoever made
+   it.
+
    The operator ID is **not** compiled in, deliberately: the three characters after the
    hyphen are secret, and anything committed to a repository stays in its history. Until
-   both are set the module broadcasts nothing at all — a structurally invalid identifier
-   is worse than silence, because a receiver logs something untraceable.
+   both identifiers are valid the module broadcasts nothing at all — an untraceable
+   identifier in a receiver's log is worse than silence.
 
 Also check `VOLTAGE_DIVIDER_TRIM` against a multimeter and `CRUISE_CURRENT_A` against a
 real thrust-stand measurement, both described in section 11 of the specification.

@@ -104,6 +104,34 @@ uint8_t odyMakeCtaSerial(const char* mfrCode, const char* mfrSerial,
 }
 
 // -------------------------------------------------------------------------------------
+//  CAA registration identifier
+//
+//  The route for a privately built aircraft: no ICAO manufacturer code, no CTA serial.
+//  Formats are national, so this validates structure only and does not pretend to know
+//  every authority's scheme.
+// -------------------------------------------------------------------------------------
+uint8_t odyValidateCaaRegistration(const char* reg) {
+  if (!reg) return ODY_ID_ERR_NULL;
+
+  // The placeholder is checked FIRST. It is longer than the field, so a length check
+  // would otherwise report "wrong length" -- true, but far less useful than telling the
+  // operator they simply have not set it yet.
+  if (strncmp(reg, "SET-YOUR", 8) == 0) return ODY_ID_ERR_PLACEHOLDER;
+
+  const size_t n = strlen(reg);
+  if (n == 0 || n > ODY_CAA_REG_MAX) return ODY_ID_ERR_LENGTH;
+
+  // Alphanumerics plus the separators registrations commonly use. Anything else is
+  // either a typo or would not survive the fixed-width ODID field cleanly.
+  for (size_t i = 0; i < n; ++i) {
+    const char c = reg[i];
+    const bool ok = isalnum((unsigned char)c) || c == '-' || c == '.' || c == '_';
+    if (!ok) return ODY_ID_ERR_CHARSET;
+  }
+  return ODY_ID_OK;
+}
+
+// -------------------------------------------------------------------------------------
 //  EU operator registration number
 // -------------------------------------------------------------------------------------
 

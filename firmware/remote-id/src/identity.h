@@ -72,6 +72,41 @@ enum OdyIdResult : uint8_t {
 const char* odyIdResultText(uint8_t r);
 
 // -------------------------------------------------------------------------------------
+//  WHICH IDENTIFIER TO BROADCAST
+//
+//  ASTM F3411 defines four UAS ID types, and the Basic ID message says which one it is
+//  carrying. Revision 2.1 of this firmware hard-coded ODID_IDTYPE_SERIAL_NUMBER, which
+//  forces the CTA-2063-A route -- and that route needs a 4-character manufacturer code
+//  that ICAO issues to MANUFACTURERS.
+//
+//  A privately built aircraft has no manufacturer, so that was the wrong default:
+//
+//    ODID_IDTYPE_SERIAL_NUMBER        CTA-2063-A. Needs an ICAO manufacturer code.
+//                                     Correct for a manufactured airframe, or when you
+//                                     fit a bought Remote ID module (it carries its
+//                                     own serial from ITS manufacturer -- you do not
+//                                     apply for anything).
+//
+//    ODID_IDTYPE_CAA_REGISTRATION_ID  The registration your civil aviation authority
+//                                     issued. Needs no ICAO involvement whatsoever.
+//                                     THIS IS THE ROUTE FOR A HOME BUILD.
+//
+//    ODID_IDTYPE_UTM_ASSIGNED_UUID    Assigned by a UTM service provider.
+//    ODID_IDTYPE_SPECIFIC_SESSION_ID  Per-session, for privacy-preserving schemes.
+//
+//  You would only ever write to OPSInbox@icao.int if you intend to MANUFACTURE Remote ID
+//  modules or airframes for others. Building one aircraft for yourself is not that.
+// -------------------------------------------------------------------------------------
+
+// CAA registration identifiers are national and their formats differ, so validation here
+// is structural only: non-empty, within the 20-byte ODID field, and restricted to
+// characters that survive the encoding. It deliberately does not try to pattern-match
+// every authority's scheme.
+#define ODY_CAA_REG_MAX  20
+
+uint8_t odyValidateCaaRegistration(const char* reg);
+
+// -------------------------------------------------------------------------------------
 //  CTA-2063-A
 // -------------------------------------------------------------------------------------
 

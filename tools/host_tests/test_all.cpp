@@ -568,6 +568,39 @@ static void testCtaSerial() {
         "a short manufacturer code is refused");
 }
 
+static void testCaaRegistration() {
+  section("Remote ID: CAA registration -- the route that needs no ICAO code");
+
+  check(odyValidateCaaRegistration("DNK87astrdge12k8") == ODY_ID_OK,
+        "a Danish operator registration is accepted as the UAS ID");
+  check(odyValidateCaaRegistration("G-ABCD") == ODY_ID_OK,
+        "a short national registration is accepted");
+  check(odyValidateCaaRegistration("FA3X9-771.2_A") == ODY_ID_OK,
+        "hyphens, dots and underscores are accepted");
+
+  // The placeholder must never reach the air.
+  check(odyValidateCaaRegistration("SET-YOUR-CAA-REGISTRATION") == ODY_ID_ERR_PLACEHOLDER,
+        "the shipped placeholder is rejected");
+
+  check(odyValidateCaaRegistration("") == ODY_ID_ERR_LENGTH,
+        "an empty registration is rejected");
+  check(odyValidateCaaRegistration("123456789012345678901") == ODY_ID_ERR_LENGTH,
+        "21 characters exceeds the 20-byte ODID field");
+  check(odyValidateCaaRegistration("ABC DEF") == ODY_ID_ERR_CHARSET,
+        "a space is rejected");
+  check(odyValidateCaaRegistration(nullptr) == ODY_ID_ERR_NULL,
+        "a null registration is rejected");
+
+  // Exactly 20 characters must fit -- that is the ODID field width.
+  check(odyValidateCaaRegistration("12345678901234567890") == ODY_ID_OK,
+        "exactly 20 characters fits the ODID UAS ID field");
+
+  // The point of this route: no ICAO manufacturer code is involved anywhere.
+  check(odyValidateCaaRegistration("DNK87astrdge12k8") == ODY_ID_OK
+        && odyValidateCtaSerial("DNK87astrdge12k8") != ODY_ID_OK,
+        "a CAA registration need not be a valid CTA serial -- different schemes");
+}
+
 static void testOperatorId() {
   section("Remote ID: EU / Danish operator registration number");
 
@@ -646,6 +679,7 @@ int main() {
   testPid();
   testDebounce();
   testCtaSerial();
+  testCaaRegistration();
   testOperatorId();
 
   printf("\n=====================================================================\n");
