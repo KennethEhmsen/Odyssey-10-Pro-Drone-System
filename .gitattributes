@@ -1,0 +1,31 @@
+# Normalise line endings in the repository, check out native on each platform.
+* text=auto
+
+# Sources and documents are text.
+*.c      text
+*.cpp    text
+*.h      text
+*.py     text
+*.md     text
+*.csv    text
+*.ini    text
+*.json   text
+*.txt    text
+
+# Shell scripts must keep LF even when checked out on Windows, or /bin/sh
+# rejects them with a "bad interpreter" error.
+*.sh     text eol=lf
+
+# Generated Word documents are binary. Without this, text normalisation would
+# corrupt them.
+*.docx   binary
+*.pdf    binary
+*.png    binary
+*.jpg    binary
+
+# BlackBox flight logs are binary (they are gitignored, but be explicit in case
+# one is ever committed deliberately as a regression fixture).
+*.ody    binary
+
+# Collapse generated documents in diffs -- the Markdown is the source of truth.
+docs/*.docx -diff

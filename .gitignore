@@ -1,0 +1,32 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+.vscode/
+*.pyc
+__pycache__/
+
+# Build output
+build/
+*.elf
+*.bin
+*.hex
+*.map
+
+# Flight logs pulled off the aircraft
+*.ody
+*.ody.csv
+
+# Generated documents -- regenerate with tools/md2docx.py
+# (the .docx IS committed, since not everyone has python-docx; but scratch copies are not)
+~$*.docx
+*.tmp
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Host test binary
+tools/host_tests/test_all
+tools/host_tests/test_all.exe
