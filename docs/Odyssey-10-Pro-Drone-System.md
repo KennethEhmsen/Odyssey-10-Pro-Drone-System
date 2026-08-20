@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 2.6 — propeller configuration is a build switch
+**Document revision:** 2.7 — motor and propeller are both build switches
 
 ---
 
@@ -24,7 +24,7 @@ below has been recomputed:
 | Thrust per motor | 1750 g | **1230 g** |
 | Thrust-to-weight | 3.95:1 | **3.11:1** |
 | Hover throttle | ~44% | **~51%** |
-| Motors | 3110, 68 g each | **2810, 52 g each** |
+| Motors | 3110, 68 g each | **2810, 52 g each** (`MOTOR_CLASS` switch) |
 | ESC | 50 A/ch, 34 g | **40 A/ch, 25 g** |
 | Pack | 4500 mAh 45C, 680 g | **4500 mAh 20C, 640 g** |
 | Gyro notch centre | 80 Hz | **120 Hz** |
@@ -236,17 +236,41 @@ total and a **thrust-to-weight ratio of 3.11:1**.
 
 **Why the motor changed.** Revisions up to 2.2 specified a 3110 — a 31 mm stator, which
 is a 10–11 inch motor. On a 387 mm 9-inch frame that is over-sized: it carries mass the
-airframe does not need and runs a propeller below the range the stator was built for. The
-2810 class (28 mm stator, about 82% of the stator volume) is the 8–9 inch class and is the
-correct match.
+airframe does not need. The 2810 class (28 mm stator, about 82% of the volume) is the
+8–9 inch class and is the correct match.
 
 The 900 KV winding is unchanged, and deliberately so — it is the **stator** that was
 wrong, not the KV. 900 KV on 6S is already right for a 9-inch propeller; dropping the
 stator size while keeping the winding gives a lighter motor at the same shaft speed.
 
-The result is a lighter aircraft with *more* thrust-to-weight than the 3110 gave on 9-inch
-propellers, because the mass saved (64 g) matters more at this scale than the modest
-thrust the larger stator could have delivered on a propeller too small to load it properly.
+> **Correction to revision 2.3.** That revision quoted 1300 g for the 3110 and 1400 g for
+> the 2810 on the same propeller — which had the *smaller* stator producing *more*
+> thrust. That is backwards. The 1300 g came from scaling the 10-inch figure down for a
+> smaller propeller; the 1400 g came from asserting the 2810 was "properly matched". Only
+> the first was derived from anything.
+>
+> The physical picture: at 900 KV on 6S a 9-inch propeller is **prop-limited**, not
+> motor-limited, so both stators reach similar thrust. The 3110 holds RPM slightly better
+> under load — about 3% more thrust — and mostly buys **thermal headroom**. It does
+> not buy performance, and it costs 64 g.
+
+So the two motors are close to a wash on thrust-to-weight, and the real choice is between
+mass and thermal margin:
+
+| | 2810 | 3110 |
+| --- | --- | --- |
+| Stator | 28 mm | 31 mm |
+| Mass each | **52 g** | 68 g |
+| Peak thrust (2-blade) | 1230 g | **1271 g** |
+| All-up weight | **1584 g** | 1648 g |
+| Thrust-to-weight | **3.11:1** | 3.08:1 |
+| Cruise current | **9.7 A** | 10.1 A |
+| One-way range | **16.0 km** | 15.4 km |
+| Thermal headroom | adequate | **better** |
+
+The 2810 is the default. Choose the 3110 if you fly long hovering missions in warm
+weather, or if a thrust-stand run shows the 2810 running hot — 0.6 km of range is a fair
+price for margin you have measured a need for.
 
 Revision 1.0 stated that hover occurred at 22% throttle. That figure was not physical:
 propeller thrust scales with roughly the square of shaft speed, so 22% stick cannot
@@ -298,18 +322,34 @@ before the mixer starts trading attitude authority for climb. If you fly this ai
 manually and aggressively, or in gusty conditions close to obstacles, three blades are
 the better choice and the 1.4 km of range is a fair price.
 
-**Switching is one build flag.** Blade count changes seven constants, so it is a
-compile-time switch rather than a set of edits:
+**Both are build switches.** Motor class and blade count each change several coupled
+constants, so they are compile-time switches rather than sets of edits:
 
 ```bash
-pio run -e odyssey-fc                          # 2-blade, the default
-pio run -e odyssey-fc -- -DPROP_BLADES=3       # 3-blade
+pio run -e odyssey-fc                                      # 2810 + 2-blade, default
+pio run -e odyssey-fc -- -DPROP_BLADES=3                   # 2810 + 3-blade
+pio run -e odyssey-fc -- -DMOTOR_CLASS=MOTOR_3110          # 3110 + 2-blade
+pio run -e odyssey-fc -- -DMOTOR_CLASS=MOTOR_3110 -DPROP_BLADES=3
 ```
 
-`PROP_BLADES` in `config.h` selects everything downstream — propeller mass, peak thrust,
-all-up weight, gyro notch centre, cruise current, power loading and peak pack current.
-Setting it to anything other than 2 or 3 stops the build with an `#error`, because no
-other blade count has been characterised.
+All four combinations are characterised, build, and pass the host tests. Anything else
+stops the build with an `#error`.
+
+`PROP_BLADES` supplies the per-propeller figures — mass, base thrust, notch centre,
+power loading. `MOTOR_CLASS` supplies the per-motor figures — mass and thrust factor.
+All-up weight, peak thrust, peak current and cruise current are then **derived** from
+both:
+
+```c
+AIRFRAME_AUW_G     = base dry + 4 x motor mass + 4 x prop mass + payload reserve
+MOTOR_MAX_THRUST_G = prop base thrust x motor thrust factor
+CRUISE_CURRENT_A   = (AUW / power loading + avionics W) x cruise factor / pack V
+```
+
+Tabulating two motors by two propellers would be four sets of numbers and four chances to
+mistype one. Deriving them also means an `AIRFRAME_AUW_G` override for payload flows
+through to the cruise current automatically, which matters because that constant sizes
+the return-to-home reserve.
 
 This is a switch rather than documentation because the constants are **coupled**, and
 the coupling is not obvious. Changing thrust and weight but forgetting the notch would
@@ -326,14 +366,18 @@ Two constants accept an override, because measurement should beat a model:
 ```
 
 Compile-time assertions catch an incoherent combination — a thrust-to-weight ratio below
-2:1, a notch outside any plausible motor-noise band, an implausible all-up weight — and
-`tools/check_consistency.py` verifies that both configurations stay distinct and that
-the default is still 2-blade.
+2:1, a notch outside any plausible motor-noise band, an implausible all-up weight or motor
+mass. `tools/check_consistency.py` goes further: it resolves all four builds through the
+real C preprocessor and checks that each constant actually varies on the axis it should,
+in the right direction, and that the default is still 2810 + 2-blade. It also rejects a
+3110 modelled at more than 10% extra thrust, because that would mean the revision 2.3
+error had crept back in.
 
 **The firmware prints its configuration at boot**, because two builds are otherwise
 indistinguishable once flashed:
 
 ```
+Motors     : 2810 (28 mm stator)  (52 g each)
 Propellers : 9x5x2 two-blade  (PROP_BLADES=2)
 Airframe   : AUW 1584 g, 1230 g/motor, TWR 3.11:1
 Gyro notch : 120 Hz, Q 4.0  (modelled default -- measure and override)

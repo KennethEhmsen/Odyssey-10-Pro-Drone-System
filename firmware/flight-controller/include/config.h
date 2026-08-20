@@ -52,31 +52,93 @@
 #define PROP_DIAMETER_IN          9
 #define PROP_PITCH_IN             5
 
+// -------------------------------------------------------------------------------------
+//  MOTOR_CLASS -- the second switch
+//
+//  Same 900 KV winding either way; only the stator changes. See docs section 3.2.
+//
+//    MOTOR_2810   28 mm stator, 52 g. The 8-9 inch class, correct for this airframe.
+//    MOTOR_3110   31 mm stator, 68 g. A 10-11 inch motor. More thermal headroom, at
+//                 64 g and about 0.6 km of range.
+//
+//  A CORRECTION, since revision 2.3 got this backwards. That revision quoted 1300 g for
+//  the 3110 and 1400 g for the 2810 on the same propeller, which had the SMALLER stator
+//  producing MORE thrust. The 1300 came from scaling the 10-inch figure down for a
+//  smaller propeller; the 1400 came from asserting the 2810 was "properly matched".
+//  Only the first was derived from anything.
+//
+//  The physical picture: at 900 KV on 6S a 9-inch propeller is PROP-limited rather than
+//  motor-limited, so both stators reach similar thrust. The 3110 holds RPM slightly
+//  better under load -- about 3% more thrust -- and mostly buys thermal headroom. It
+//  does not buy performance, and it costs mass.
+// -------------------------------------------------------------------------------------
+#define MOTOR_2810                2810
+#define MOTOR_3110                3110
+
+#ifndef MOTOR_CLASS
+#define MOTOR_CLASS               MOTOR_2810
+#endif
+
+#if MOTOR_CLASS == MOTOR_2810
+  #define MOTOR_MASS_G_EACH       52.0f
+  #define MOTOR_STATOR_MM         28
+  #define MOTOR_THRUST_FACTOR     1.000f   // reference
+  #define MOTOR_CONFIG_NAME       "2810 (28 mm stator)"
+
+#elif MOTOR_CLASS == MOTOR_3110
+  #define MOTOR_MASS_G_EACH       68.0f
+  #define MOTOR_STATOR_MM         31
+  #define MOTOR_THRUST_FACTOR     1.033f   // ~23% more stator, ~3% more thrust
+  #define MOTOR_CONFIG_NAME       "3110 (31 mm stator)"
+
+#else
+  #error "MOTOR_CLASS must be MOTOR_2810 or MOTOR_3110. Nothing else is characterised."
+#endif
+
+// -------------------------------------------------------------------------------------
+//  PROP_BLADES -- per-propeller figures, quoted against the reference 2810 motor
+// -------------------------------------------------------------------------------------
 #if PROP_BLADES == 2
   // 9x5x2. Modelled figures -- verify on a thrust stand, see docs section 11.2.
   #define PROP_MASS_G_EACH        7.0f
-  #define MOTOR_MAX_THRUST_G      1230.0f  // per motor at 6S
-  #define PROP_AUW_DEFAULT_G      1584.0f  // all-up weight, grams
+  #define PROP_BASE_THRUST_G      1230.0f  // per motor at 6S, on the reference 2810
   #define PROP_NOTCH_DEFAULT_HZ   120.0f   // hover fundamental ~124 Hz
-  #define CRUISE_CURRENT_A        9.7f     // CRUISE, not hover -- see section 5
   #define PROP_POWER_LOADING_GW   8.90f    // hover, g/W
-  #define PROP_PEAK_PACK_A        51.0f    // full throttle, whole aircraft
+  #define PROP_BASE_PEAK_A        51.0f    // full throttle, whole aircraft
   #define PROP_CONFIG_NAME        "9x5x2 two-blade"
 
 #elif PROP_BLADES == 3
   // 9x5x3. Same motors and ESC; only the propellers differ.
   #define PROP_MASS_G_EACH        9.0f
-  #define MOTOR_MAX_THRUST_G      1400.0f
-  #define PROP_AUW_DEFAULT_G      1592.0f
+  #define PROP_BASE_THRUST_G      1400.0f
   #define PROP_NOTCH_DEFAULT_HZ   100.0f   // hover fundamental ~104 Hz
-  #define CRUISE_CURRENT_A        10.7f
   #define PROP_POWER_LOADING_GW   8.07f
-  #define PROP_PEAK_PACK_A        67.0f
+  #define PROP_BASE_PEAK_A        67.0f
   #define PROP_CONFIG_NAME        "9x5x3 three-blade"
 
 #else
   #error "PROP_BLADES must be 2 or 3. Other blade counts are not characterised."
 #endif
+
+// -------------------------------------------------------------------------------------
+//  DERIVED -- so the four combinations cannot disagree with each other
+//
+//  Tabulating 2 motors x 2 propellers = 4 sets of numbers by hand would be four chances
+//  to mistype one. These are computed instead, which also means an AIRFRAME_AUW_G
+//  override for payload flows through to the cruise current automatically.
+// -------------------------------------------------------------------------------------
+#define AIRFRAME_BASE_DRY_G       1178.0f  // everything except motors and propellers
+#define PAYLOAD_RESERVE_G         170.0f
+#define AVIONICS_POWER_W          18.0f    // FC, VTX, camera, BEC losses
+#define CRUISE_POWER_FACTOR       1.10f    // cruise costs ~10% more than hover
+
+#define PROP_AUW_DEFAULT_G        (AIRFRAME_BASE_DRY_G                  \
+                                 + 4.0f * MOTOR_MASS_G_EACH             \
+                                 + 4.0f * PROP_MASS_G_EACH              \
+                                 + PAYLOAD_RESERVE_G)
+
+#define MOTOR_MAX_THRUST_G        (PROP_BASE_THRUST_G * MOTOR_THRUST_FACTOR)
+#define PROP_PEAK_PACK_A          (PROP_BASE_PEAK_A * MOTOR_THRUST_FACTOR)
 
 // The notch is the one constant the documentation actively tells you to replace with a
 // measurement, so it takes an override. PROP_BLADES only supplies the starting point.
@@ -233,16 +295,25 @@
 // beacon is armed on touchdown.
 #define RECOVERY_RADIUS_M         15.0f
 
-// CRUISE_CURRENT_A is set by PROP_BLADES in section 1.
+// CRUISE_CURRENT_A is DERIVED, not tabulated.
 //
-// It is the current drawn while flying home AT CRUISE SPEED, and it budgets the charge
-// the return leg will cost. It must therefore be the cruise figure, not the hover one.
+// It is the current drawn flying home at cruise speed, and it budgets the charge the
+// return leg will cost -- so it must be the cruise figure, not hover. Revisions 2.2 to
+// 2.4 used hover power, about 10% lower, which made the return-to-home reserve
+// optimistic.
 //
-// Revisions 2.2 to 2.4 set it from hover power, about 10% lower, which made the
-// return-to-home energy budget optimistic: the aircraft believed it could reach home on
-// less charge than the trip actually costs. Binding it to PROP_BLADES also stops the
-// two configurations sharing one figure, which they should not -- three blades cost
-// about 10% more current at cruise.
+// Deriving it from AIRFRAME_AUW_G means a payload override flows through automatically.
+// The approximation is that PROP_POWER_LOADING_GW is treated as constant, when disc
+// loading actually degrades it slightly as mass rises; at the masses involved that is
+// about 2% optimistic, comfortably inside the 20% margin the energy budget already
+// applies to the required mAh (see navigation.cpp).
+//
+// Override with -DCRUISE_CURRENT_A=... once you have measured it.
+#ifndef CRUISE_CURRENT_A
+#define CRUISE_CURRENT_A          (((AIRFRAME_AUW_G / PROP_POWER_LOADING_GW)   \
+                                    + AVIONICS_POWER_W)                        \
+                                   * CRUISE_POWER_FACTOR / PACK_NOMINAL_V)
+#endif
 
 // =====================================================================================
 //  6. FAILSAFE AND LANDING
@@ -458,6 +529,12 @@ static_assert(FLIGHT_LOOP_HZ % BLACKBOX_LOG_HZ == 0,
 // If someone overrides one by hand and leaves the rest, the build should stop.
 static_assert(PROP_BLADES == 2 || PROP_BLADES == 3,
               "PROP_BLADES must be 2 or 3");
+static_assert(MOTOR_CLASS == MOTOR_2810 || MOTOR_CLASS == MOTOR_3110,
+              "MOTOR_CLASS must be MOTOR_2810 or MOTOR_3110");
+static_assert(MOTOR_MASS_G_EACH > 30.0f && MOTOR_MASS_G_EACH < 120.0f,
+              "Motor mass is implausible for this airframe class");
+static_assert(MOTOR_THRUST_FACTOR >= 1.0f && MOTOR_THRUST_FACTOR < 1.2f,
+              "Motor thrust factor is outside the characterised range");
 static_assert(NOTCH_CENTER_HZ < FLIGHT_LOOP_HZ / 2.0f,
               "Notch centre is above Nyquist for the flight loop rate");
 // Sanity band only, NOT a tight coupling to PROP_BLADES. The documentation tells you to
@@ -465,9 +542,9 @@ static_assert(NOTCH_CENTER_HZ < FLIGHT_LOOP_HZ / 2.0f,
 // an assertion that second-guessed the measurement would be worse than none.
 static_assert(NOTCH_CENTER_HZ > 50.0f && NOTCH_CENTER_HZ < 200.0f,
               "Notch centre is outside any plausible motor-noise band for this airframe");
-static_assert(PROP_BLADES != 2 || MOTOR_MAX_THRUST_G < 1300.0f,
+static_assert(PROP_BLADES != 2 || MOTOR_MAX_THRUST_G < 1330.0f,
               "A 2-blade build cannot reach the 3-blade thrust figure");
-static_assert(PROP_BLADES != 3 || MOTOR_MAX_THRUST_G > 1300.0f,
+static_assert(PROP_BLADES != 3 || MOTOR_MAX_THRUST_G > 1330.0f,
               "A 3-blade build should carry the higher thrust figure");
 static_assert(4.0f * MOTOR_MAX_THRUST_G / AIRFRAME_AUW_G > 2.0f,
               "Thrust-to-weight below 2:1 is not safely flyable -- check AIRFRAME_AUW_G "

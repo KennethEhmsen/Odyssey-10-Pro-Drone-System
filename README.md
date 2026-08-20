@@ -10,7 +10,7 @@
 Autonomous long-range 9-inch quadcopter. ESP32-P4 dual-core RISC-V avionics, integrated
 perception, kinetic recovery and safety stack.
 
-**Status:** revision 2.6 — propeller configuration is a build switch. All
+**Status:** revision 2.7 — motor and propeller are both build switches. All
 eighteen defects found in the revision 1.0 review are fixed. See
 [`docs/review-findings-resolution.md`](docs/review-findings-resolution.md) for the
 finding-by-finding index, or section 13 of the specification.
@@ -83,11 +83,17 @@ Three things to settle before your first flight:
    including to home builds), or your authority requires it for any other reason. See
    specification section 12.1.
 
-2. **`firmware/flight-controller/include/config.h`** — set `PROP_BLADES` to 2 or 3 to
-   match the propellers you are fitting. It defaults to **2**, and it drives seven
-   coupled constants including the gyro notch frequency, so it is a switch rather than
-   a set of manual edits. Build the other configuration with
-   `pio run -- -DPROP_BLADES=3`. The firmware prints which one it is at boot.
+2. **`firmware/flight-controller/include/config.h`** — set `MOTOR_CLASS` and
+   `PROP_BLADES` to match the hardware you are fitting. They default to
+   **2810 + 2-blade** and together drive every coupled constant, including the gyro notch
+   frequency and the cruise current that sizes the return-to-home reserve:
+
+   ```bash
+   pio run -- -DMOTOR_CLASS=MOTOR_3110 -DPROP_BLADES=3
+   ```
+
+   All four combinations are characterised and tested; anything else fails the build.
+   The firmware prints which one it is at boot.
 
    Then confirm `CELL_COUNT` matches your
    pack. Every battery threshold derives from it. Getting this wrong is what finding 1

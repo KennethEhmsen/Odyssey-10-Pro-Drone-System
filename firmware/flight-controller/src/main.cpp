@@ -1033,6 +1033,8 @@ void setup() {
   // puts the gyro notch ~20 Hz off the actual motor peak and budgets the return-to-home
   // reserve from the wrong cruise current. Print the configuration so it can be checked
   // against the propellers actually fitted, before they go on.
+  Serial.printf("Motors     : %s  (%.0f g each)\n",
+                MOTOR_CONFIG_NAME, MOTOR_MASS_G_EACH);
   Serial.printf("Propellers : %s  (PROP_BLADES=%d)\n", PROP_CONFIG_NAME, PROP_BLADES);
   Serial.printf("Airframe   : AUW %.0f g, %.0f g/motor, TWR %.2f:1\n",
                 AIRFRAME_AUW_G, MOTOR_MAX_THRUST_G,
