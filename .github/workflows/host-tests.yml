@@ -77,7 +77,7 @@ jobs:
 
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5      # v4 targets Node 20, now deprecated
         with:
           fetch-depth: 1        # no history needed, and it is faster
 
