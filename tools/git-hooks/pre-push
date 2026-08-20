@@ -1,23 +1,80 @@
 #!/bin/sh
-# Runs the host verification before every push. Zero CI quota, zero cost.
+# =====================================================================================
+#  Odyssey-10 Pro -- pre-push verification
+#  ------------------------------------------------------------------------------------
+#  Runs the host test suite before every push. Zero CI quota, zero cost, no network.
 #
-# Enable with:   git config core.hooksPath tools/git-hooks
-# Bypass once:   git push --no-verify
+#      enable:       git config core.hooksPath tools/git-hooks
+#      disable:      git config --unset core.hooksPath
+#      bypass once:  git push --no-verify
+#
+#  Git passes the refs being pushed on stdin, one per line:
+#      <local ref> <local sha> <remote ref> <remote sha>
+#  A remote sha of all zeroes means the branch does not exist on the remote yet.
+#
+#  The suite compiles the WORKING TREE, so this hook deliberately fails open: if it
+#  cannot work out exactly what is being pushed, it runs the tests rather than skipping
+#  them. For a repository full of flight-critical code, a few wasted seconds is the
+#  right trade against a silent skip.
+# =====================================================================================
 set -e
-root=$(git rev-parse --show-toplevel)
 
-# Only bother if something that affects the tests actually changed.
-if git diff --quiet --exit-code @{u}.. -- firmware shared tools/host_tests 2>/dev/null; then
+root=$(git rev-parse --show-toplevel)
+WATCHED="firmware shared tools/host_tests"
+ZERO=0000000000000000000000000000000000000000
+
+should_run=no
+
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+    # Nothing to push on this ref (a deletion).
+    [ "$local_sha" = "$ZERO" ] && continue
+
+    if [ "$remote_sha" = "$ZERO" ]; then
+        # New branch on the remote: we cannot cheaply bound the range, so run.
+        should_run=yes
+        break
+    fi
+
+    # Does the range being pushed touch anything the tests cover?
+    if ! git diff --quiet "$remote_sha" "$local_sha" -- $WATCHED 2>/dev/null; then
+        should_run=yes
+        break
+    fi
+done
+
+# Uncommitted changes to watched paths are compiled by the suite even though they are
+# not part of the push, so they must also trigger a run -- otherwise a broken working
+# tree passes silently.
+if [ "$should_run" = no ]; then
+    if ! git diff --quiet HEAD -- $WATCHED 2>/dev/null; then
+        should_run=yes
+    fi
+fi
+
+# No stdin at all (hook invoked manually for testing): run.
+if [ "$should_run" = no ] && [ -t 0 ]; then
+    should_run=yes
+fi
+
+if [ "$should_run" = no ]; then
     exit 0
 fi
 
 echo "pre-push: running host verification..."
-if ! sh "$root/tools/host_tests/run_tests.sh" > /tmp/ody-tests.$$ 2>&1; then
-    tail -40 /tmp/ody-tests.$$
-    rm -f /tmp/ody-tests.$$
-    echo
-    echo "pre-push: tests FAILED -- push aborted. Use --no-verify to override."
-    exit 1
+log=$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/ody-tests.$$")
+
+if sh "$root/tools/host_tests/run_tests.sh" > "$log" 2>&1; then
+    tail -n 3 "$log"
+    rm -f "$log"
+    exit 0
 fi
-tail -3 /tmp/ody-tests.$$
-rm -f /tmp/ody-tests.$$
+
+echo
+echo "----------------------------------------------------------------------"
+tail -n 40 "$log"
+echo "----------------------------------------------------------------------"
+rm -f "$log"
+echo
+echo "pre-push: host tests FAILED -- push aborted."
+echo "          Fix the failure, or override with:  git push --no-verify"
+exit 1
