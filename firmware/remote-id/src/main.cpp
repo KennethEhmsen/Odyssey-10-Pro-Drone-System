@@ -327,6 +327,7 @@ static void serviceAuxBus(uint32_t nowMs) {
 //  Broadcast
 // =====================================================================================
 static void broadcastLocation() {
+  if (!ctaSerialValid) return;      // see broadcastStatic()
   ODID_Location_encoded enc;
   if (encodeLocationMessage(&enc, &uasData.Location) != ODID_SUCCESS) return;
   odidTransportSend(ODID_MESSAGETYPE_LOCATION,
@@ -336,6 +337,11 @@ static void broadcastLocation() {
 }
 
 static void broadcastStatic() {
+  // A structurally invalid UAS ID is worse than no broadcast: a receiver logs a
+  // malformed identifier that cannot be traced back to anyone. Stay silent instead,
+  // and say so on the console.
+  if (!ctaSerialValid) return;
+
   ODID_BasicID_encoded basic;
   if (encodeBasicIDMessage(&basic, &uasData.BasicID[0]) == ODID_SUCCESS) {
     odidTransportSend(ODID_MESSAGETYPE_BASIC_ID,
@@ -400,8 +406,13 @@ void setup() {
   }
 
   if (!ctaSerialValid || !operatorIdConfigured) {
-    Serial.println("*** Health line stays LOW -- the flight controller will refuse "
-                   "to arm. ***");
+    Serial.println("*** Remote ID is NOT broadcasting. ***");
+    Serial.println("*** The health line stays LOW. Whether that blocks arming depends");
+    Serial.println("*** on REQUIRE_REMOTE_ID_TO_ARM in the flight controller's config.h,");
+    Serial.println("*** which defaults to 0 because a privately built aircraft under");
+    Serial.println("*** 25 kg in EU open category A3 does not require Direct Remote ID.");
+    Serial.println("*** Set it to 1 if you fly in the specific category, are");
+    Serial.println("*** class-marked, or are in a jurisdiction that requires it.");
   }
 }
 

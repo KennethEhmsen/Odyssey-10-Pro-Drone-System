@@ -492,8 +492,19 @@ uses the reference library `opendroneid/opendroneid-core-c` rather than a hand-r
 layout, because the ASTM field packing is bit-exact and easy to get subtly wrong.
 
 The module drives a health line back to the flight controller, asserted only while both
-radios are advertising **and** the operator ID has been configured. Remote ID health is a
-blocking arm condition, so an aircraft with an unconfigured or dead module will not arm.
+radios are advertising **and** both identifiers are valid. If the CTA serial is
+malformed the module broadcasts nothing at all, because a receiver logging an untraceable
+identifier is worse than silence.
+
+**Whether that blocks arming is the operator's choice, not the firmware's.**
+`REQUIRE_REMOTE_ID_TO_ARM` in `config.h` defaults to **0**: Remote ID is optional,
+because a privately built aircraft under 25 kg in the EU open category A3 is not
+class-marked and the DRI obligation attaches to class-marked aircraft. Set it to 1 for
+the specific category, a class-marked build, or the United States under 14 CFR Part 89.
+
+An earlier draft of this fix made Remote ID unconditionally blocking. That was the same
+mistake as the original over-claim, expressed in code instead of prose: it would have
+grounded a perfectly legal aircraft.
 
 **Documented in:** specification §12.1
 

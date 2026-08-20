@@ -225,6 +225,32 @@
 //  retained the last received throttle across flights, so arming with a raised stick
 //  drove all four 10-inch props to ~82% instantly.
 // =====================================================================================
+// -------------------------------------------------------------------------------
+//  REMOTE ID POLICY
+//
+//  0 = Remote ID is OPTIONAL. Its health is still reported in telemetry and shown on
+//      the ground station, but a missing, unconfigured or failed module does NOT block
+//      arming. This is the default, and it is correct for the aircraft as specified:
+//      a privately built airframe under 25 kg flown in the EU open category A3 is not
+//      class-marked, and the Direct Remote ID obligation attaches to class-marked
+//      C1/C2/C3 aircraft.
+//
+//  1 = Remote ID is REQUIRED to arm. Set this if any of the following apply:
+//        * you fly in the SPECIFIC category (DRI is required there regardless of
+//          weight or class);
+//        * your aircraft is class-marked C1/C2/C3;
+//        * you are in the United States, where 14 CFR Part 89 applies above 250 g
+//          including to home-built aircraft;
+//        * you are in Denmark after the proposed Trafikstyrelsen electronic-visibility
+//          rules take effect (proposed 1 January 2027 -- confirm what was adopted);
+//        * your national authority requires it for any other reason.
+//
+//  Getting this wrong in the permissive direction is a legal problem; getting it wrong
+//  in the restrictive direction grounds a legal aircraft. Neither default is safe for
+//  everyone, so the choice is explicit. See docs section 12.1.
+// -------------------------------------------------------------------------------
+#define REQUIRE_REMOTE_ID_TO_ARM  0
+
 #define ARM_THROTTLE_MAX_US       1050     // stick must be at the bottom
 #define ARM_MAX_TILT_DEG          8.0f     // aircraft must be roughly level
 #define ARM_MIN_SATELLITES        6

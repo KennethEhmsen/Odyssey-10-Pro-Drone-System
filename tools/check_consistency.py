@@ -541,6 +541,13 @@ def check_arm_gate(rep, fix):
         return
 
     required = set(re.findall(r"ODY_SENS_[A-Z_]+", m.group(1)))
+
+    # Remote ID is opt-in via REQUIRE_REMOTE_ID_TO_ARM, so include it in the required
+    # set only when the operator has actually opted in.
+    cfg = read(CONFIG_H)
+    opt = re.search(r"#define\s+REQUIRE_REMOTE_ID_TO_ARM\s+(\d+)", cfg)
+    if opt and opt.group(1) != "0":
+        required.add("ODY_SENS_REMOTE_ID")
     sensors_cpp = read(ROOT / "firmware" / "flight-controller" / "src" / "sensors.cpp")
     settable = set(re.findall(r"ODY_SENS_[A-Z_]+", sensors_cpp)) | \
                set(re.findall(r"ODY_SENS_[A-Z_]+", main))

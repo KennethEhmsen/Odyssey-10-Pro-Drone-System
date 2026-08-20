@@ -491,7 +491,15 @@ static uint8_t evaluateArmBlockers(uint32_t nowMs, const PilotInput& pilot,
                                    bool pilotPresent, uint16_t health) {
   uint8_t flags = 0;
 
-  if ((health & ODY_ARM_REQUIRED_SENSORS) != ODY_ARM_REQUIRED_SENSORS)
+  // Remote ID is added to the required set only when the operator has opted in via
+  // REQUIRE_REMOTE_ID_TO_ARM. It is not required for a privately built aircraft under
+  // 25 kg in the EU open category -- see config.h and docs section 12.1.
+  const uint16_t requiredSensors = ODY_ARM_REQUIRED_SENSORS
+#if REQUIRE_REMOTE_ID_TO_ARM
+                                 | ODY_SENS_REMOTE_ID
+#endif
+                                 ;
+  if ((health & requiredSensors) != requiredSensors)
     flags |= ODY_ARMBLOCK_SENSORS;
 
   if (!homeLocked)                       flags |= ODY_ARMBLOCK_NO_HOME;

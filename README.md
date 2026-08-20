@@ -27,7 +27,7 @@ finding-by-finding index, or section 13 of the specification.
 | `docs/Odyssey-10-Pro-Drone-System.md` | The engineering master specification |
 | `docs/Odyssey-10-Pro-Drone-System.docx` | The same document as Word, generated from the Markdown |
 | `docs/review-findings-resolution.md` | Every review finding mapped to its fix |
-| `docs/remote-id-regulatory-notes.md` | Direct Remote ID reference notes for a privately built aircraft in Denmark/EU |
+| `docs/remote-id-regulatory-notes.md` | Direct Remote ID reference notes for a privately built aircraft in Denmark/EU (`.docx` alongside) |
 | `docs/Odyssey-10-Pro-Drone-System.ORIGINAL.md` | Revision 1.0, kept for reference |
 | `shared/odyssey_link.h` | Wire protocol shared by all four firmware images |
 | `firmware/flight-controller/` | ESP32-P4 flight controller |
@@ -66,18 +66,38 @@ cd firmware/ground-station && pio run -t upload
 
 ### Before you build
 
-Two things must be set for your own aircraft, and the firmware will not let you fly
-without them:
+Three things to settle before your first flight:
 
-1. **`firmware/remote-id/src/main.cpp`** — set `UAS_SERIAL_NUMBER` and `OPERATOR_ID` to
-   the values registered with your civil aviation authority. Until you do, the module
-   holds its health line low and the flight controller refuses to arm. Broadcasting a
-   placeholder Remote ID is itself a regulatory violation.
+1. **`firmware/flight-controller/include/config.h`** — decide whether you need Remote ID.
+
+   `REQUIRE_REMOTE_ID_TO_ARM` defaults to **0**, meaning Remote ID is optional and a
+   missing or unconfigured module will **not** stop the aircraft arming. That default is
+   correct for this airframe as specified: a privately built aircraft under 25 kg flown
+   in the EU open category A3 is not class-marked, and the Direct Remote ID obligation
+   attaches to class-marked C1/C2/C3 aircraft.
+
+   Set it to **1** if you fly in the **specific category**, your aircraft is
+   class-marked, you are in the **United States** (14 CFR Part 89 applies above 250 g
+   including to home builds), or your authority requires it for any other reason. See
+   specification section 12.1.
 
 2. **`firmware/flight-controller/include/config.h`** — confirm `CELL_COUNT` matches your
    pack. Every battery threshold derives from it. Getting this wrong is what finding 1
    was, and it is the difference between a working failsafe and an aircraft that flies
    until the pack collapses.
+
+3. **If you are fitting the Remote ID module**, set `UAS_SERIAL_NUMBER` in
+   `firmware/remote-id/src/main.cpp` to your CTA-2063-A serial, and provision your
+   operator registration at runtime over the serial console:
+
+   ```
+   SETOPERATOR DNKxxxxxxxxxxxxx-yyy
+   ```
+
+   The operator ID is **not** compiled in, deliberately: the three characters after the
+   hyphen are secret, and anything committed to a repository stays in its history. Until
+   both are set the module broadcasts nothing at all — a structurally invalid identifier
+   is worse than silence, because a receiver logs something untraceable.
 
 Also check `VOLTAGE_DIVIDER_TRIM` against a multimeter and `CRUISE_CURRENT_A` against a
 real thrust-stand measurement, both described in section 11 of the specification.

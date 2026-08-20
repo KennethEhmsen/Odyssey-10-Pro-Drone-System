@@ -180,10 +180,20 @@ enum OdySensorBit : uint16_t {
 // LiDAR and downward ToF are deliberately excluded: they degrade capability
 // (no obstacle bubble, no laser flare) but do not prevent a safe manual flight.
 // Remote ID is included because flying without it is illegal in most jurisdictions.
+//
+// REMOTE ID IS DELIBERATELY NOT IN THIS SET.
+//
+// A privately built aircraft under 25 kg flown in the EU open category A3 is not
+// class-marked, and the Direct Remote ID obligation attaches to class-marked C1/C2/C3
+// aircraft. Blocking arming on Remote ID would impose a requirement that does not apply
+// to this airframe, and would ground a perfectly legal aircraft.
+//
+// Operators who DO need it -- specific category, a class-marked build, or a
+// jurisdiction that requires it regardless -- set REQUIRE_REMOTE_ID_TO_ARM in config.h,
+// which adds ODY_SENS_REMOTE_ID to the mask below. See docs section 12.1.
 #define ODY_ARM_REQUIRED_SENSORS ( ODY_SENS_IMU_PRIMARY | ODY_SENS_BARO   \
                                  | ODY_SENS_MAG         | ODY_SENS_GNSS   \
-                                 | ODY_SENS_CURRENT     | ODY_SENS_CRSF_RC\
-                                 | ODY_SENS_REMOTE_ID )
+                                 | ODY_SENS_CURRENT     | ODY_SENS_CRSF_RC )
 
 // -------------------------------------------------------------------------------------
 //  FC -> GCS telemetry  (LoRa, 2 Hz)

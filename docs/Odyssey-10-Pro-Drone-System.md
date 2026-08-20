@@ -643,7 +643,8 @@ a bitmask in telemetry, so a blocked arm is never a silent mystery in the field:
 
 | Check | Blocker flag |
 | --- | --- |
-| Every required sensor healthy (IMU, baro, mag, GNSS, current, RC, Remote ID) | `SENSORS` |
+| Every required sensor healthy (IMU, baro, mag, GNSS, current, RC) | `SENSORS` |
+| Remote ID healthy — **only if `REQUIRE_REMOTE_ID_TO_ARM` is set**; optional by default, see 12.1 | `SENSORS` |
 | GNSS home position locked, ≥ 6 satellites | `NO_HOME` |
 | **Throttle stick at minimum (≤ 1050 µs) from a live CRSF frame** | `THROTTLE` |
 | Fresh CRSF frame within 500 ms | `RC_STALE` |
@@ -1277,10 +1278,11 @@ rebuilds all four.
 - [ ] **Land permission round trip.** Force `AWAITING_LAND_PERMIT` on the bench, confirm
       the GCS raises the alert, press PERMIT on the ground station and confirm the
       aircraft transitions. This path was unreachable in revision 1.0.
-- [ ] **Remote ID.** Confirm a Remote ID receiver app sees the aircraft, with **your**
-      registered operator ID and serial number — not the placeholder. The module
-      holds its health line low until both are valid, so the aircraft will refuse to
-      arm if this step is skipped.
+- [ ] **Remote ID — only if you are fitting it.** Confirm a Remote ID receiver app sees
+      the aircraft, with **your** registered operator ID and serial number. Until both
+      are valid the module broadcasts nothing, which is deliberate: a malformed
+      identifier is worse than silence. Whether an unhealthy module blocks arming
+      depends on `REQUIRE_REMOTE_ID_TO_ARM`, which is **0** by default — see 12.1.
 - [ ] **2.4 GHz coexistence (see 8.5).** With the aircraft powered and Remote ID
       broadcasting, watch the ExpressLRS link quality in telemetry for 60 s. It must
       not dip in step with the Remote ID transmissions. `rcLinkQuality` is recorded
@@ -1332,6 +1334,26 @@ authorisation, an STS, or a SORA — Remote ID is required regardless.
 **This is a summary, not advice.** Confirm the position for your own operation and
 jurisdiction. The distinction that matters is *class-marked versus privately built*, and
 it is easy to miss because most published guidance is written for shop-bought drones.
+
+**What the firmware does about it.** Because the requirement does not apply universally,
+the firmware does not assume it. `REQUIRE_REMOTE_ID_TO_ARM` in `config.h` selects the
+policy:
+
+| Setting | Behaviour | Use when |
+| --- | --- | --- |
+| **`0`** (default) | Remote ID health is reported in telemetry and on the ground station, but a missing, unconfigured or failed module does **not** block arming | Privately built, open category, A1 or A3 — this airframe as specified |
+| `1` | Remote ID must be healthy before the aircraft will arm | Specific category; class-marked C1/C2/C3; the United States under 14 CFR Part 89; or wherever your authority requires it |
+
+Revision 2.0 hard-wired the restrictive behaviour, which would have grounded a legal
+aircraft. Getting this wrong in the permissive direction is a legal problem; getting it
+wrong in the restrictive direction stops you flying something you are entitled to fly.
+Neither default is safe for everyone, so the choice is explicit and documented rather
+than assumed.
+
+The module itself stays honest either way: if the CTA serial is not structurally valid
+it **broadcasts nothing at all** rather than transmitting a malformed identifier, and it
+holds its health line low so the condition is visible in telemetry whether or not it
+blocks arming.
 
 ### 12.2 Denmark
 
@@ -1525,6 +1547,7 @@ Revision 2.0 introduced or left standing the following, all corrected here.
 | Moving the RC link to 2.4 GHz solved the 433 MHz harmonic problem but created an unaddressed 2.4 GHz coexistence problem with the Remote ID module, which the placement diagram put in the central stack | §8.5 added: asymmetric mitigation protecting the mission-critical ELRS receiver, placement rules, and a measurable bench check in §11.4 |
 | §12 implied that broadcasting OpenDroneID messages constitutes compliance | §12.4 added, listing what EU 2019/945 Part 6 additionally requires |
 | Nothing checked that the specification and the firmware still agreed with each other — the failure mode behind findings 1, 2, 16 and 18 | `tools/check_consistency.py` added: 12 automated checks with `--fix` for the mechanically correctable ones, wired into the pre-push hook and CI |
+| Remote ID was a **blocking** arm condition, imposing on a privately built A3 aircraft a requirement that attaches to class-marked C1/C2/C3 aircraft — it would have grounded a legal airframe | `REQUIRE_REMOTE_ID_TO_ARM` added to `config.h`, defaulting to 0. Remote ID is optional unless the operator opts in; §12.1 documents when to |
 
 ---
 
