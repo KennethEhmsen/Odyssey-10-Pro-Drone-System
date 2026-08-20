@@ -3,66 +3,55 @@
 #  ------------------------------------------------------------------------------------
 #  COST
 #
-#  This repository is PRIVATE, so Actions minutes come out of the account's monthly
-#  included quota (GitHub Free: 2,000 min/month; Pro: 3,000). It is billed only if the
-#  account's spending limit is raised above its default of $0 -- at $0, Actions simply
-#  stops running once the quota is exhausted and no charge is possible.
+#  This repository is PUBLIC, so GitHub-hosted standard runners are FREE AND UNLIMITED.
+#  There is no quota to exhaust and no billing to configure. That is why the repository
+#  was made public: on a private repo the first run came back "The job was not started
+#  because recent account payments have failed or your spending limit needs to be
+#  increased", and the only ways forward were to authorise spending or to go public.
 #
-#  Everything below is shaped to keep the quota cost near zero:
+#  The controls below are kept anyway. They cost nothing to keep, they keep runs fast,
+#  and they mean this workflow stays cheap if the repository is ever made private again:
 #
 #    * ubuntu-latest only. Linux consumes minutes at 1x; Windows is 2x and macOS 10x.
 #      Never add those runners to this workflow.
 #    * No `schedule:` trigger. Cron burns minutes even when nothing has changed.
-#    * Path filters, so editing documentation does not spend a minute.
+#    * Path filters. Note that docs/ and hardware/ ARE included: the consistency
+#      check compares the specification and the BOM against the firmware, so a
+#      documentation edit genuinely can break the build.
 #    * concurrency + cancel-in-progress, so a burst of pushes runs once, not N times.
 #    * One job, no matrix.
 #    * fetch-depth 1, and no toolchain install -- g++ is preinstalled on the runner.
 #    * timeout-minutes as a hard backstop against a hung job draining the quota.
 #
-#  The tests build and run in well under 30 seconds, but GitHub rounds each job UP to
-#  the nearest minute, so budget ~1 minute per triggering push. At 2,000 minutes that
-#  is roughly 2,000 pushes a month before the quota is even a consideration.
+#  The tests build and run in well under 30 seconds.
 #
-#  If you want literally zero quota usage, use the local hook instead and delete this
-#  file:  git config core.hooksPath tools/git-hooks
+#  The pre-push hook runs the same checks locally before every push, so CI is the
+#  backstop for anything pushed with --no-verify rather than the only line of defence:
+#      git config core.hooksPath tools/git-hooks
 # =====================================================================================
 
 name: host-tests
 
-# ------------------------------------------------------------------------------------
-#  AUTOMATIC TRIGGERS ARE DISABLED.
-#
-#  On 2026-08-20 this repository's first run came back with:
-#      "The job was not started because recent account payments have failed or your
-#       spending limit needs to be increased."
-#
-#  The job never started, so nothing was billed -- but nothing ran either. Leaving the
-#  push trigger enabled would just paint a red X on every commit for a job that cannot
-#  execute, which is worse than having no CI at all.
-#
-#  Until the billing state is resolved (or the repository is made public, where Actions
-#  minutes are unlimited and free), verification runs locally through the pre-push hook:
-#      git config core.hooksPath tools/git-hooks
-#
-#  TO RE-ENABLE: uncomment the push and pull_request blocks below. Nothing else needs
-#  to change -- the cost controls documented above are all still in place.
-# ------------------------------------------------------------------------------------
 on:
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - 'firmware/**'
-  #     - 'shared/**'
-  #     - 'tools/host_tests/**'
-  #     - '.github/workflows/host-tests.yml'
-  # pull_request:
-  #   paths:
-  #     - 'firmware/**'
-  #     - 'shared/**'
-  #     - 'tools/host_tests/**'
-  #     - '.github/workflows/host-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'firmware/**'
+      - 'shared/**'
+      - 'tools/**'
+      - 'hardware/**'
+      - 'docs/**'
+      - '.github/workflows/host-tests.yml'
+  pull_request:
+    paths:
+      - 'firmware/**'
+      - 'shared/**'
+      - 'tools/**'
+      - 'hardware/**'
+      - 'docs/**'
+      - '.github/workflows/host-tests.yml'
 
-  # Manual only, so a run happens when you ask for one and never by surprise.
+  # Manual trigger, for running against an unchanged tree.
   workflow_dispatch:
 
 # Least privilege: this workflow only ever reads the repository.

@@ -129,18 +129,21 @@ including documentation-only ones.
 
 ### In CI
 
-`.github/workflows/host-tests.yml` exists but its **automatic triggers are disabled**.
-The first run on this private repository came back with *"The job was not started
-because recent account payments have failed or your spending limit needs to be
-increased"* — so nothing was billed, but nothing ran either. A permanently red X on
-every commit is worse than no CI, so push and pull_request triggers are commented out
-and only `workflow_dispatch` remains.
+[![host-tests](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml/badge.svg)](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml)
 
-Actions minutes are **free and unlimited on public repositories** and come out of a
-monthly quota on private ones. To re-enable, either resolve the billing state or make
-the repository public, then uncomment the two trigger blocks. The cost controls
-(Linux-only runner, path filters, no schedule, no matrix, cancel-in-progress, and a
-guard step that fails if any of those are removed) are already in place.
+`.github/workflows/host-tests.yml` runs the consistency check and the host suite on
+every push and pull request.
+
+This repository is public, so GitHub-hosted standard runners are **free and unlimited** —
+there is no quota to exhaust and no billing to configure. The workflow keeps its cost
+controls anyway (Linux-only runner, no schedule, no matrix, cancel-in-progress, path
+filters, a 5-minute timeout, and a guard step that fails if any of those are removed),
+because they cost nothing to keep and would matter again if the repository were ever
+made private.
+
+Note that `docs/` and `hardware/` are in the trigger paths. The consistency check
+compares the specification and the BOM against the firmware, so a documentation edit
+genuinely can break the build — which is the entire point of it.
 
 ---
 
