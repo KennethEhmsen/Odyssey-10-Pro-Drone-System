@@ -20,10 +20,12 @@ uint32_t g_millis = 0;
 #include "pid.h"
 #include "state_machine.h"
 #include "identity.h"
+#include "dynamic_notch.h"
 
 #include <cstdio>
 #include <vector>
 #include <string>
+#include <cmath>
 
 // -------------------------------------------------------------------------------------
 static int g_pass = 0, g_fail = 0;
@@ -46,6 +48,13 @@ static void checkNear(float got, float want, float tol, const char* what) {
   if (ok) { ++g_pass; printf("  PASS  %s  (%.4f)\n", what, got); }
   else    { ++g_fail; printf("  FAIL  %s  got %.4f want %.4f +/- %.4f\n",
                             what, got, want, tol); }
+}
+
+// Some checks build their description from the case being run, so the helpers accept a
+// std::string too rather than every caller having to write .c_str().
+static void check(bool cond, const std::string& what) { check(cond, what.c_str()); }
+static void checkNear(float got, float want, float tol, const std::string& what) {
+  checkNear(got, want, tol, what.c_str());
 }
 
 // =====================================================================================
@@ -507,6 +516,175 @@ static void testDebounce() {
 }
 
 // =====================================================================================
+//  DYNAMIC NOTCH
+//
+//  The justification for this feature is that a measured centre beats a compiled one.
+//  That only holds if the tracker genuinely finds the right frequency, and if a tracker
+//  that goes wrong is no worse than the constant it replaced. Both claims are tested
+//  here against synthetic gyro signals whose true peak is known exactly.
+// =====================================================================================
+
+// Drives a tracker with a tone plus deterministic broadband noise and returns it.
+// Noise matters: a tracker that only works on a clean sine is not evidence of anything,
+// because a real gyro trace never looks like that.
+static void driveTracker(DynamicNotchTracker& tr, float sampleRate, float toneHz,
+                         float toneAmp, float noiseAmp, float seconds) {
+  const int samples   = (int)(sampleRate * seconds);
+  const int perUpdate = (int)(sampleRate / DYN_NOTCH_UPDATE_HZ);
+  uint32_t rng = 12345u;
+  for (int i = 0; i < samples; ++i) {
+    rng = rng * 1664525u + 1013904223u;
+    const float noise = (((float)(rng >> 8) / 8388608.0f) - 1.0f) * noiseAmp;
+    const float tsec  = (float)i / sampleRate;
+    tr.push(toneAmp * sinf(2.0f * (float)M_PI * toneHz * tsec) + noise);
+    if (perUpdate > 0 && i % perUpdate == 0) tr.update();
+  }
+}
+
+static void testDynamicNotchTracking() {
+  section("Dynamic notch: does it find the peak");
+
+  DynamicNotchTracker probe;
+  probe.begin(500.0f, 120.0f);
+  checkNear(probe.bandLowHz(), 72.0f, 0.5f,
+            "search band starts at 0.6x the static centre");
+  check(probe.bandHighHz() <= (float)IMU_DLPF_HZ + 0.01f,
+        "search band is capped at the IMU DLPF corner, not extended past it");
+  checkNear(probe.centreHz(), 120.0f, 0.01f,
+            "before any samples arrive it sits on the static centre");
+
+  const float tones[] = { 90.0f, 105.0f, 120.0f, 140.0f, 160.0f };
+  for (float tone : tones) {
+    DynamicNotchTracker tr;
+    tr.begin(500.0f, 120.0f);
+    driveTracker(tr, 500.0f, tone, 10.0f, 0.5f, 8.0f);
+    check(tr.state().tracking,
+          "tracking engages on a " + std::to_string((int)tone) + " Hz tone");
+    checkNear(tr.centreHz(), tone, 6.0f,
+              "locks onto a " + std::to_string((int)tone) + " Hz tone");
+  }
+
+  // Parabolic interpolation should beat the 3.9 Hz bin spacing.
+  DynamicNotchTracker odd;
+  odd.begin(500.0f, 120.0f);
+  driveTracker(odd, 500.0f, 117.3f, 10.0f, 0.3f, 10.0f);
+  checkNear(odd.centreHz(), 117.3f, 4.0f,
+            "resolves a frequency that falls between two bins");
+
+  // A peak buried in comparable noise is not a peak worth chasing.
+  DynamicNotchTracker buried;
+  buried.begin(500.0f, 120.0f);
+  driveTracker(buried, 500.0f, 140.0f, 0.4f, 10.0f, 8.0f);
+  check(buried.centreHz() >= buried.bandLowHz() - 0.01f &&
+        buried.centreHz() <= buried.bandHighHz() + 0.01f,
+        "a tone buried in noise leaves the centre inside the permitted band");
+}
+
+static void testDynamicNotchRejectsNoise() {
+  section("Dynamic notch: what it refuses to believe");
+
+  // Broadband noise with no motor in it. The magnitude gate alone would not catch this
+  // -- across ~30 bins white noise produces a peak-to-mean near 4 about half the time.
+  // The bin-repeat gate is what rejects it.
+  DynamicNotchTracker noisy;
+  noisy.begin(500.0f, 120.0f);
+  driveTracker(noisy, 500.0f, 0.0f, 0.0f, 10.0f, 10.0f);
+  check(!noisy.state().tracking, "pure broadband noise does not engage tracking");
+  checkNear(noisy.centreHz(), 120.0f, 3.0f,
+            "and the centre stays on the static value");
+
+  // A silent gyro is the same case with no ambiguity at all.
+  DynamicNotchTracker quiet;
+  quiet.begin(500.0f, 120.0f);
+  driveTracker(quiet, 500.0f, 0.0f, 0.0f, 0.0f, 6.0f);
+  check(!quiet.state().tracking, "a silent gyro does not engage tracking");
+  checkNear(quiet.centreHz(), 120.0f, 0.01f,
+            "and the centre stays exactly on the static value");
+
+  // Nothing is reported before the window has filled.
+  DynamicNotchTracker cold;
+  cold.begin(500.0f, 120.0f);
+  for (int i = 0; i < DYN_NOTCH_BINS / 2; ++i) {
+    cold.push(10.0f * sinf(2.0f * (float)M_PI * 140.0f * (float)i / 500.0f));
+    cold.update();
+  }
+  check(!cold.state().tracking, "no verdict before the analysis window has filled");
+  checkNear(cold.centreHz(), 120.0f, 0.01f, "and no movement either");
+}
+
+static void testDynamicNotchIsBounded() {
+  section("Dynamic notch: it cannot do worse than the static value");
+
+  // This is the safety argument for enabling it by default, so it gets tested hardest.
+  // A strong tone well OUTSIDE the search band must not drag the notch out with it.
+  const float outOfBand[] = { 10.0f, 30.0f, 45.0f, 200.0f, 230.0f, 245.0f };
+  for (float tone : outOfBand) {
+    DynamicNotchTracker tr;
+    tr.begin(500.0f, 120.0f);
+    driveTracker(tr, 500.0f, tone, 15.0f, 0.5f, 10.0f);
+    check(tr.centreHz() >= tr.bandLowHz() - 0.01f &&
+          tr.centreHz() <= tr.bandHighHz() + 0.01f,
+          "a " + std::to_string((int)tone) + " Hz out-of-band tone cannot pull the "
+          "centre outside the permitted band");
+  }
+
+  // The centre must never leave the band under any input, including absurd ones.
+  DynamicNotchTracker wild;
+  wild.begin(500.0f, 120.0f);
+  for (int i = 0; i < 2000; ++i) wild.push((i % 2) ? 1.0e6f : -1.0e6f);
+  wild.update();
+  check(std::isfinite(wild.centreHz()), "extreme input does not produce NaN or inf");
+  check(wild.centreHz() >= wild.bandLowHz() - 0.01f &&
+        wild.centreHz() <= wild.bandHighHz() + 0.01f,
+        "extreme input leaves the centre inside the permitted band");
+
+  // Slew limiting: one update cannot traverse the band.
+  DynamicNotchTracker slew;
+  slew.begin(500.0f, 120.0f);
+  const float startHz = slew.centreHz();
+  driveTracker(slew, 500.0f, 180.0f, 15.0f, 0.5f, 0.30f);
+  const float maxStep = DYN_NOTCH_SLEW_HZ_PER_S / (float)DYN_NOTCH_UPDATE_HZ;
+  check(fabsf(slew.centreHz() - startHz) <= maxStep * 8.0f,
+        "the centre is rate-limited, not teleported, when the peak moves");
+
+  // The band itself must always straddle the static centre, whatever it is set to.
+  const float statics[] = { 88.0f, 90.0f, 100.0f, 105.0f, 120.0f, 150.0f, 180.0f };
+  for (float s : statics) {
+    DynamicNotchTracker tr;
+    tr.begin(500.0f, s);
+    check(tr.bandLowHz() < s, "band floor sits below a " +
+          std::to_string((int)s) + " Hz static centre");
+    check(tr.bandHighHz() > tr.bandLowHz(),
+          "band is non-empty for a " + std::to_string((int)s) + " Hz static centre");
+  }
+}
+
+static void testDynamicNotchAcrossBuilds() {
+  section("Dynamic notch: every characterised build");
+
+  // The notch spans 88-180 Hz across the ten frame/motor/propeller combinations, and
+  // the 7-inch runs a 1000 Hz loop. The tracker has to work at all of them, not just
+  // at the one the tests happen to be compiled for.
+  struct Case { float fs; float staticHz; float tone; const char* name; };
+  const Case cases[] = {
+    { 1000.0f, 180.0f, 172.0f, "7-inch 2-blade, 1000 Hz loop" },
+    { 1000.0f, 150.0f, 155.0f, "7-inch 3-blade, 1000 Hz loop" },
+    {  500.0f, 120.0f, 124.0f, "9-inch 2-blade (default)" },
+    {  500.0f, 100.0f, 103.0f, "9-inch 3-blade" },
+    {  500.0f, 105.0f, 100.0f, "10-inch 2-blade" },
+    {  500.0f,  90.0f,  88.0f, "10-inch 3-blade" },
+  };
+  for (const Case& c : cases) {
+    DynamicNotchTracker tr;
+    tr.begin(c.fs, c.staticHz);
+    driveTracker(tr, c.fs, c.tone, 10.0f, 0.5f, 8.0f);
+    check(tr.state().tracking && fabsf(tr.centreHz() - c.tone) < 10.0f,
+          std::string(c.name) + ": locks near " + std::to_string((int)c.tone) +
+          " Hz (got " + std::to_string((int)tr.centreHz()) + " Hz)");
+  }
+}
+
+// =====================================================================================
 //  FINDING 17 -- Remote ID identifiers
 // =====================================================================================
 static void testCtaSerial() {
@@ -678,6 +856,10 @@ int main() {
   testNotchFilter();
   testPid();
   testDebounce();
+  testDynamicNotchTracking();
+  testDynamicNotchRejectsNoise();
+  testDynamicNotchIsBounded();
+  testDynamicNotchAcrossBuilds();
   testCtaSerial();
   testCaaRegistration();
   testOperatorId();

@@ -364,6 +364,39 @@
 // specified, which moves the structural resonance independently of the propellers.
 #define NOTCH_Q                   4.0f
 
+// -------------------------------------------------------------------------------------
+//  DYNAMIC NOTCH
+//
+//  Tracks the real motor peak from the gyro spectrum instead of trusting the compiled
+//  centre. See dynamic_notch.h for why -- briefly, the static value has been wrong or
+//  stale at almost every point in this project's history, and it is a fixed number
+//  standing in for a quantity that varies with mass, air density, pack voltage and
+//  workload.
+//
+//  It is BOUNDED so it cannot do worse than the static value it replaces: the tracked
+//  centre is clamped to a band around NOTCH_CENTER_HZ, a peak must be both tall enough
+//  AND repeat in the same bin before it is believed, and the centre slews rather than
+//  jumping. If tracking fails, the notch sits exactly where the static config put it.
+//
+//  DYN_NOTCH_MIN_CONFIDENCE is 8, not 4, because white noise across a ~30-bin band
+//  already produces a peak-to-mean ratio near 4 about half the time -- a threshold set
+//  there would believe noise. The bin-repeat test is what does the real rejecting.
+//
+//  Set DYN_NOTCH_ENABLE to 0 to fall back to the fixed notch entirely.
+// -------------------------------------------------------------------------------------
+#ifndef DYN_NOTCH_ENABLE
+#define DYN_NOTCH_ENABLE          1
+#endif
+
+#define DYN_NOTCH_BINS            128      // 3.9 Hz resolution at a 500 Hz loop
+#define DYN_NOTCH_UPDATE_HZ       20       // spectrum re-evaluation rate
+#define DYN_NOTCH_BAND_LOW        0.60f    // search from 0.6x the static centre
+#define DYN_NOTCH_BAND_HIGH       1.60f    // ...to 1.6x, further capped by the DLPF
+#define DYN_NOTCH_MIN_CONFIDENCE  8.0f     // peak must be 8x the band average...
+#define DYN_NOTCH_PEAK_TOL_BINS   2        // ...and land in the same place twice running
+#define DYN_NOTCH_SLEW_HZ_PER_S   40.0f    // rate limit on centre movement
+#define DYN_NOTCH_RETUNE_HZ       1.5f     // ignore movement smaller than this
+
 // Complementary filter weighting for the attitude estimate
 #define ATT_COMP_ALPHA            0.992f
 
@@ -684,6 +717,20 @@ static_assert(PROP_BLADES == 2 || PROP_BLADES == 3,
 // This assertion exists because the real thing happened: the DLPF was set to 94 Hz when
 // the notch was 80 Hz, the notch then moved to 120 Hz across four revisions, and the
 // DLPF was left behind. Nothing compared them until the build matrix check did.
+static_assert(DYN_NOTCH_BAND_LOW > 0.0f && DYN_NOTCH_BAND_LOW < 1.0f,
+              "Dynamic notch lower band must sit below the static centre");
+static_assert(DYN_NOTCH_BAND_HIGH > 1.0f && DYN_NOTCH_BAND_HIGH < 3.0f,
+              "Dynamic notch upper band is implausible");
+static_assert(DYN_NOTCH_UPDATE_HZ > 0 && DYN_NOTCH_UPDATE_HZ <= 100,
+              "Dynamic notch update rate is implausible");
+static_assert(DYN_NOTCH_MIN_CONFIDENCE > 5.0f,
+              "A confidence threshold this low is inside the noise floor of the search "
+              "band -- see the note above");
+static_assert(DYN_NOTCH_PEAK_TOL_BINS >= 1 && DYN_NOTCH_PEAK_TOL_BINS <= 4,
+              "Peak-repeat tolerance is either too strict to ever lock or too loose to "
+              "reject a wandering noise peak");
+static_assert((DYN_NOTCH_BINS & (DYN_NOTCH_BINS - 1)) == 0 && DYN_NOTCH_BINS >= 32,
+              "Dynamic notch bin count must be a power of two and give usable resolution");
 static_assert(IMU_DLPF_HZ > PROP_NOTCH_DEFAULT_HZ * 1.3f,
               "IMU DLPF must sit at least 30% above the notch centre");
 static_assert(IMU_DLPF_HZ < FLIGHT_LOOP_HZ / 2.0f,

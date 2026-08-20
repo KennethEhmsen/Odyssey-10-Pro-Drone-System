@@ -738,6 +738,16 @@ def check_workflow_cost(rep, fix):
 
 #  (where it lives, regex with ONE capture group, config.h constant, tolerance)
 PROSE_CLAIMS = [
+    # 8.3.1 quotes the dynamic notch's own parameters. These are exactly the kind of
+    # figure that goes stale the moment the constant behind it is retuned.
+    ("8.3.1 notch bin count",
+     r"Sliding DFT, ([\d]+) bins",                          "DYN_NOTCH_BINS",   0.5),
+    ("8.3.1 notch update rate",
+     r"\| Update rate \| ([\d.]+) Hz \|",                    "DYN_NOTCH_UPDATE_HZ", 0.5),
+    ("8.3.1 notch slew rate",
+     r"centre \*\*slews\*\* at ([\d.]+) Hz/s",                "DYN_NOTCH_SLEW_HZ_PER_S", 0.5),
+    ("8.3.1 notch band floor",
+     r"clamped\*\* to ([\d.]+)×",                            "DYN_NOTCH_BAND_LOW", 0.01),
     ("5.2 energy formula",
      r"I_cruise\s*=\s*([\d.]+)\s*A",                       "CRUISE_CURRENT_A", 0.05),
     ("3.3 cruise current",
@@ -1042,6 +1052,26 @@ def check_prop_configs(rep, fix):
                         f"{notch:.0f} Hz notch -- it would attenuate that peak itself "
                         f"and leave its phase lag in the control band")
 
+        # The dynamic notch searches a band around the static centre. If that band does
+        # not straddle the centre, or runs past the DLPF corner, the tracker is either
+        # unable to reach the real peak or hunting in the filter's own roll-off. This is
+        # the same coupled-constant trap that produced the DLPF defect, one level up.
+        lo = notch * d.get("DYN_NOTCH_BAND_LOW", 0)
+        hi = notch * d.get("DYN_NOTCH_BAND_HIGH", 0)
+        if not (lo < notch < hi):
+            rep.problem("build-configs",
+                        f"{label}: the dynamic notch band {lo:.0f}-{hi:.0f} Hz does not "
+                        f"straddle the {notch:.0f} Hz static centre")
+        if min(hi, dlpf) <= lo:
+            rep.problem("build-configs",
+                        f"{label}: the dynamic notch band collapses once capped at the "
+                        f"{dlpf:.0f} Hz DLPF corner -- nothing left to search")
+        if min(hi, dlpf) >= loop / 2:
+            rep.problem("build-configs",
+                        f"{label}: the dynamic notch could track up to "
+                        f"{min(hi, dlpf):.0f} Hz, at or above Nyquist for a "
+                        f"{loop:.0f} Hz loop")
+
         peak, packA = d.get("PROP_PEAK_PACK_A", 0), d.get("PACK_MAX_DISCHARGE_A", 0)
         if peak > packA:
             rep.problem("build-configs",
@@ -1123,6 +1153,17 @@ def check_prop_configs(rep, fix):
               "a bigger disc turns slower for the same thrust")
     direction("FRAME_GAIN_SCALE",      frame_pairs, "less",
               "a bigger airframe has more rotational inertia")
+
+    for (frame, mc, pb), d in builds.items():
+        loop = d.get("FLIGHT_LOOP_HZ", 0)
+        bins = d.get("DYN_NOTCH_BINS", 0)
+        if bins and loop:
+            resolution = loop / bins
+            if resolution > 12.0:
+                rep.problem("build-configs",
+                            f'{frame}" {mc[6:]} {pb}b: {bins} bins at {loop:.0f} Hz '
+                            f"gives {resolution:.1f} Hz notch resolution, too coarse to "
+                            f"be worth tracking")
 
     rep.note = getattr(rep, "note", [])
     rep.note.append(f"build-configs: {len(builds)} frame x motor x propeller "

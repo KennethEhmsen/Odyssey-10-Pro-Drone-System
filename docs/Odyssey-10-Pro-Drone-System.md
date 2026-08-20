@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 2.8 — frame, motor and propeller are all build switches
+**Document revision:** 2.9 — the gyro notch measures itself
 
 ---
 
@@ -581,9 +581,15 @@ the actual shaft speed** rather than sitting at a fixed estimate, which is how m
 flight controllers handle it and which removes the failure mode entirely.
 
 That is future work, not implemented. Bidirectional DShot needs tight timing on the
-ESP32-P4 (RMT or a dedicated peripheral) and the firmware currently has neither. It is
-recorded here because it is the highest-value next change to the propulsion stack, not
-because it is done.
+ESP32-P4 (RMT or a dedicated peripheral) and the firmware currently has neither.
+
+**Revision 2.9 took the other route to the same goal.** Rather than measuring shaft speed
+at the ESC, the flight controller now finds the motor peak in the gyro spectrum directly
+and tracks it — see §8.3.1. That removes the fixed-estimate failure mode without new
+hardware or new timing-critical code, and it could be tested on the bench. RPM telemetry
+would still be better, because it gives the shaft frequency directly rather than inferring
+it from the noise, but it is no longer the only thing standing between this design and a
+notch that knows where the peak actually is.
 
 ### 4.4 Mixer and desaturation
 
@@ -1213,11 +1219,81 @@ specified, which moves the structural resonance independently of the propellers.
 Blade-pass energy sits near twice the fundamental, around 250 Hz, which the notch does
 not target.
 
-This remains the one number in the specification where a modelled value is actively risky
-rather than merely approximate, because a notch in the wrong place is worse than no notch
-— it adds phase lag in the control band while attenuating nothing. Section 4.3 records
-bidirectional DShot as the change that would remove the guesswork entirely, by letting
-the notch track measured RPM.
+#### 8.3.1 The notch now measures itself
+
+Everything above describes how to *estimate* the notch frequency. Revision 2.9 stops
+relying on the estimate.
+
+The static value was the one number in this specification where a modelled figure was
+actively risky rather than merely approximate, because a notch in the wrong place is
+worse than no notch at all — it adds phase lag in the control band while attenuating
+nothing. And it was demonstrably fragile: it moved four times as the airframe evolved,
+two models of it disagreed by 7%, it spans 88–180 Hz across the ten build combinations,
+and when it last moved the IMU anti-alias filter was left behind, producing the defect
+recorded above.
+
+Every one of those failures has the same shape — a fixed constant standing in for a
+quantity that is not fixed. Hover shaft speed varies with mass, air density, pack
+voltage, payload and how hard the aircraft is working. A number chosen at compile time is
+wrong the moment any of those changes.
+
+**A sliding DFT over the raw gyro signal finds the peak, and the notch follows it.**
+
+| | |
+| --- | --- |
+| Transform | Sliding DFT, 128 bins, 64 usable |
+| Resolution | 3.9 Hz at a 500 Hz loop, 7.8 Hz at 1000 Hz |
+| Update rate | 20 Hz |
+| Cost | ~0.5 MFLOP/s, ~3 KB — under 1% of one P4 core |
+| Input | **raw** gyro, roll axis, upstream of the filter it tunes |
+
+A sliding DFT rather than an FFT because an FFT does a burst of work every N samples,
+which is exactly the periodic spike that ruins a hard real-time loop's worst case. The
+SDFT updates every bin by a constant amount on every sample, so the worst case equals the
+average case.
+
+The tracker is fed the **raw** gyro deliberately. Feeding it the filtered signal would be
+self-defeating: the notch removes the very peak the tracker exists to find, so it would
+watch the peak vanish, conclude there was nothing there, and wander off.
+
+One tracker drives all three axes. The peak being hunted is the four motor shafts, and
+they are the same four shafts whichever axis you look down.
+
+**It cannot do worse than the constant it replaces.** That is the condition for enabling
+it by default on hardware nobody has flown yet, and it is enforced four ways:
+
+- The tracked centre is **clamped** to 0.6×–1.6× the compiled `NOTCH_CENTER_HZ`, further
+  capped at the DLPF corner and below Nyquist. A peak outside that band cannot pull the
+  notch out with it.
+- A peak must be **both** tall enough *and* land in the same bin twice running. The height
+  test alone is not sufficient: across a ~30-bin search band, white noise produces a
+  peak-to-mean ratio near 4 about half the time. What separates a motor from noise is not
+  height but **stability** — a motor peak stays put because shaft speed changes on the
+  timescale of the aircraft's mass, while a noise peak wanders. The bin-repeat test is
+  what does the real rejecting.
+- The centre **slews** at 40 Hz/s rather than jumping, and retunes the biquad without
+  clearing its delay line, so a moving peak does not punch a transient through the rate
+  loop.
+- If tracking does not lock, or the gyro is quiet, the notch sits at **exactly** the
+  static value. Analysis only runs while the motors are live, so a spurious bench lock
+  cannot be carried into the air.
+
+Disable it with `-DDYN_NOTCH_ENABLE=0` to fall back to the fixed notch.
+
+**What is verified, and what is not.** The tracker is covered by host tests that drive it
+with synthetic gyro signals — tone plus broadband noise — at every notch frequency in the
+build matrix. It locks to within about 1 Hz at each, resolves frequencies that fall
+between bins, refuses to engage on pure noise or silence, and stays inside its band under
+out-of-band tones and deliberately absurd input. What that does **not** establish is
+behaviour on a real airframe: real gyro noise is not a tone plus white noise, it has
+structural resonances, blade-pass energy near twice the fundamental, and frame modes that
+none of the models above account for. Section 11.2 still calls for a BlackBox trace, and
+`NOTCH_CENTER_HZ` should still be set from it — the tracker narrows the consequences of
+getting that number wrong, it does not make it unnecessary.
+
+Bidirectional DShot (§4.3) remains the better long-term answer, because RPM telemetry
+gives the shaft frequency directly instead of inferring it from the noise it produces.
+This is the version that could be built and tested without hardware.
 
 ### 8.4 Radio frequency plan
 
@@ -1893,6 +1969,7 @@ Revision 2.0 introduced or left standing the following, all corrected here.
 | `CRUISE_CURRENT_A` was set from HOVER power since revision 2.2, but it budgets the charge to fly home at CRUISE speed — about 10% more. The RTH energy reserve was therefore optimistic | Corrected to 9.7 A, and §3.3 now states which figure it is and why |
 | The pack was rated 45C against a 15C peak demand, carrying 40 g for capability the aircraft cannot use | Specified as 20C minimum. §3.3 explains that energy per gram, not C-rate, is the constraint on this platform |
 | 3-blade propellers on a long-range platform with thrust to spare | Changed to 9x5x2. About 10% better hover efficiency for ~12% of peak thrust: 24 min hover and 16 km one-way, up from 22 min and 14.1 km |
+| The gyro notch was a compile-time constant standing in for a quantity that varies with mass, air density, pack voltage and workload — it moved four times, two models of it disagreed by 7%, and when it last moved the IMU DLPF was left behind | A sliding DFT over the raw gyro now tracks the real peak at 20 Hz, bounded to 0.6–1.6× the compiled value so it cannot do worse than the constant it replaced. §8.3.1 |
 | The IMU anti-alias filter was left at 94 Hz while the gyro notch moved from 80 Hz to 120 Hz across four revisions, so the DLPF sat BELOW the notch — attenuating the peak the notch was aimed at, while keeping its phase lag in the control band | Corrected to 260 Hz (7-inch) and 184 Hz (9- and 10-inch), with an assertion requiring 30% clearance above the notch. Found by the build-matrix check in §3.2 |
 | The ESC was rated 50 A per channel against a 16.9 A peak — nearly 3× margin, carried over from the 10-inch build along with 9 g | Right-sized to 40 A/ch (2.4×). §4.3 now shows the sizing arithmetic and records bidirectional DShot as the route to an RPM-tracked notch |
 | Motors were a 3110 (31 mm stator, a 10-11 inch motor) on a 9-inch frame — over-sized and carrying 64 g the airframe did not need | Changed to the 2810 class (28 mm stator, 8-9 inch). The 900 KV winding was already correct, so only the stator changed. AUW 1705 → 1641 g, TWR 3.05 → 3.41:1 |

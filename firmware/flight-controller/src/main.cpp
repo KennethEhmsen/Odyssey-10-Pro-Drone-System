@@ -28,6 +28,7 @@
 #include "types.h"
 #include "odyssey_link.h"
 #include "filters.h"
+#include "dynamic_notch.h"
 #include "pid.h"
 #include "mixer.h"
 #include "state_machine.h"
@@ -59,6 +60,17 @@ static Pid pidYaw  (GainSets::yawRate());
 static Pid pidClimb(GainSets::verticalRate());
 
 static BiQuadNotch notchGx, notchGy, notchGz;
+
+#if DYN_NOTCH_ENABLE
+// ONE tracker, not three. The peak being hunted is the four motor shafts, and they are
+// the same four shafts whichever axis you look down -- running a tracker per axis would
+// spend three times the CPU rediscovering the same number. The roll axis is used because
+// it sees the strongest motor coupling on a Quad-X.
+static DynamicNotchTracker notchTracker;
+static int      notchDivider   = 0;
+static volatile float trackedNotchHz = NOTCH_CENTER_HZ;   // published for telemetry
+static volatile bool  notchIsTracking = false;
+#endif
 
 static double   homeLat = 0.0, homeLon = 0.0;
 static bool     homeLocked = false;
@@ -150,6 +162,37 @@ static void TaskFlightLoop(void* /*arg*/) {
     const float gxRaw = gyroRaw.x - gyroBias[0];
     const float gyRaw = gyroRaw.y - gyroBias[1];
     const float gzRaw = gyroRaw.z - gyroBias[2];
+
+#if DYN_NOTCH_ENABLE
+    // ---- Dynamic notch tracking ----------------------------------------------------
+    // The tracker is fed the RAW gyro, deliberately. Feeding it the filtered signal
+    // would be self-defeating: the notch removes the very peak the tracker exists to
+    // find, so it would watch the peak vanish, conclude there was nothing there, and
+    // wander off. Analysis has to happen upstream of the filter it is tuning.
+    //
+    // Only while the motors are actually turning. With the props stopped there is no
+    // motor peak to find and nothing to do but reject noise, and a spurious lock on the
+    // bench would be carried into the air.
+    if (odyMotorsAreLive(state)) {
+      notchTracker.push(gxRaw);
+      if (++notchDivider >= FLIGHT_LOOP_HZ / DYN_NOTCH_UPDATE_HZ) {
+        notchDivider = 0;
+        if (notchTracker.update()) {
+          const float centre = notchTracker.centreHz();
+          // retune(), not configure(): configure() clears the delay line, which would
+          // punch a transient straight through the rate loop every time the notch
+          // moved a couple of hertz. retune() keeps the filter state.
+          notchGx.retune(centre, (float)FLIGHT_LOOP_HZ, NOTCH_Q);
+          notchGy.retune(centre, (float)FLIGHT_LOOP_HZ, NOTCH_Q);
+          notchGz.retune(centre, (float)FLIGHT_LOOP_HZ, NOTCH_Q);
+          trackedNotchHz = centre;
+        }
+        notchIsTracking = notchTracker.state().tracking;
+      }
+    } else {
+      notchDivider = 0;
+    }
+#endif
 
     const float gx = notchGx.apply(gxRaw);
     const float gy = notchGy.apply(gyRaw);
@@ -1041,7 +1084,17 @@ void setup() {
                 4.0f * MOTOR_MAX_THRUST_G / AIRFRAME_AUW_G);
   Serial.printf("Gyro notch : %.0f Hz, Q %.1f%s\n", NOTCH_CENTER_HZ, NOTCH_Q,
                 (NOTCH_CENTER_HZ == PROP_NOTCH_DEFAULT_HZ)
-                    ? "  (modelled default -- measure and override)" : "  (overridden)");
+                    ? "  (modelled default)" : "  (overridden)");
+#if DYN_NOTCH_ENABLE
+  Serial.printf("             dynamic: tracks %.0f-%.0f Hz, %d bins, %.1f Hz resolution\n",
+                NOTCH_CENTER_HZ * DYN_NOTCH_BAND_LOW,
+                min((float)IMU_DLPF_HZ, NOTCH_CENTER_HZ * DYN_NOTCH_BAND_HIGH),
+                DYN_NOTCH_BINS,
+                (float)FLIGHT_LOOP_HZ / (float)DYN_NOTCH_BINS);
+#else
+  Serial.println("             dynamic tracking DISABLED -- the fixed value above is "
+                 "modelled, so measure it");
+#endif
   Serial.printf("Energy     : cruise %.1f A, peak %.0f A\n",
                 CRUISE_CURRENT_A, PROP_PEAK_PACK_A);
   Serial.printf("Battery    : %dS, warn %.1f V, critical %.1f V\n",
@@ -1099,6 +1152,12 @@ void setup() {
     notchGx.configure(NOTCH_CENTER_HZ, (float)FLIGHT_LOOP_HZ, NOTCH_Q);
     notchGy.configure(NOTCH_CENTER_HZ, (float)FLIGHT_LOOP_HZ, NOTCH_Q);
     notchGz.configure(NOTCH_CENTER_HZ, (float)FLIGHT_LOOP_HZ, NOTCH_Q);
+
+#if DYN_NOTCH_ENABLE
+    // The tracker starts on the configured value and is bounded around it, so the worst
+    // case if tracking never locks is exactly the static behaviour configured above.
+    notchTracker.begin((float)FLIGHT_LOOP_HZ, NOTCH_CENTER_HZ);
+#endif
 
     navigator.begin();
 
