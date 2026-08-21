@@ -464,6 +464,38 @@
 //  when viewed from above.
 // =====================================================================================
 #define PWM_FREQ_HZ               400
+
+// -------------------------------------------------------------------------------------
+//  DSHOT
+//
+//  DEFAULTS TO OFF, and that is deliberate. The frame arithmetic in dshot.h is fully
+//  host-tested, but the RMT timing that puts those frames on a wire cannot be verified
+//  without an oscilloscope. This code drives motors: a frame that misses a bit boundary
+//  does not fail politely, it becomes a throttle value the ESC will act on.
+//
+//  Turn it on with -DDSHOT_ENABLE=1 once the waveform has been checked on a scope and
+//  then on a thrust stand with the propellers OFF.
+//
+//  The reason to want it is not the throttle resolution. It is that bidirectional DShot
+//  returns per-motor RPM, which makes shaft frequency a measurement instead of the
+//  estimate the whole of section 8.3 is built around.
+// -------------------------------------------------------------------------------------
+#ifndef DSHOT_ENABLE
+#define DSHOT_ENABLE              0
+#endif
+#ifndef DSHOT_BIDIRECTIONAL
+#define DSHOT_BIDIRECTIONAL       1        // no point without the telemetry
+#endif
+#define DSHOT_BITRATE_KHZ         300      // DShot300: 3.33 us per bit
+#define DSHOT_TELEM_TIMEOUT_US    200      // give up on a reply after this
+
+// Pole pairs, for turning electrical RPM into shaft RPM. Every motor offered here is a
+// 12N14P outrunner: 14 magnets, 7 pole pairs. Getting this wrong scales every derived
+// frequency by a constant, which presents as a mis-tuned notch rather than as the units
+// error it is -- so it is asserted rather than assumed.
+#ifndef MOTOR_POLE_PAIRS
+#define MOTOR_POLE_PAIRS          7
+#endif
 #define PWM_RES_BITS              12
 #define PWM_PERIOD_COUNTS         (1u << PWM_RES_BITS)             // 4096
 #define PWM_MIN                   1638      // 1000 us at 400 Hz / 12-bit
@@ -761,6 +793,17 @@ static_assert(OBSTACLE_STOP_CM < OBSTACLE_SLOW_CM,
               "Obstacle brake distance must be inside the slow-down distance");
 static_assert(TOUCHDOWN_TOF_M < TOUCHDOWN_VETO_AGL_M,
               "Touchdown threshold must sit below the veto altitude");
+static_assert(MOTOR_POLE_PAIRS >= 2 && MOTOR_POLE_PAIRS <= 14,
+              "Pole pairs outside this range is a units error, not a motor");
+static_assert(DSHOT_BITRATE_KHZ == 150 || DSHOT_BITRATE_KHZ == 300 ||
+              DSHOT_BITRATE_KHZ == 600 || DSHOT_BITRATE_KHZ == 1200,
+              "DShot runs at 150, 300, 600 or 1200 kbit/s and nothing else");
+// A DShot frame is 16 bits. Sending one per loop iteration has to fit in the period,
+// with room for the ESC's reply when bidirectional telemetry is enabled.
+static_assert((16 * 1000 / DSHOT_BITRATE_KHZ) + DSHOT_TELEM_TIMEOUT_US
+              < (1000000 / FLIGHT_LOOP_HZ),
+              "A DShot frame plus its telemetry reply does not fit inside one flight "
+              "loop period at this bitrate");
 static_assert(IMU_ACCEL_READ_HZ > 0 && FLIGHT_LOOP_HZ % IMU_ACCEL_READ_HZ == 0,
               "IMU_ACCEL_READ_HZ must divide FLIGHT_LOOP_HZ exactly, or the accelerometer "
               "divider drifts against the loop");

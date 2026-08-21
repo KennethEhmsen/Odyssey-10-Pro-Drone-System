@@ -22,6 +22,7 @@ uint32_t g_millis = 0;
 #include "state_machine.h"
 #include "identity.h"
 #include "dynamic_notch.h"
+#include "dshot.h"
 
 #include <cstdio>
 #include <vector>
@@ -685,6 +686,308 @@ static void testDynamicNotchAcrossBuilds() {
   }
 }
 
+// =====================================================================================
+//  DSHOT
+//
+//  The timing cannot be tested without a scope. The arithmetic can, and it is all that
+//  stands between a throttle request and what the ESC actually does with it.
+// =====================================================================================
+static void testDshotFrames() {
+  section("DShot: frame construction");
+
+  // Worked by hand from the published format, so this is a check against the spec and
+  // not against my own implementation:
+  //   throttle 1046, no telemetry -> payload = 1046<<1 = 0x82C
+  //   crc = (0x82C ^ 0x082 ^ 0x008) & 0xF = 0x8A6 & 0xF = 6
+  //   frame = 0x82C<<4 | 6 = 0x82C6
+  check(dshotFrame(1046, false, false) == 0x82C6,
+        "throttle 1046 encodes to 0x82C6");
+
+  // Bidirectional inverts the checksum: ~6 & 0xF = 9.
+  check(dshotFrame(1046, false, true) == 0x82C9,
+        "the same throttle with an inverted checksum is 0x82C9");
+  check((dshotFrame(1046, false, false) & 0xFFF0) ==
+        (dshotFrame(1046, false, true) & 0xFFF0),
+        "inverting the checksum changes ONLY the checksum, not the payload");
+
+  // The telemetry-request bit sits between the value and the checksum, so setting it
+  // changes the payload and therefore the checksum too.
+  check(dshotValueOf(dshotFrame(1046, true, false)) == 1046,
+        "the value survives the telemetry bit being set");
+  check(dshotFrame(1046, true, false) != dshotFrame(1046, false, false),
+        "the telemetry bit is actually present in the frame");
+
+  // Round trip across the whole range, in both checksum conventions.
+  int bad = 0;
+  for (uint16_t v = 0; v <= 2047; ++v) {
+    for (int bi = 0; bi < 2; ++bi) {
+      for (int tel = 0; tel < 2; ++tel) {
+        const uint16_t f = dshotFrame(v, tel != 0, bi != 0);
+        if (dshotValueOf(f) != v) ++bad;
+        if (!dshotFrameValid(f, bi != 0)) ++bad;
+        // A frame built one way must NOT validate under the other convention -- that
+        // is precisely how an ESC tells a telemetry request from an ordinary frame.
+        if (dshotFrameValid(f, bi == 0)) ++bad;
+      }
+    }
+  }
+  check(bad == 0, "all 2048 values round-trip in both checksum conventions");
+
+  // A corrupted frame must be rejected rather than acted on.
+  const uint16_t good = dshotFrame(1200, false, false);
+  check(dshotFrameValid(good, false), "an intact frame validates");
+  check(!dshotFrameValid((uint16_t)(good ^ 0x0100), false),
+        "a single flipped payload bit fails the checksum");
+}
+
+static void testDshotThrottleMapping() {
+  section("DShot: mapping the mixer's microseconds onto throttle");
+
+  // Value 0 means STOP. Value 48 means the slowest speed the ESC will hold. Conflating
+  // them would make an idle command spin the motors, or a stop command fail to stop.
+  check(dshotFromPwmMicros(PWM_MIN) == DSHOT_CMD_DISARM,
+        "PWM_MIN maps to DISARM, not to the lowest throttle");
+  check(dshotFromPwmMicros(PWM_MIN - 100) == DSHOT_CMD_DISARM,
+        "anything below PWM_MIN also disarms");
+  check(dshotFromPwmMicros(PWM_MAX) == DSHOT_MAX_THROTTLE,
+        "PWM_MAX maps to full throttle");
+  check(dshotFromPwmMicros(PWM_MAX + 100) == DSHOT_MAX_THROTTLE,
+        "and cannot be pushed past it");
+
+  check(dshotIsThrottle(dshotFromPwmMicros(PWM_MIN + 1)),
+        "one microsecond above minimum is already a throttle, not a command");
+
+  // Monotonic, and never straying into the command range.
+  int nonMono = 0, inCommandRange = 0;
+  uint16_t prev = 0;
+  for (uint16_t us = PWM_MIN + 1; us <= PWM_MAX; ++us) {
+    const uint16_t d = dshotFromPwmMicros(us);
+    if (d < prev) ++nonMono;
+    if (d < DSHOT_MIN_THROTTLE) ++inCommandRange;
+    prev = d;
+  }
+  check(nonMono == 0, "the mapping is monotonic across the whole PWM range");
+  check(inCommandRange == 0,
+        "no throttle request ever lands in the command range, where it would be "
+        "interpreted as beep or save-settings rather than as a speed");
+
+  // Mid-stick should be mid-throttle, near enough.
+  const uint16_t mid = dshotFromPwmMicros((uint16_t)((PWM_MIN + PWM_MAX) / 2));
+  const uint16_t expect = (uint16_t)((DSHOT_MIN_THROTTLE + DSHOT_MAX_THROTTLE) / 2);
+  check(mid > expect - 4 && mid < expect + 4, "mid-stick lands mid-throttle");
+}
+
+static void testDshotTelemetryDecode() {
+  section("DShot: decoding the ESC's reply");
+
+  // Build a telemetry word the way an ESC would, then read it back. period = mantissa
+  // << exponent microseconds, between electrical commutations.
+  auto makeWord = [](uint32_t mantissa, uint32_t exponent) -> uint16_t {
+    const uint16_t p12 = (uint16_t)(((exponent & 0x7) << 9) | (mantissa & 0x1FF));
+    const uint8_t crc = (uint8_t)((~(p12 ^ (p12 >> 4) ^ (p12 >> 8))) & 0x0F);
+    return (uint16_t)((p12 << 4) | crc);
+  };
+
+  // The mantissa is only 9 bits, so any period above 511 us needs the exponent. An ESC
+  // does this shift itself; a test that ignores it silently truncates and then blames
+  // the decoder. A 9-inch hover sits near 1190 us, well past that limit.
+  auto makePeriod = [&makeWord](uint32_t periodUs) -> uint16_t {
+    uint32_t e = 0;
+    while ((periodUs >> e) > 0x1FF && e < 7) ++e;
+    return makeWord(periodUs >> e, e);
+  };
+
+  // 250 us electrical period -> 240000 eRPM -> 34285 shaft rpm at 7 pole pairs.
+  const uint16_t w = makeWord(250, 0);
+  check(dshotTelemetryValid(w), "a well-formed telemetry word validates");
+  check(dshotErpm(w) == 60000000u / 250u, "eRPM is 60e6 divided by the period");
+  checkNear(dshotShaftRpm(dshotErpm(w)), 240000.0f / 7.0f, 1.0f,
+            "shaft RPM divides eRPM by the pole pairs");
+
+  // The exponent is a shift, so it multiplies the period.
+  check(dshotErpm(makeWord(250, 1)) == dshotErpm(makeWord(500, 0)),
+        "mantissa 250 exponent 1 is the same period as mantissa 500 exponent 0");
+
+  // A corrupt word must be rejected, not turned into a plausible RPM.
+  check(dshotErpm((uint16_t)(w ^ 0x0001)) == DSHOT_ERPM_INVALID,
+        "a bad checksum yields INVALID rather than a number");
+  check(dshotShaftRpm(DSHOT_ERPM_INVALID) == 0.0f,
+        "and INVALID converts to zero rather than to nonsense");
+
+  // The stopped-motor code must read as stopped, not as an enormous RPM.
+  const uint16_t stopped = makeWord(0x1FF, 0x7);
+  check(dshotErpm(stopped) == 0, "the not-spinning code decodes as zero eRPM");
+
+  // ---- what this is all for --------------------------------------------------------
+  // The 9-inch default hovers near 120 Hz shaft. Confirm the chain from a wire-level
+  // period to the number the notch wants comes out where section 8.3 says it should.
+  const float targetHz = 120.0f;
+  const float shaftRpm = targetHz * 60.0f;
+  const uint32_t erpm = (uint32_t)(shaftRpm * MOTOR_POLE_PAIRS);
+  const uint32_t periodUs = 60000000u / erpm;
+  const uint16_t hover = makePeriod(periodUs);
+  checkNear(dshotShaftHz(dshotErpm(hover)), targetHz, 1.0f,
+            "an ESC period consistent with a 120 Hz hover decodes back to 120 Hz -- "
+            "the number section 8.3 estimates with two disagreeing models");
+
+  // Every notch frequency in the build matrix, through the full wire-level chain.
+  int off = 0;
+  for (float hz : { 88.0f, 90.0f, 100.0f, 105.0f, 120.0f, 150.0f, 180.0f }) {
+    const uint32_t e = (uint32_t)(hz * 60.0f * MOTOR_POLE_PAIRS);
+    const uint16_t w2 = makePeriod(60000000u / e);
+    if (fabsf(dshotShaftHz(dshotErpm(w2)) - hz) > 1.5f) ++off;
+  }
+  check(off == 0,
+        "every notch frequency in the build matrix survives the round trip through an "
+        "ESC telemetry word, including the mantissa/exponent split");
+}
+
+static void testDshotGcr() {
+  section("DShot: GCR line coding");
+
+  // Every legal 5-bit group maps to exactly one nibble, and nothing else decodes.
+  int mapped = 0;
+  bool seen[16] = { false };
+  int duplicates = 0;
+  for (int q = 0; q < 32; ++q) {
+    const uint8_t n = dshotGcrDecodeNibble((uint8_t)q);
+    if (n != 0xFF) {
+      ++mapped;
+      if (n > 15) { duplicates = 999; }
+      else if (seen[n]) ++duplicates;
+      else seen[n] = true;
+    }
+  }
+  check(mapped == 16, "exactly 16 of the 32 five-bit groups are legal");
+  check(duplicates == 0, "each legal group maps to a distinct nibble");
+
+  int missing = 0;
+  for (int i = 0; i < 16; ++i) if (!seen[i]) ++missing;
+  check(missing == 0, "every nibble 0-15 is reachable");
+
+  // An illegal group must poison the whole decode rather than yielding a partial value.
+  check(dshotGcrDecodeNibble(0x00) == 0xFF, "an illegal group is rejected");
+  check(dshotGcrDecodeNibble(0x1F) == 0xFF, "so is the all-ones group");
+
+  // Round trip a known word through the wire encoding.
+  auto encode = [](uint16_t word) -> uint32_t {
+    static const uint8_t kEnc[16] = { 0x19, 0x1B, 0x12, 0x13, 0x1D, 0x15, 0x16, 0x17,
+                                      0x1A, 0x09, 0x0A, 0x0B, 0x1E, 0x0D, 0x0E, 0x0F };
+    uint32_t v = 0;
+    for (int shift = 12; shift >= 0; shift -= 4)
+      v = (v << 5) | kEnc[(word >> shift) & 0x0F];
+    // The wire carries value ^ (value >> 1); undo it by prefix-xor.
+    uint32_t out = 0, running = 0;
+    for (int i = 20; i >= 0; --i) {
+      running ^= (v >> i) & 1u;
+      out |= (running & 1u) << i;
+    }
+    return out & 0x1FFFFF;
+  };
+
+  const uint16_t word = 0x1234;
+  check(dshotDecodeGcr21(encode(word)) == word,
+        "a 16-bit word survives the GCR encode/decode round trip");
+  check(dshotDecodeGcr21(0x000000) == 0xFFFF,
+        "an all-zero burst is rejected rather than decoded as zero RPM");
+}
+
+static void testDshotTelemetryAggregation() {
+  section("DShot: four motors, one notch frequency");
+
+  // Encode a shaft frequency the way an ESC would report it.
+  auto wordForHz = [](float hz) -> uint16_t {
+    const uint32_t erpm = (uint32_t)(hz * 60.0f * MOTOR_POLE_PAIRS);
+    uint32_t periodUs = 60000000u / (erpm ? erpm : 1u);
+    uint32_t e = 0;
+    while ((periodUs >> e) > 0x1FF && e < 7) ++e;
+    const uint16_t p12 = (uint16_t)(((e & 0x7) << 9) | ((periodUs >> e) & 0x1FF));
+    const uint8_t crc = (uint8_t)((~(p12 ^ (p12 >> 4) ^ (p12 >> 8))) & 0x0F);
+    return (uint16_t)((p12 << 4) | crc);
+  };
+
+  // ---- a steady hover: all four close, one notch covers them ------------------------
+  DShotTelemetry t;
+  for (int i = 0; i < 4; ++i) t.ingest((uint8_t)i, wordForHz(120.0f + i), 1000);
+  t.update(1000);
+  check(t.state().validCount == 4, "all four motors reporting");
+  check(t.state().coherent, "a hover with 3 Hz of spread is coherent");
+  checkNear(t.notchHz(), 121.5f, 2.0f, "the notch frequency is the mean of the four");
+  check(t.state().spread < DSHOT_TELEM_MAX_SPREAD,
+        "the spread is inside the coherence limit");
+
+  // ---- a hard roll: the diagonals diverge, one notch will not do -------------------
+  DShotTelemetry r;
+  r.ingest(0, wordForHz(100.0f), 1000);
+  r.ingest(1, wordForHz(100.0f), 1000);
+  r.ingest(2, wordForHz(160.0f), 1000);
+  r.ingest(3, wordForHz(160.0f), 1000);
+  r.update(1000);
+  check(r.state().validCount == 4, "all four still reporting under a roll");
+  check(!r.state().coherent,
+        "a 60 Hz split between the diagonals is NOT coherent");
+  check(r.notchHz() == 0.0f,
+        "so no measured notch frequency is offered, and the caller falls back to the "
+        "sliding DFT rather than notching a frequency no motor is actually at");
+  check(r.state().spread > DSHOT_TELEM_MAX_SPREAD, "and the spread says why");
+
+  // ---- a motor stops replying ------------------------------------------------------
+  // Finding 15 in a new subsystem: a value that is only written on success and never
+  // invalidated latches the last reading forever.
+  DShotTelemetry s;
+  for (int i = 0; i < 4; ++i) s.ingest((uint8_t)i, wordForHz(120.0f), 1000);
+  s.update(1000);
+  check(s.state().coherent, "coherent while all four report");
+  s.ingest(0, wordForHz(120.0f), 1000 + DSHOT_TELEM_STALE_MS + 50);
+  s.ingest(1, wordForHz(120.0f), 1000 + DSHOT_TELEM_STALE_MS + 50);
+  s.ingest(2, wordForHz(120.0f), 1000 + DSHOT_TELEM_STALE_MS + 50);
+  // motor 3 goes quiet
+  s.update(1000 + DSHOT_TELEM_STALE_MS + 50);
+  check(s.state().validCount == 3, "the silent motor is dropped once it goes stale");
+  check(!s.state().coherent,
+        "three motors is not enough -- the mean would no longer describe the aircraft");
+  check(s.notchHz() == 0.0f, "so no measured frequency is offered");
+  check(s.state().shaftHz[3] == 0.0f,
+        "and the stale motor reads as zero rather than latching its last value");
+
+  // ---- a corrupt word must not poison the aggregate --------------------------------
+  DShotTelemetry c;
+  for (int i = 0; i < 4; ++i) c.ingest((uint8_t)i, wordForHz(120.0f), 1000);
+  c.ingest(2, (uint16_t)(wordForHz(120.0f) ^ 0x0001), 1010);   // bad checksum
+  c.update(1010);
+  check(c.state().coherent,
+        "a single corrupt frame is ignored and the previous value keeps being used");
+  checkNear(c.notchHz(), 120.0f, 2.0f, "the aggregate is unaffected by one bad frame");
+
+  // ---- out-of-range motor index is ignored rather than corrupting memory -----------
+  DShotTelemetry g;
+  g.ingest(9, wordForHz(120.0f), 1000);
+  g.update(1000);
+  check(g.state().validCount == 0, "an out-of-range motor index is ignored");
+
+  // ---- reset ------------------------------------------------------------------------
+  DShotTelemetry z;
+  for (int i = 0; i < 4; ++i) z.ingest((uint8_t)i, wordForHz(120.0f), 1000);
+  z.update(1000);
+  z.reset();
+  z.update(1000);
+  check(z.state().validCount == 0 && z.notchHz() == 0.0f,
+        "reset clears every motor, so a disarm does not carry RPM into the next flight");
+
+  // ---- the point of the exercise ---------------------------------------------------
+  // Section 8.3 estimates 120 Hz from two models that disagree by 7%. This arrives at
+  // the same number by reading it off the ESCs.
+  DShotTelemetry p;
+  for (int i = 0; i < 4; ++i) p.ingest((uint8_t)i, wordForHz(124.0f), 2000);
+  p.update(2000);
+  checkNear(p.notchHz(), 124.0f, 1.5f,
+            "a measured 124 Hz hover reports 124 Hz, with no search and no models");
+  check(p.notchHz() > NOTCH_CENTER_HZ * DYN_NOTCH_BAND_LOW &&
+        p.notchHz() < NOTCH_CENTER_HZ * DYN_NOTCH_BAND_HIGH,
+        "and it lands inside the band the sliding DFT would have searched, so the two "
+        "methods agree about where to look");
+}
+
 static void testImuReadSplit() {
   section("Primary IMU: gyro at loop rate, accelerometer slower");
 
@@ -1157,6 +1460,11 @@ int main() {
   testNotchFilter();
   testPid();
   testDebounce();
+  testDshotFrames();
+  testDshotThrottleMapping();
+  testDshotTelemetryDecode();
+  testDshotGcr();
+  testDshotTelemetryAggregation();
   testImuReadSplit();
   testLoopRateIsSchedulable();
   testNotchIsNotObservableInTheLog();

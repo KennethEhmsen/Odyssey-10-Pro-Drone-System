@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 3.3 — the IMU read is split, which was step 2 of the 1000 Hz sequencing and pays at 500 Hz too
+**Document revision:** 3.4 — DShot at the protocol level, with the RPM the notch has been estimating all along
 
 ---
 
@@ -580,8 +580,38 @@ because there is no measurement to settle it. With RPM telemetry the notch could
 the actual shaft speed** rather than sitting at a fixed estimate, which is how modern
 flight controllers handle it and which removes the failure mode entirely.
 
-That is future work, not implemented. Bidirectional DShot needs tight timing on the
-ESP32-P4 (RMT or a dedicated peripheral) and the firmware currently has neither.
+**Revision 3.4 implements the protocol.** `firmware/flight-controller/include/dshot.h`
+carries frame construction, both checksum conventions, the GCR telemetry decode, the
+eRPM-to-shaft-Hz conversion, and a four-motor aggregator that turns per-motor RPM into
+one notch frequency. All of it is pure integer arithmetic and all of it is host-tested —
+51 assertions, including a full round trip of every value from 0 to 2047 in both checksum
+conventions and of every notch frequency in the build matrix through a wire-level
+telemetry word.
+
+**The RMT driver is deliberately NOT written.** Putting those frames on a wire means
+driving the ESP32-P4's RMT peripheral to a fraction of a microsecond and turning the line
+around fast enough to catch the ESC's reply. That code cannot be compiled in this
+environment, let alone verified, and it drives motors — a frame that misses a bit
+boundary does not fail politely, it becomes a throttle value the ESC acts on. Writing it
+untested would produce the appearance of a finished feature and none of the substance.
+What it needs is spelled out in §4.3.1.
+
+`DSHOT_ENABLE` defaults to **0**, and analog PWM remains the default output.
+
+#### 4.3.1 What the DShot driver still needs
+
+Everything below the frame arithmetic, in the order it would have to be built:
+
+| Step | Requirement |
+| --- | --- |
+| Bit timing | DShot300 is 3.33 µs per bit; a `1` holds high for 74.9% of it and a `0` for 37.4%. Tolerance is roughly ±5%, so the RMT clock divider has to be chosen against the actual APB frequency, not assumed |
+| Frame cadence | 16 bits is 53 µs at DShot300. That plus the telemetry window must fit inside the loop period — `config.h` asserts it |
+| Line turnaround | Bidirectional DShot has the ESC reply **on the same wire**, roughly 30 µs after the frame ends. The pin has to change direction and start capturing within that gap |
+| Reply capture | The reply is 21 bits at a nominal ¾ of the outgoing bitrate, and the ESC's clock is not ours — the edges have to be timed, not counted |
+| Verification | A scope on the signal line first. Then a thrust stand **with the propellers off**, confirming commanded throttle against measured RPM across the range, before anything spins with a blade attached |
+
+Until that exists, `dshot.h` is a tested library with no caller, which is a more honest
+state than an untested driver with one.
 
 **Revision 2.9 took the other route to the same goal.** Rather than measuring shaft speed
 at the ESC, the flight controller now finds the motor peak in the gyro spectrum directly
@@ -1541,10 +1571,9 @@ FreeRTOS tick**. Any overrun misses the deadline outright rather than eating int
 **Do not raise the loop rate for the harmonic alone.** The costs are all manageable, but
 the sequencing is wrong:
 
-1. **Bidirectional DShot first** (§4.3). It gives shaft frequency directly instead of
-   inferring it from the noise, which makes the fundamental *and* its harmonics known
-   rather than searched for — and it raises actuator bandwidth, which is the thing a
-   1000 Hz loop cannot give you on its own.
+1. **Bidirectional DShot first** (§4.3). Protocol and telemetry decode landed in
+   revision 3.4 and are tested; the RMT driver (§4.3.1) still needs hardware. Until it
+   drives motors, the actuator argument for a faster loop does not hold.
 2. ~~**Split the IMU read** — gyro at loop rate, accel at 250 Hz.~~ **Done in
    revision 3.3.** Bus utilisation at 500 Hz fell from 39% to 30%.
 3. **Then reconsider 1000 Hz**, at which point the actuator can use it and the bus can
@@ -2236,6 +2265,7 @@ Revision 2.0 introduced or left standing the following, all corrected here.
 | `CRUISE_CURRENT_A` was set from HOVER power since revision 2.2, but it budgets the charge to fly home at CRUISE speed — about 10% more. The RTH energy reserve was therefore optimistic | Corrected to 9.7 A, and §3.3 now states which figure it is and why |
 | The pack was rated 45C against a 15C peak demand, carrying 40 g for capability the aircraft cannot use | Specified as 20C minimum. §3.3 explains that energy per gram, not C-rate, is the constraint on this platform |
 | 3-blade propellers on a long-range platform with thrust to spare | Changed to 9x5x2. About 10% better hover efficiency for ~12% of peak thrust: 24 min hover and 16 km one-way, up from 22 min and 14.1 km |
+| The bidirectional-DShot GCR decode read its four 5-bit groups from the wrong bit offsets, and most-significant group first. Every legal group still decoded to a legal nibble, so a corrupted RPM would have passed its checksum and been fed to the notch as a measurement | Corrected to read groups low-first at offsets 0/5/10/15. Caught by a full encode/decode round trip, which is why the test builds the wire format rather than trusting the decoder against itself |
 | The flight loop's period is `pdMS_TO_TICKS(1000 / FLIGHT_LOOP_HZ)`, which at the ESP-IDF default 100 Hz tick rounds to ZERO ticks — `vTaskDelayUntil` would not delay and the loop would spin, starving its core. The 1000 Hz 7-inch build has depended on Arduino-ESP32's 1000 Hz tick since revision 2.8 with nothing declaring it | `static_assert` on `configTICK_RATE_HZ`, plus one requiring `FLIGHT_LOOP_HZ` to divide 1000 exactly. Host tests check every divider derived from the loop rate. §8.3.4 |
 | Second-harmonic notching was proposed on the assumption that the SDFT already computes those bins, so tracking the overtone would be a modest addition. The bins exist, but in 8 of 10 builds 2·f₀ lands above the MPU-6050 anti-alias corner, so the IMU has already attenuated it | Implemented, but gated on observability computed at runtime from the tracked fundamental. Where 2·f₀ does not clear the corner the notch never engages, because notching an already-filtered peak buys phase lag for nothing. §8.3.3 |
 | Every revision instructed the reader to find the motor peak in a BlackBox gyro trace. That was impossible twice over: the logged gyro is post-notch, and the 100 Hz log rate puts its Nyquist limit at 50 Hz while the peak is 88–180 Hz, so a 120 Hz peak aliases to 20 Hz | Instruction withdrawn. The spectrum is analysed on board at the full loop rate and the tracker's verdict is logged in format v3, so the measurement is recoverable on the ground. §8.3, §8.3.2 |
