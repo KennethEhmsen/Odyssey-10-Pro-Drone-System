@@ -103,8 +103,12 @@ jobs:
 
       # Proves the decoder turns bytes back into the right NUMBERS. The consistency
       # check above proves the layout matches; it cannot prove the scaling does.
-      - name: BlackBox decoder tests
-        run: python3 tools/test_blackbox_decode.py
+      # patchfile backs `--fix`, which rewrites source in place -- a bug there damages
+      # files rather than reporting a problem, so it is tested too.
+      - name: Python tool tests
+        run: |
+          python3 tools/test_patchfile.py
+          python3 tools/test_blackbox_decode.py
 
       - name: Build and run host tests
         env:

@@ -35,6 +35,8 @@ import csv
 import os
 import re
 import struct
+
+import patchfile
 import sys
 from pathlib import Path
 
@@ -114,20 +116,22 @@ _EOL = {}
 
 
 def read(path):
-    """Reads a file, remembering its dominant line ending, and returns LF-normalised text."""
-    raw = path.read_bytes()
-    crlf = raw.count(b"\r\n")
-    lf = raw.count(b"\n") - crlf
-    _EOL[path] = "\r\n" if crlf > lf else "\n"
-    return raw.decode("utf-8").replace("\r\n", "\n")
+    """Reads a file, remembering its line ending, and returns LF-normalised text."""
+    text, eol = patchfile.read_text(path)
+    _EOL[path] = eol
+    return text
 
 
 def write(path, text):
-    """Writes text back using whatever line ending the file already had."""
-    eol = _EOL.get(path, os.linesep)
-    if eol == "\r\n":
-        text = text.replace("\n", "\r\n")
-    path.write_bytes(text.encode("utf-8"))
+    """
+    Writes text back using whatever line ending the file already had.
+
+    Delegates to patchfile, which refuses a result dramatically smaller than the
+    original and refuses a .py file that no longer parses. --fix rewrites source in
+    place, so a bad anchor here would silently damage a file rather than report an
+    inconsistency.
+    """
+    patchfile.write_text(path, text, _EOL.get(path, os.linesep))
 
 
 def config_defines(text):
@@ -1065,6 +1069,24 @@ def check_readme(rep, fix):
                         f"README says revision {mr.group(1)}, the specification says "
                         f"{ms.group(1)}", fixable=True)
 
+    # --- the same count, written out in prose ---------------------------------------
+    # The badge was guarded from the start; this sentence was not, and it sat at 14
+    # while the suite had grown to 16. A number in prose drifts exactly as easily as a
+    # number in a badge -- it just does not look like data, so nobody checks it.
+    mp = re.search(r"(\d+) checks\. `--fix` repairs", text)
+    if mp:
+        actual = len(CHECKS)
+        if int(mp.group(1)) != actual:
+            if fix:
+                start, end = mp.span(1)
+                text = text[:start] + str(actual) + text[end:]
+                changed = True
+                rep.fix("readme", f"prose check count {mp.group(1)} -> {actual}")
+            else:
+                rep.problem("readme",
+                            f"README prose says {mp.group(1)} checks, there are "
+                            f"{actual}", fixable=True)
+
     # --- consistency-check count ----------------------------------------------------
     m = re.search(r"consistency_checks-(\d+)-", text)
     if m:
@@ -1396,6 +1418,71 @@ def check_notch_observability(rep, fix):
                     f"(Nyquist {nyquist:.0f} Hz) -- not observable, verdict logged instead")
 
 
+def check_line_endings(rep, fix):
+    """
+    Every tracked text file's line endings must match what .gitattributes declares.
+
+    Shell scripts and git hooks are `eol=lf` for a concrete reason: /bin/sh rejects a
+    script whose shebang line ends in CR with "bad interpreter", which is a confusing
+    way to discover a line-ending problem. Everything else is `text=auto`, checked out
+    native, and must be internally consistent -- a file that has become half CRLF and
+    half LF produces a whole-file diff on the next edit, burying the real change.
+
+    This also catches a file mangled by a tool that guessed the ending wrongly, which
+    is why tools/patchfile.py exists.
+    """
+    rep.checks_run += 1
+    import subprocess
+
+    try:
+        rows = subprocess.run(["git", "ls-files", "--eol"], cwd=str(ROOT),
+                              capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        rep.problem("line-endings", "git is not available to list tracked files",
+                    severity="warn")
+        return
+    if rows.returncode != 0:
+        rep.problem("line-endings", "git ls-files --eol failed", severity="warn")
+        return
+
+    checked = 0
+    for row in rows.stdout.splitlines():
+        parts = row.split("\t")
+        if len(parts) != 2:
+            continue
+        meta, rel = parts[0], parts[1].strip()
+        if "w/-text" in meta or "w/none" in meta:
+            continue            # binary, or empty
+        path = ROOT / rel
+        if not path.exists():
+            continue
+
+        raw = path.read_bytes()
+        crlf = raw.count(b"\r\n")
+        lf = raw.count(b"\n") - crlf
+        lone_cr = raw.count(b"\r") - crlf
+        checked += 1
+
+        if crlf and lf:
+            rep.problem("line-endings",
+                        f"{rel} has MIXED line endings ({crlf} CRLF, {lf} LF). The next "
+                        f"edit will rewrite whichever kind loses, producing a whole-file "
+                        f"diff that buries the real change.")
+        if lone_cr:
+            rep.problem("line-endings",
+                        f"{rel} contains {lone_cr} bare CR characters")
+
+        if "eol=lf" in meta and crlf:
+            rep.problem("line-endings",
+                        f"{rel} is declared eol=lf in .gitattributes but has {crlf} CRLF "
+                        f"line endings on disk. If this is a shell script or a git hook, "
+                        f"/bin/sh will reject it with 'bad interpreter'.")
+
+    rep.note = getattr(rep, "note", [])
+    rep.note.append(f"line-endings: {checked} tracked text files consistent with "
+                    f".gitattributes")
+
+
 # =====================================================================================
 #  Registry
 # =====================================================================================
@@ -1407,6 +1494,9 @@ CHECKS = [
     ("bom", "BOM per-line arithmetic and the total quoted in the specification", check_bom),
     ("spec-constants", "battery thresholds, AUW and TWR agree with config.h",
      check_spec_constants),
+    ("line-endings",
+     "every tracked text file matches the line endings .gitattributes declares",
+     check_line_endings),
     ("blackbox", "BlackBox record layout agrees between firmware and decoder",
      check_blackbox_layout),
     ("findings", "all 18 review findings appear in both documents", check_findings),

@@ -2,7 +2,7 @@
 
 [![host-tests](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml/badge.svg?branch=main)](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml)
 [![assertions](https://img.shields.io/badge/host_assertions-203-blue)](tools/host_tests/)
-[![consistency](https://img.shields.io/badge/consistency_checks-16-blue)](tools/check_consistency.py)
+[![consistency](https://img.shields.io/badge/consistency_checks-17-blue)](tools/check_consistency.py)
 [![decoder](https://img.shields.io/badge/RID_decoder_tests-80-blue)](android/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-ESP32--P4%20%7C%20C3%20%7C%20C6-lightgrey)](firmware/)
@@ -39,6 +39,8 @@ finding-by-finding index, or section 13 of the specification.
 | `tools/blackbox_decode.py` | Decodes flight logs to CSV, prints a flight summary |
 | `tools/md2docx.py` | Regenerates the Word document from the Markdown |
 | `tools/test_blackbox_decode.py` | Verifies the BlackBox decoder scales and flags every field correctly |
+| `tools/patchfile.py` | In-place source edits that preserve line endings and refuse ambiguous anchors |
+| `tools/test_patchfile.py` | Tests for the above, including the whole-file anchor bug that motivated it |
 | `tools/host_tests/` | Compiles the real firmware headers on a PC and verifies the safety-critical algorithms |
 | `tools/check_consistency.py` | Checks the specification, firmware and BOM still agree; `--fix` repairs the mechanical ones |
 | `android/` | Remote ID test receiver for Android — verifies the aircraft broadcasts what you configured, at the required rate |
@@ -190,7 +192,7 @@ together, because nothing checked that the parts still agreed.
 python tools/check_consistency.py --fix
 ```
 
-14 checks. `--fix` repairs whitespace, BOM totals and any specification constant that has
+17 checks. `--fix` repairs whitespace, BOM totals and any specification constant that has
 drifted from `config.h` — the code is the source of truth, and the fixer rewrites the
 documentation to match, never the reverse. It runs in the pre-push hook on every push,
 including documentation-only ones.
