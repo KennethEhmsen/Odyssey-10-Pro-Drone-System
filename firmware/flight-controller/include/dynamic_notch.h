@@ -128,6 +128,12 @@ struct DynamicNotchState {
     float confidence   = 0.0f;   // peak magnitude over the band average
     bool  tracking     = false;  // false means it fell back to the static value
     uint32_t updates   = 0;
+
+    // ---- second harmonic -------------------------------------------------------------
+    float harmonicHz        = 0.0f;   // tracked 2*f0, or 0 when not engaged
+    float harmonicConf      = 0.0f;
+    bool  harmonicTracking  = false;  // a confident lock on the harmonic
+    bool  harmonicObservable = false; // 2*f0 clears the DLPF corner and Nyquist margin
 };
 
 // -------------------------------------------------------------------------------------
@@ -160,12 +166,19 @@ public:
 
         // Never search above the DLPF corner: there is nothing above it but the filter's
         // own roll-off, and a peak found there would be an artefact.
-        const float ceiling = min((float)IMU_DLPF_HZ, sampleRate_ * 0.45f);
-        if (maxHz_ > ceiling) maxHz_ = ceiling;
+        ceilingHz_ = min((float)IMU_DLPF_HZ,
+                         sampleRate_ * 0.5f * DYN_NOTCH_H2_NYQUIST_FRAC);
+        if (maxHz_ > ceilingHz_) maxHz_ = ceilingHz_;
 
         state_.centreHz = staticHz_;
         state_.detectedHz = staticHz_;
+        state_.harmonicHz = 0.0f;
+        state_.harmonicTracking = false;
+        state_.harmonicObservable =
+            (staticHz_ * DYN_NOTCH_H2_MULTIPLE) <= ceilingHz_;
         smoothed_ = staticHz_;
+        h2PrevK_ = -1;
+        h2HavePrev_ = false;
     }
 
     /** Feed every gyro sample from one axis, RAW -- upstream of the notch it tunes. */
@@ -236,11 +249,98 @@ public:
         state_.detectedHz = dft_.binToHz(kEst);
         state_.tracking = true;
         slewTowards(constrain(state_.detectedHz, minHz_, maxHz_));
-        return commit();
+        const bool moved = commit();
+        updateHarmonic();
+        return moved;
+    }
+
+    /**
+     * Looks for the second harmonic, in a narrow window around twice the tracked
+     * fundamental.
+     *
+     * Searching a WINDOW rather than simply notching at exactly 2x the fundamental is
+     * the point: a propeller's overtone is not an exact integer multiple once blade
+     * flex and frame modes are involved, and a notch placed by arithmetic rather than by
+     * measurement is the mistake this whole subsystem exists to stop repeating.
+     */
+    void updateHarmonic() {
+#if DYN_NOTCH_HARMONIC
+        state_.harmonicTracking = false;
+
+        // Judged against the TRACKED fundamental, not the compiled one. If the real f0
+        // is lower than the model assumed, the harmonic may be visible when the compiled
+        // value said it would not be -- and the reverse.
+        const float target = state_.centreHz * DYN_NOTCH_H2_MULTIPLE;
+        state_.harmonicObservable = (target <= ceilingHz_);
+        if (!state_.harmonicObservable || !state_.tracking) {
+            state_.harmonicHz = 0.0f;
+            state_.harmonicConf = 0.0f;
+            h2HavePrev_ = false;
+            return;
+        }
+
+        const int kLo = dft_.hzToBin(target * (1.0f - DYN_NOTCH_H2_SEARCH));
+        const int kHi = dft_.hzToBin(target * (1.0f + DYN_NOTCH_H2_SEARCH));
+        if (kHi <= kLo + 1) {
+            state_.harmonicHz = 0.0f;
+            h2HavePrev_ = false;
+            return;
+        }
+
+        float peakMag = 0.0f, sumMag = 0.0f;
+        int peakK = kLo;
+        for (int k = kLo; k <= kHi; ++k) {
+            const float m = dft_.magnitudeSq(k);
+            sumMag += m;
+            if (m > peakMag) { peakMag = m; peakK = k; }
+        }
+        const float mean = sumMag / (float)(kHi - kLo + 1);
+        state_.harmonicConf = (mean > 1e-12f) ? (peakMag / mean) : 0.0f;
+
+        // Same two gates as the fundamental: tall enough, and in the same place twice.
+        const int drift = peakK - h2PrevK_;
+        const bool repeated = h2HavePrev_ && drift >= -DYN_NOTCH_PEAK_TOL_BINS
+                                          && drift <=  DYN_NOTCH_PEAK_TOL_BINS;
+        h2PrevK_ = peakK;
+        h2HavePrev_ = true;
+
+        if (state_.harmonicConf < DYN_NOTCH_H2_MIN_CONF || !repeated) {
+            state_.harmonicHz = 0.0f;
+            return;
+        }
+
+        float kEst = (float)peakK;
+        if (peakK > kLo && peakK < kHi) {
+            const float a = sqrtf(dft_.magnitudeSq(peakK - 1));
+            const float b = sqrtf(dft_.magnitudeSq(peakK));
+            const float c = sqrtf(dft_.magnitudeSq(peakK + 1));
+            const float denom = a - 2.0f * b + c;
+            if (fabsf(denom) > 1e-9f) {
+                const float delta = 0.5f * (a - c) / denom;
+                if (fabsf(delta) < 1.0f) kEst += delta;
+            }
+        }
+
+        const float found = dft_.binToHz(kEst);
+        state_.harmonicHz = constrain(found, target * (1.0f - DYN_NOTCH_H2_SEARCH),
+                                      min(target * (1.0f + DYN_NOTCH_H2_SEARCH),
+                                          ceilingHz_));
+        state_.harmonicTracking = true;
+#endif
     }
 
     const DynamicNotchState& state() const { return state_; }
     float centreHz() const { return state_.centreHz; }
+    float harmonicHz() const { return state_.harmonicHz; }
+
+    /**
+     * The highest frequency worth searching.
+     *
+     * Above the IMU's anti-alias corner there is nothing but the filter's own roll-off,
+     * and near Nyquist the SDFT's top bins collect whatever aliased. A peak found in
+     * either region is an artefact, and notching an artefact costs real phase lag.
+     */
+    float ceilingHz() const { return ceilingHz_; }
 
     float bandLowHz()  const { return minHz_; }
     float bandHighHz() const { return maxHz_; }
@@ -267,8 +367,11 @@ private:
     DynamicNotchState state_;
     float sampleRate_ = 500.0f;
     float staticHz_   = 100.0f;
+    float ceilingHz_  = 184.0f;
     int   prevPeakK_  = -1;
     bool  havePrev_   = false;
+    int   h2PrevK_    = -1;
+    bool  h2HavePrev_ = false;
     float minHz_      = 60.0f;
     float maxHz_      = 200.0f;
     float smoothed_   = 100.0f;

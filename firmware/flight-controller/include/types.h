@@ -149,7 +149,7 @@ struct PilotInput {
 //  exactly when you most want to see them.
 // -------------------------------------------------------------------------------------
 #define BLACKBOX_MAGIC    0x4F445931u   // "ODY1"
-#define BLACKBOX_VERSION   3
+#define BLACKBOX_VERSION   4
 
 struct __attribute__((packed)) BlackBoxHeader {
   uint32_t magic;
@@ -196,9 +196,20 @@ struct __attribute__((packed)) BlackBoxRecord {
   uint16_t notchCentreDeciHz;          // tracked notch centre, 0.1 Hz
   uint8_t  notchConfidence;            // peak/mean ratio, saturating at 255
   uint8_t  notchFlags;                 // see ODY_NOTCH_FLAG_*
+
+  // ---- v4: the second harmonic -------------------------------------------------------
+  //
+  // Logged for the same reason as the fundamental, and with one extra job: on most
+  // builds the harmonic is NOT observable, because 2*f0 lands above the IMU's
+  // anti-alias corner. The OBSERVABLE flag records which case a given flight was in,
+  // so a log showing no harmonic notch can be read as "the hardware could not see it"
+  // rather than "the tracker failed".
+  uint16_t notchHarmonicDeciHz;        // tracked 2*f0, 0.1 Hz, or 0 when not engaged
 };
 
-#define ODY_NOTCH_FLAG_TRACKING  (1u << 0)   // the tracker had a confident lock
-#define ODY_NOTCH_FLAG_DYNAMIC   (1u << 1)   // DYN_NOTCH_ENABLE was compiled in
+#define ODY_NOTCH_FLAG_TRACKING    (1u << 0)  // the tracker had a confident lock
+#define ODY_NOTCH_FLAG_DYNAMIC     (1u << 1)  // DYN_NOTCH_ENABLE was compiled in
+#define ODY_NOTCH_FLAG_H2_TRACKING (1u << 2)  // the harmonic had a confident lock
+#define ODY_NOTCH_FLAG_H2_VISIBLE  (1u << 3)  // 2*f0 was below the DLPF/Nyquist ceiling
 
 #endif // ODY_TYPES_H

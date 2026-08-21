@@ -73,6 +73,18 @@ public:
 
   void reset() { x1_ = x2_ = y1_ = y2_ = 0.0f; }
 
+  /**
+   * Disengages the filter, returning it to a pass-through.
+   *
+   * A notch that is no longer needed must be REMOVED, not left tuned to wherever it
+   * last was. The dynamic harmonic notch can legitimately stop having anything to
+   * filter -- the overtone fades, or the tracked fundamental rises until twice it no
+   * longer clears the anti-alias corner -- and a notch left sitting on empty spectrum
+   * contributes phase lag in the control band in exchange for nothing. That is the
+   * defect of section 8.3 in miniature.
+   */
+  void bypass() { setPassthrough(); }
+
   bool  configured() const { return configured_; }
   float centreHz()   const { return centreHz_; }
 

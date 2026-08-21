@@ -1325,6 +1325,45 @@ def check_prop_configs(rep, fix):
     direction("FRAME_GAIN_SCALE",      frame_pairs, "less",
               "a bigger airframe has more rotational inertia")
 
+    # ---- can each build see its own second harmonic? --------------------------------
+    #
+    # Reported as a note rather than a problem: an unobservable harmonic is a property
+    # of the MPU-6050's anti-alias corner, not a defect. But it must be VISIBLE, because
+    # the natural assumption is that a harmonic notch works everywhere, and on this
+    # aircraft it mostly does not. Silence here would let that assumption stand.
+    h2_yes, h2_no = [], []
+    for (frame, mc, pb), d in sorted(builds.items()):
+        f0 = d.get("PROP_NOTCH_DEFAULT_HZ", 0)
+        dlpf = d.get("IMU_DLPF_HZ", 0)
+        loop = d.get("FLIGHT_LOOP_HZ", 0)
+        mult = d.get("DYN_NOTCH_H2_MULTIPLE", 2.0)
+        frac = d.get("DYN_NOTCH_H2_NYQUIST_FRAC", 0.8)
+        if not (f0 and dlpf and loop):
+            continue
+        h2 = f0 * mult
+        ceiling = min(dlpf, loop * 0.5 * frac)
+        label = f'{frame}"/{mc[6:]}/{pb}b'
+        if h2 <= ceiling:
+            h2_yes.append(f"{label} @{h2:.0f}Hz")
+        else:
+            why = "DLPF" if h2 > dlpf else "Nyquist"
+            h2_no.append(f"{label} ({h2:.0f}>{ceiling:.0f}Hz {why})")
+
+        # A harmonic notch must never be placed above the ceiling, in any build.
+        if h2 <= ceiling and h2 >= loop * 0.5:
+            rep.problem("build-configs",
+                        f"{label}: the harmonic at {h2:.0f} Hz is at or above Nyquist "
+                        f"for a {loop:.0f} Hz loop")
+
+    rep.note = getattr(rep, "note", [])
+    if h2_yes:
+        rep.note.append(f"harmonic: observable in {len(h2_yes)}/{len(builds)} builds -- "
+                        + ", ".join(h2_yes))
+    if h2_no:
+        rep.note.append(f"harmonic: NOT observable in {len(h2_no)}/{len(builds)} builds, "
+                        f"2*f0 is above the IMU anti-alias corner -- "
+                        + ", ".join(h2_no))
+
     for (frame, mc, pb), d in builds.items():
         loop = d.get("FLIGHT_LOOP_HZ", 0)
         bins = d.get("DYN_NOTCH_BINS", 0)

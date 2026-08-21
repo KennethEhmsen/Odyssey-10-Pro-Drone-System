@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 3.0 — the notch measurement is recorded, and the procedure that could never have produced it is withdrawn
+**Document revision:** 3.1 — second-harmonic tracking, and an honest account of where the hardware can support it
 
 ---
 
@@ -1248,8 +1248,9 @@ board, at the full flight-loop rate where the peak is genuinely visible, and rec
 conclusion. See §8.3.1 for the tracker and §8.3.2 for the procedure. None of the models above account for the frame
 itself: the 6 mm arms on this airframe are less stiff than the 7–8 mm arms originally
 specified, which moves the structural resonance independently of the propellers.
-Blade-pass energy sits near twice the fundamental, around 250 Hz, which the notch does
-not target.
+Blade-pass energy sits at `PROP_BLADES` times the fundamental — 240 Hz on the 2-blade
+default, 300 Hz on a 3-blade — which the notch does not target and, as §8.3.3 shows,
+mostly cannot.
 
 #### 8.3.1 The notch now measures itself
 
@@ -1375,6 +1376,63 @@ tracking does not lock.
 > The C struct and the Python format string are cross-checked field by field against the
 > real compiler by the `blackbox` consistency check, because a field at the wrong offset
 > does not fail loudly, it produces plausible numbers that are wrong.
+
+
+#### 8.3.3 The second harmonic, and why it usually cannot be notched
+
+A propeller puts energy at twice the shaft fundamental as well as at the fundamental
+itself. Tracking that overtone and notching it too is standard on modern flight
+controllers, and revision 3.1 implements it. **On this hardware it can only engage in
+two of the ten build combinations**, and the reason is worth stating carefully, because
+the natural assumption is that a harmonic notch works everywhere.
+
+The gyro reaches the flight controller through the MPU-6050's anti-alias filter at
+`IMU_DLPF_HZ`. Twice the fundamental lands **above that corner** in eight of the ten
+builds:
+
+| Build | f₀ | 2·f₀ | Ceiling | Observable? |
+| --- | --- | --- | --- | --- |
+| 7-inch 2-blade | 180 Hz | 360 Hz | 260 Hz | no — 38% above the DLPF |
+| 7-inch 3-blade | 150 Hz | 300 Hz | 260 Hz | no — 15% above the DLPF |
+| **9-inch 2-blade (default)** | **120 Hz** | **240 Hz** | **184 Hz** | **no — 30% above the DLPF, and 96% of Nyquist** |
+| 9-inch 3-blade | 100 Hz | 200 Hz | 184 Hz | no — 9% above the DLPF |
+| 10-inch 2-blade | 105 Hz | 210 Hz | 184 Hz | no — 14% above the DLPF |
+| **10-inch 3-blade** | **90 Hz** | **180 Hz** | **184 Hz** | **yes** |
+
+The ceiling is the lower of the DLPF corner and 80% of Nyquist for the loop rate.
+
+**Notching an unobservable harmonic would be actively harmful**, not merely useless. It
+is the defect of §8.3 with the roles reversed: the DLPF has already attenuated the peak,
+so a notch placed there filters spectrum that is largely gone while contributing its own
+phase lag in the control band. That is a straight loss to the D term in exchange for
+nothing.
+
+So the harmonic notch checks observability **at runtime, against the tracked
+fundamental**, not against the compiled one. If the real f₀ turns out lower than the
+model assumed, the harmonic may become visible when the compiled value said it would not
+— and the reverse. Where it does not clear the ceiling the second notch is never
+configured, which `filters.h` treats as a pass-through, so it costs nothing but three
+function calls per loop. The firmware says which case a given build is in at boot, and
+the log records it per flight in the `harmonic_observable` flag, so a log with no
+harmonic notch reads as *"the IMU could not see it"* rather than *"the tracker failed"*.
+
+When it does engage, it searches a ±12% window around 2·f₀ rather than notching at
+exactly twice the fundamental. A real overtone is not an exact integer multiple once
+blade flex and frame modes are involved, and placing a notch by arithmetic rather than
+by measurement is precisely the mistake this subsystem exists to stop repeating.
+
+**Raising `IMU_DLPF_HZ` is not the fix.** The DLPF *is* the anti-alias filter; lifting it
+toward Nyquist trades a visible harmonic for aliased content folding into the control
+band, which is a worse problem than the one it solves. The real fix is a faster loop —
+1000 Hz on the 9- and 10-inch would put Nyquist at 500 Hz and allow a 260 Hz corner,
+making every build's harmonic visible. The MPU-6050's 1 kHz output ceiling makes that
+possible but leaves no margin, and it would change the PID timing, the CPU budget and
+the SDFT resolution together. It is recorded here as the route, not as a decision.
+
+> Blade-pass frequency is `PROP_BLADES × f₀`, so it coincides with the second harmonic
+> only on a 2-blade propeller. On the 3-blade builds blade-pass is 3·f₀ — 300 Hz on the
+> 9-inch — which is further above the corner still. Earlier revisions of §8.3 described
+> blade-pass as "near twice the fundamental", which is true only for the 2-blade case.
 
 ### 8.4 Radio frequency plan
 
@@ -2058,6 +2116,7 @@ Revision 2.0 introduced or left standing the following, all corrected here.
 | `CRUISE_CURRENT_A` was set from HOVER power since revision 2.2, but it budgets the charge to fly home at CRUISE speed — about 10% more. The RTH energy reserve was therefore optimistic | Corrected to 9.7 A, and §3.3 now states which figure it is and why |
 | The pack was rated 45C against a 15C peak demand, carrying 40 g for capability the aircraft cannot use | Specified as 20C minimum. §3.3 explains that energy per gram, not C-rate, is the constraint on this platform |
 | 3-blade propellers on a long-range platform with thrust to spare | Changed to 9x5x2. About 10% better hover efficiency for ~12% of peak thrust: 24 min hover and 16 km one-way, up from 22 min and 14.1 km |
+| Second-harmonic notching was proposed on the assumption that the SDFT already computes those bins, so tracking the overtone would be a modest addition. The bins exist, but in 8 of 10 builds 2·f₀ lands above the MPU-6050 anti-alias corner, so the IMU has already attenuated it | Implemented, but gated on observability computed at runtime from the tracked fundamental. Where 2·f₀ does not clear the corner the notch never engages, because notching an already-filtered peak buys phase lag for nothing. §8.3.3 |
 | Every revision instructed the reader to find the motor peak in a BlackBox gyro trace. That was impossible twice over: the logged gyro is post-notch, and the 100 Hz log rate puts its Nyquist limit at 50 Hz while the peak is 88–180 Hz, so a 120 Hz peak aliases to 20 Hz | Instruction withdrawn. The spectrum is analysed on board at the full loop rate and the tracker's verdict is logged in format v3, so the measurement is recoverable on the ground. §8.3, §8.3.2 |
 | The gyro notch was a compile-time constant standing in for a quantity that varies with mass, air density, pack voltage and workload — it moved four times, two models of it disagreed by 7%, and when it last moved the IMU DLPF was left behind | A sliding DFT over the raw gyro now tracks the real peak at 20 Hz, bounded to 0.6–1.6× the compiled value so it cannot do worse than the constant it replaced. §8.3.1 |
 | The IMU anti-alias filter was left at 94 Hz while the gyro notch moved from 80 Hz to 120 Hz across four revisions, so the DLPF sat BELOW the notch — attenuating the peak the notch was aimed at, while keeping its phase lag in the control band | Corrected to 260 Hz (7-inch) and 184 Hz (9- and 10-inch), with an assertion requiring 30% clearance above the notch. Found by the build-matrix check in §3.2 |

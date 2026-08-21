@@ -30,8 +30,9 @@ HEADER_SIZE = struct.calcsize(HEADER_FMT)
 # a flight recorder is for.
 _V2_FMT = "<I3h3h3h4H H h H h h h H H B B"
 _V3_FMT = _V2_FMT + " H B B"          # notch centre, confidence, flags
+_V4_FMT = _V3_FMT + " H"              # second-harmonic centre
 
-RECORD_FMTS = {2: _V2_FMT, 3: _V3_FMT}
+RECORD_FMTS = {2: _V2_FMT, 3: _V3_FMT, 4: _V4_FMT}
 SUPPORTED_VERSIONS = tuple(sorted(RECORD_FMTS))
 
 _BASE_FIELDS = [
@@ -45,11 +46,18 @@ _BASE_FIELDS = [
     "obstacle_cm", "sensor_health", "flight_state", "mixer_sat_pct",
 ]
 _V3_FIELDS = ["notch_hz", "notch_confidence", "notch_tracking", "notch_dynamic"]
+_V4_FIELDS = ["harmonic_hz", "harmonic_tracking", "harmonic_observable"]
 
-FIELDS_BY_VERSION = {2: _BASE_FIELDS, 3: _BASE_FIELDS + _V3_FIELDS}
+FIELDS_BY_VERSION = {
+    2: _BASE_FIELDS,
+    3: _BASE_FIELDS + _V3_FIELDS,
+    4: _BASE_FIELDS + _V3_FIELDS + _V4_FIELDS,
+}
 
-NOTCH_FLAG_TRACKING = 1 << 0
-NOTCH_FLAG_DYNAMIC  = 1 << 1
+NOTCH_FLAG_TRACKING    = 1 << 0
+NOTCH_FLAG_DYNAMIC     = 1 << 1
+NOTCH_FLAG_H2_TRACKING = 1 << 2
+NOTCH_FLAG_H2_VISIBLE  = 1 << 3
 
 STATE_NAMES = {
     0: "BOOT", 1: "CALIBRATING", 2: "PREFLIGHT_FAIL", 3: "PREFLIGHT_OK",
@@ -117,6 +125,10 @@ def decode_record(raw, version=3):
         out["notch_confidence"] = v[25]
         out["notch_tracking"] = bool(v[26] & NOTCH_FLAG_TRACKING)
         out["notch_dynamic"] = bool(v[26] & NOTCH_FLAG_DYNAMIC)
+    if version >= 4:
+        out["harmonic_hz"] = v[27] / 10.0
+        out["harmonic_tracking"] = bool(v[26] & NOTCH_FLAG_H2_TRACKING)
+        out["harmonic_observable"] = bool(v[26] & NOTCH_FLAG_H2_VISIBLE)
     return out
 
 
@@ -222,6 +234,29 @@ def summarise(header, records):
                       "motor peak is outside\n           the 0.6-1.6x search band, or "
                       "the airframe is quieter than the\n           confidence "
                       "threshold expects.")
+
+        # ---- second harmonic -------------------------------------------------------
+        # Distinguish "not found" from "not findable". On most builds of this aircraft
+        # 2*f0 lands above the IMU anti-alias corner, so the absence of a harmonic
+        # notch is a property of the hardware, not a failure of the tracker.
+        if any("harmonic_hz" in r for r in records):
+            visible = [r for r in records if r.get("harmonic_observable")]
+            h2 = [r["harmonic_hz"] for r in records
+                  if r.get("harmonic_tracking") and r["harmonic_hz"] > 0]
+            if not visible:
+                print("\n  2nd harmonic     : NOT OBSERVABLE on this build -- twice the "
+                      "tracked\n                     fundamental sits above the IMU "
+                      "anti-alias corner, so\n                     the harmonic notch "
+                      "stayed idle. This is expected; see\n                     "
+                      "section 8.3.3.")
+            elif h2:
+                print(f"\n  2nd harmonic     : locked {100.0*len(h2)/len(records):.1f}% "
+                      f"of the flight, {min(h2):.1f} - {max(h2):.1f} Hz, "
+                      f"mean {sum(h2)/len(h2):.1f} Hz")
+            else:
+                print("\n  2nd harmonic     : observable, but no overtone was found. "
+                      "The propellers\n                     may simply be well "
+                      "balanced.")
 
     # Sensor dropouts
     print("\nSensor availability:")

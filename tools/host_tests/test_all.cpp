@@ -722,9 +722,161 @@ static void testNotchIsNotObservableInTheLog() {
 
   // The layout the decoder assumes. The consistency check verifies this against the
   // compiler field by field; this catches it at test time too.
-  check(sizeof(BlackBoxRecord) == 52,
-        "the v3 record is 52 bytes, as the decoder's format string expects");
-  check(BLACKBOX_VERSION == 3, "the firmware writes log format v3");
+  check(sizeof(BlackBoxRecord) == 54,
+        "the v4 record is 54 bytes, as the decoder's format string expects");
+  check(BLACKBOX_VERSION == 4, "the firmware writes log format v4");
+
+  // The harmonic's own fields. The OBSERVABLE flag is the one that matters on this
+  // hardware: it separates "the tracker found nothing" from "the IMU cannot see it",
+  // and on most builds the answer is the second.
+  rec.notchHarmonicDeciHz = 1760;
+  rec.notchFlags |= ODY_NOTCH_FLAG_H2_TRACKING | ODY_NOTCH_FLAG_H2_VISIBLE;
+  checkNear(rec.notchHarmonicDeciHz / 10.0f, 176.0f, 0.01f,
+            "the harmonic centre round-trips at 0.1 Hz resolution");
+  check((rec.notchFlags & ODY_NOTCH_FLAG_H2_TRACKING) != 0,
+        "the harmonic tracking flag is readable back out");
+  check((rec.notchFlags & ODY_NOTCH_FLAG_H2_VISIBLE) != 0,
+        "the harmonic observability flag is independent of it");
+  check(ODY_NOTCH_FLAG_TRACKING != ODY_NOTCH_FLAG_H2_TRACKING &&
+        ODY_NOTCH_FLAG_DYNAMIC  != ODY_NOTCH_FLAG_H2_VISIBLE,
+        "all four notch flags occupy distinct bits");
+
+  // On this build, can the harmonic be seen at all? State the answer either way.
+  const float h2 = PROP_NOTCH_DEFAULT_HZ * DYN_NOTCH_H2_MULTIPLE;
+  const float ceiling = min((float)IMU_DLPF_HZ,
+                            (float)FLIGHT_LOOP_HZ * 0.5f * DYN_NOTCH_H2_NYQUIST_FRAC);
+  if (h2 <= ceiling) {
+    check(true, "this build CAN observe its second harmonic");
+  } else {
+    check(h2 > IMU_DLPF_HZ || h2 > (float)FLIGHT_LOOP_HZ * 0.5f * DYN_NOTCH_H2_NYQUIST_FRAC,
+          "this build cannot observe its second harmonic, and the reason is the IMU "
+          "anti-alias corner or the Nyquist margin -- not a tracker failure");
+  }
+}
+
+// Same driver, plus energy at a second frequency -- a real propeller puts a harmonic
+// there and the tracker has to tell it apart from the fundamental.
+static void driveTracker2(DynamicNotchTracker& tr, float sampleRate,
+                          float toneHz, float toneAmp,
+                          float harmHz, float harmAmp,
+                          float noiseAmp, float seconds) {
+  const int samples   = (int)(sampleRate * seconds);
+  const int perUpdate = (int)(sampleRate / DYN_NOTCH_UPDATE_HZ);
+  uint32_t rng = 12345u;
+  for (int i = 0; i < samples; ++i) {
+    rng = rng * 1664525u + 1013904223u;
+    const float noise = (((float)(rng >> 8) / 8388608.0f) - 1.0f) * noiseAmp;
+    const float tsec  = (float)i / sampleRate;
+    float x = toneAmp * sinf(2.0f * (float)M_PI * toneHz * tsec) + noise;
+    if (harmAmp > 0.0f) x += harmAmp * sinf(2.0f * (float)M_PI * harmHz * tsec);
+    tr.push(x);
+    if (perUpdate > 0 && i % perUpdate == 0) tr.update();
+  }
+}
+
+static void testHarmonicObservability() {
+  section("Second harmonic: only tracked where the hardware can see it");
+
+  // The ceiling is the IMU's anti-alias corner, or a margin below Nyquist, whichever
+  // is lower. Above it there is nothing but the DLPF's own roll-off and aliased energy.
+  DynamicNotchTracker probe;
+  probe.begin(500.0f, 120.0f);
+  const float expected = min((float)IMU_DLPF_HZ,
+                             500.0f * 0.5f * DYN_NOTCH_H2_NYQUIST_FRAC);
+  checkNear(probe.ceilingHz(), expected, 0.01f,
+            "the search ceiling is the lower of the DLPF corner and the Nyquist margin");
+
+  // The 9-inch default: f0 = 120, so the harmonic would be 240 Hz -- above a 184 Hz
+  // DLPF corner and at 96% of Nyquist. It must NOT be tracked, however strong it is.
+  DynamicNotchTracker deaf;
+  deaf.begin(500.0f, 120.0f);
+  driveTracker2(deaf, 500.0f, 120.0f, 10.0f, 240.0f, 10.0f, 0.5f, 8.0f);
+  check(deaf.state().tracking, "the fundamental still locks at 120 Hz");
+  check(!deaf.state().harmonicObservable,
+        "a 240 Hz harmonic is correctly judged unobservable on the 9-inch default");
+  check(!deaf.state().harmonicTracking,
+        "...so it is not tracked, however much energy is put there");
+  checkNear(deaf.harmonicHz(), 0.0f, 0.01f, "...and no harmonic notch is requested");
+
+  // The 10-inch 3-blade: f0 = 90, harmonic at 180 Hz, under the 184 Hz corner.
+  DynamicNotchTracker sees;
+  sees.begin(500.0f, 88.0f);
+  check(sees.state().harmonicObservable,
+        "a 176 Hz harmonic IS judged observable on the 10-inch 3-blade");
+  driveTracker2(sees, 500.0f, 88.0f, 10.0f, 176.0f, 6.0f, 0.5f, 10.0f);
+  check(sees.state().tracking, "the fundamental locks at 88 Hz");
+#if DYN_NOTCH_HARMONIC
+  check(sees.state().harmonicTracking, "and the harmonic locks too");
+  checkNear(sees.harmonicHz(), 176.0f, 8.0f, "the harmonic is found near 2x f0");
+#else
+  // Compiled out. The fundamental must be unaffected and no harmonic notch may ever
+  // be requested -- the disable switch has to actually disable.
+  check(!sees.state().harmonicTracking,
+        "with DYN_NOTCH_HARMONIC=0 the harmonic never locks, even when it is there");
+  checkNear(sees.harmonicHz(), 0.0f, 0.01f,
+            "...and no harmonic notch is ever requested");
+#endif
+}
+
+static void testHarmonicIsNotAssumed() {
+  section("Second harmonic: measured, not calculated");
+
+  // A harmonic notch placed at exactly 2x the fundamental by arithmetic would be the
+  // same mistake as a fixed notch. The tracker searches a window, so a harmonic that
+  // is not an exact multiple is still found where it actually is.
+  DynamicNotchTracker tr;
+  tr.begin(500.0f, 88.0f);
+  driveTracker2(tr, 500.0f, 88.0f, 10.0f, 168.0f, 6.0f, 0.5f, 10.0f);
+#if DYN_NOTCH_HARMONIC
+  check(tr.state().harmonicTracking, "an off-multiple harmonic still locks");
+  check(fabsf(tr.harmonicHz() - 168.0f) < fabsf(tr.harmonicHz() - 176.0f),
+        "it is found at 168 Hz where the energy is, not at the arithmetic 176 Hz");
+#else
+  check(!tr.state().harmonicTracking, "compiled out, so nothing locks");
+  check(tr.harmonicHz() == 0.0f, "compiled out, so no notch is requested");
+#endif
+
+  // No harmonic energy at all: nothing to notch, so nothing is notched.
+  DynamicNotchTracker none;
+  none.begin(500.0f, 88.0f);
+  driveTracker2(none, 500.0f, 88.0f, 10.0f, 0.0f, 0.0f, 0.5f, 10.0f);
+  check(none.state().tracking, "the fundamental locks");
+  check(!none.state().harmonicTracking,
+        "a clean fundamental with no overtone does not produce a harmonic notch");
+
+  // Broadband noise in the harmonic window must not be mistaken for an overtone --
+  // same bin-repeat gate as the fundamental.
+  DynamicNotchTracker noisy;
+  noisy.begin(500.0f, 88.0f);
+  driveTracker2(noisy, 500.0f, 88.0f, 10.0f, 0.0f, 0.0f, 8.0f, 10.0f);
+  check(!noisy.state().harmonicTracking,
+        "noise in the harmonic window is not mistaken for an overtone");
+}
+
+static void testHarmonicStaysInBounds() {
+  section("Second harmonic: bounded like the fundamental");
+
+  // Whatever it locks onto, it can never sit above the ceiling -- that is the whole
+  // basis for enabling it by default.
+  const float statics[] = { 60.0f, 75.0f, 88.0f, 90.0f, 100.0f, 120.0f, 150.0f };
+  for (float s : statics) {
+    DynamicNotchTracker tr;
+    tr.begin(500.0f, s);
+    driveTracker2(tr, 500.0f, s, 12.0f, 2.0f * s, 10.0f, 1.0f, 8.0f);
+    check(tr.harmonicHz() <= tr.ceilingHz() + 0.01f,
+          "a " + std::to_string((int)s) + " Hz fundamental never puts the harmonic "
+          "notch above the ceiling");
+    check(tr.harmonicHz() == 0.0f || tr.harmonicHz() > tr.centreHz(),
+          "the harmonic notch is never placed below the fundamental it belongs to");
+  }
+
+  // If the fundamental never locks, there is no fundamental to take a harmonic of.
+  DynamicNotchTracker unlocked;
+  unlocked.begin(500.0f, 88.0f);
+  driveTracker2(unlocked, 500.0f, 0.0f, 0.0f, 0.0f, 0.0f, 10.0f, 8.0f);
+  check(!unlocked.state().tracking, "the fundamental does not lock on pure noise");
+  check(!unlocked.state().harmonicTracking,
+        "and no harmonic is claimed without a fundamental to derive it from");
 }
 
 // =====================================================================================
@@ -904,6 +1056,9 @@ int main() {
   testDynamicNotchRejectsNoise();
   testDynamicNotchIsBounded();
   testDynamicNotchAcrossBuilds();
+  testHarmonicObservability();
+  testHarmonicIsNotAssumed();
+  testHarmonicStaysInBounds();
   testCtaSerial();
   testCaaRegistration();
   testOperatorId();

@@ -72,6 +72,8 @@ def build_record(version, **kw):
     if version >= 3:
         v += [kw.get("notch_decihz", 1200), kw.get("notch_conf", 40),
               kw.get("notch_flags", 3)]
+    if version >= 4:
+        v += [kw.get("harmonic_decihz", 0)]
     return struct.pack(bb.RECORD_FMTS[version], *v)
 
 
@@ -91,10 +93,11 @@ def decode_all(version, records):
 
 
 def test_scaling():
-    section("v3 record: values survive the round trip")
-    _, recs = decode_all(3, [build_record(
-        3, gyro_x=1234, accel_z=981, roll=-4500, batt_mv=22200, current_ca=970,
-        baro_cm=1550, vario_cms=-250, notch_decihz=1187, notch_conf=42, notch_flags=3)])
+    section("v4 record: values survive the round trip")
+    _, recs = decode_all(4, [build_record(
+        4, gyro_x=1234, accel_z=981, roll=-4500, batt_mv=22200, current_ca=970,
+        baro_cm=1550, vario_cms=-250, notch_decihz=1187, notch_conf=42, notch_flags=15,
+        harmonic_decihz=1760)])
     r = recs[0]
     near(r["gyro_x_dps"], 123.4, 0.01, "gyro is decoded in 0.1 deg/s units")
     near(r["accel_z_mps2"], 9.81, 0.01, "accel is decoded in 0.01 m/s^2 units")
@@ -107,29 +110,45 @@ def test_scaling():
     check(r["notch_confidence"] == 42, "notch confidence passes through unscaled")
     check(r["notch_tracking"] is True, "the tracking flag is decoded")
     check(r["notch_dynamic"] is True, "the dynamic-enabled flag is decoded")
+    near(r["harmonic_hz"], 176.0, 0.01, "the harmonic centre is decoded in 0.1 Hz units")
+    check(r["harmonic_tracking"] is True, "the harmonic tracking flag is decoded")
+    check(r["harmonic_observable"] is True, "the harmonic observability flag is decoded")
 
 
 def test_sentinels():
     section("Sentinel values are not decoded as real readings")
-    _, recs = decode_all(3, [build_record(3, tof_cm=-1, obstacle_cm=bb.LIDAR_INVALID)])
+    _, recs = decode_all(4, [build_record(4, tof_cm=-1, obstacle_cm=bb.LIDAR_INVALID)])
     r = recs[0]
     # -1 and 0xFFFF are "no reading", not "the ground is 1 cm below" or "655 m clear".
     check(r["tof_agl_m"] is None, "a stale ToF reading decodes as None, not -0.01 m")
     check(r["obstacle_cm"] is None, "an invalid LiDAR reading decodes as None")
 
-    _, recs = decode_all(3, [build_record(3, tof_cm=250, obstacle_cm=300)])
+    _, recs = decode_all(4, [build_record(4, tof_cm=250, obstacle_cm=300)])
     near(recs[0]["tof_agl_m"], 2.5, 0.01, "a valid ToF reading still decodes")
     check(recs[0]["obstacle_cm"] == 300, "a valid LiDAR reading still decodes")
 
 
 def test_notch_flags():
-    section("Notch flags are independent bits")
-    for flags, tracking, dynamic in ((0, False, False), (1, True, False),
-                                     (2, False, True), (3, True, True)):
-        _, recs = decode_all(3, [build_record(3, notch_flags=flags)])
-        check(recs[0]["notch_tracking"] is tracking and
-              recs[0]["notch_dynamic"] is dynamic,
-              f"flags 0b{flags:02b} -> tracking={tracking}, dynamic={dynamic}")
+    section("Notch flags are four independent bits")
+    for flags in range(16):
+        _, recs = decode_all(4, [build_record(4, notch_flags=flags)])
+        r = recs[0]
+        ok = (r["notch_tracking"] is bool(flags & 1) and
+              r["notch_dynamic"] is bool(flags & 2) and
+              r["harmonic_tracking"] is bool(flags & 4) and
+              r["harmonic_observable"] is bool(flags & 8))
+        check(ok, f"flags 0b{flags:04b} decode to four independent booleans")
+
+    # The distinction the whole harmonic feature turns on. "Observable but nothing
+    # found" means the propellers are clean; "not observable" means the IMU could
+    # never have shown it. Reading a log without telling those apart would credit the
+    # tracker with a success or blame it for a failure that was never its to have.
+    _, recs = decode_all(4, [build_record(4, notch_flags=8, harmonic_decihz=0)])
+    check(recs[0]["harmonic_observable"] and not recs[0]["harmonic_tracking"],
+          "observable-but-not-found is distinguishable from not-observable")
+    _, recs = decode_all(4, [build_record(4, notch_flags=0)])
+    check(not recs[0]["harmonic_observable"] and not recs[0]["harmonic_tracking"],
+          "not-observable is its own state")
 
 
 def test_v2_still_readable():
@@ -145,6 +164,15 @@ def test_v2_still_readable():
     check(bb.FIELDS_BY_VERSION[2] != bb.FIELDS_BY_VERSION[3],
           "the CSV column set differs by version")
 
+    # v3 predates the harmonic and must still decode, without inventing its fields.
+    header, recs = decode_all(3, [build_record(3, notch_decihz=1187)])
+    check(header["version"] == 3, "a v3 header is accepted")
+    near(recs[0]["notch_hz"], 118.7, 0.01, "v3 notch centre decodes correctly")
+    check("harmonic_hz" not in recs[0],
+          "v3 records do not invent harmonic fields that were never recorded")
+    check(len(bb.SUPPORTED_VERSIONS) == 3,
+          "three log formats are readable, so no recorded flight became unreadable")
+
 
 def test_bad_files_are_rejected():
     section("Corrupt and foreign files are rejected, not guessed at")
@@ -158,13 +186,13 @@ def test_bad_files_are_rejected():
 
     expect_exit(b"", "an empty file is rejected")
     expect_exit(b"\x00" * 8, "a file too short for a header is rejected")
-    bad_magic = struct.pack(bb.HEADER_FMT, 0xDEADBEEF, 3, 52, 100, 0, b"x".ljust(24, b"\0"))
+    bad_magic = struct.pack(bb.HEADER_FMT, 0xDEADBEEF, 4, 54, 100, 0, b"x".ljust(24, b"\0"))
     expect_exit(bad_magic, "a file with the wrong magic is rejected")
     bad_ver = struct.pack(bb.HEADER_FMT, bb.BLACKBOX_MAGIC, 99, 52, 100, 0,
                           b"x".ljust(24, b"\0"))
     expect_exit(bad_ver, "an unsupported format version is rejected")
     # The size field disagreeing with the format is how a silent mis-decode would start.
-    bad_size = struct.pack(bb.HEADER_FMT, bb.BLACKBOX_MAGIC, 3, 999, 100, 0,
+    bad_size = struct.pack(bb.HEADER_FMT, bb.BLACKBOX_MAGIC, 4, 999, 100, 0,
                            b"x".ljust(24, b"\0"))
     expect_exit(bad_size, "a record-size mismatch is rejected rather than mis-decoded")
 
@@ -172,13 +200,13 @@ def test_bad_files_are_rejected():
 def test_summary_runs():
     section("The summary survives real-shaped input")
     # A short flight: unlocked at first, then locked onto 118.7 Hz.
-    recs = [build_record(3, timestamp_ms=i * 10, notch_flags=2, notch_decihz=1200,
+    recs = [build_record(4, timestamp_ms=i * 10, notch_flags=2, notch_decihz=1200,
                          flight_state=4 if i > 20 else 3)
             for i in range(30)]
-    recs += [build_record(3, timestamp_ms=(30 + i) * 10, notch_flags=3,
+    recs += [build_record(4, timestamp_ms=(30 + i) * 10, notch_flags=3,
                           notch_decihz=1187 + (i % 5), notch_conf=40, flight_state=4)
              for i in range(170)]
-    header, decoded = decode_all(3, recs)
+    header, decoded = decode_all(4, recs)
 
     buf = io.StringIO()
     stdout, sys.stdout = sys.stdout, buf
@@ -195,7 +223,7 @@ def test_summary_runs():
           "it tells the reader what to do with the measurement")
 
     # And with tracking off, it must say so rather than reporting a fake measurement.
-    header, decoded = decode_all(3, [build_record(3, notch_flags=0) for _ in range(50)])
+    header, decoded = decode_all(4, [build_record(4, notch_flags=0) for _ in range(50)])
     buf = io.StringIO()
     stdout, sys.stdout = sys.stdout, buf
     try:

@@ -397,6 +397,41 @@
 #define DYN_NOTCH_SLEW_HZ_PER_S   40.0f    // rate limit on centre movement
 #define DYN_NOTCH_RETUNE_HZ       1.5f     // ignore movement smaller than this
 
+// -------------------------------------------------------------------------------------
+//  SECOND-HARMONIC NOTCH
+//
+//  A propeller puts energy at 2x the shaft fundamental as well as at the fundamental
+//  itself. Tracking and notching it is standard on modern flight controllers.
+//
+//  ON THIS HARDWARE IT USUALLY CANNOT BE SEEN. The MPU-6050's anti-alias filter sits at
+//  IMU_DLPF_HZ, and 2*f0 is ABOVE that corner in eight of the ten build combinations --
+//  including the 9-inch default, where 2*f0 is 240 Hz against a 184 Hz corner and also
+//  96% of the 250 Hz Nyquist limit. The IMU has already attenuated it before the flight
+//  controller receives a sample.
+//
+//  Notching a peak the DLPF has already removed is not free: it is the DLPF defect of
+//  section 8.3 with the roles reversed. The filter would contribute phase lag in the
+//  control band in exchange for attenuating spectrum that is already gone.
+//
+//  So observability is checked at RUNTIME, against the TRACKED fundamental rather than
+//  the compiled one -- the whole point of the dynamic notch is that the real f0 is
+//  measured, so whether 2*f0 clears the corner must be judged from the measurement too.
+//  Where it does not clear, the harmonic notch never engages and costs nothing.
+//
+//  Raising IMU_DLPF_HZ is NOT the fix. The DLPF is the anti-alias filter; lifting it
+//  toward Nyquist trades a visible harmonic for aliased content folding into the
+//  control band. The real fix is a faster loop, which the MPU-6050's 1 kHz output
+//  ceiling does not leave much room for. See section 8.3.3.
+// -------------------------------------------------------------------------------------
+#ifndef DYN_NOTCH_HARMONIC
+#define DYN_NOTCH_HARMONIC        1        // 0 disables the second notch entirely
+#endif
+
+#define DYN_NOTCH_H2_MULTIPLE     2.0f     // which harmonic: the second
+#define DYN_NOTCH_H2_SEARCH       0.12f    // search +/-12% around 2x the tracked f0
+#define DYN_NOTCH_H2_NYQUIST_FRAC 0.80f    // and no closer than 80% of Nyquist
+#define DYN_NOTCH_H2_MIN_CONF     8.0f     // same height gate as the fundamental
+
 // Complementary filter weighting for the attitude estimate
 #define ATT_COMP_ALPHA            0.992f
 
@@ -726,6 +761,13 @@ static_assert(DYN_NOTCH_UPDATE_HZ > 0 && DYN_NOTCH_UPDATE_HZ <= 100,
 static_assert(DYN_NOTCH_MIN_CONFIDENCE > 5.0f,
               "A confidence threshold this low is inside the noise floor of the search "
               "band -- see the note above");
+static_assert(DYN_NOTCH_H2_MULTIPLE >= 2.0f && DYN_NOTCH_H2_MULTIPLE <= 4.0f,
+              "The tracked harmonic must be a real overtone of the fundamental");
+static_assert(DYN_NOTCH_H2_SEARCH > 0.0f && DYN_NOTCH_H2_SEARCH < 0.5f,
+              "The harmonic search window is either empty or wide enough to catch the "
+              "fundamental itself");
+static_assert(DYN_NOTCH_H2_NYQUIST_FRAC > 0.0f && DYN_NOTCH_H2_NYQUIST_FRAC < 1.0f,
+              "The harmonic ceiling must sit below Nyquist");
 static_assert(DYN_NOTCH_PEAK_TOL_BINS >= 1 && DYN_NOTCH_PEAK_TOL_BINS <= 4,
               "Peak-repeat tolerance is either too strict to ever lock or too loose to "
               "reject a wandering noise peak");

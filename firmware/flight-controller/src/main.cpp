@@ -61,6 +61,15 @@ static Pid pidClimb(GainSets::verticalRate());
 
 static BiQuadNotch notchGx, notchGy, notchGz;
 
+#if DYN_NOTCH_HARMONIC
+// A second notch per axis for the propeller's overtone. These stay UNCONFIGURED --
+// which filters.h makes a pass-through rather than a silent zero -- unless the tracker
+// reports an observable harmonic. On most builds 2*f0 is above the IMU's anti-alias
+// corner, so on most builds these never engage and cost nothing but their memory.
+static BiQuadNotch notchH2x, notchH2y, notchH2z;
+static float       harmonicTuned = 0.0f;
+#endif
+
 #if DYN_NOTCH_ENABLE
 // ONE tracker, not three. The peak being hunted is the four motor shafts, and they are
 // the same four shafts whichever axis you look down -- running a tracker per axis would
@@ -71,6 +80,9 @@ static int      notchDivider   = 0;
 static volatile float trackedNotchHz = NOTCH_CENTER_HZ;   // recorded in the BlackBox log
 static volatile bool  notchIsTracking = false;
 static volatile float notchConfidence = 0.0f;
+static volatile float trackedHarmonicHz = 0.0f;
+static volatile bool  harmonicIsTracking = false;
+static volatile bool  harmonicIsVisible = false;
 #endif
 
 static double   homeLat = 0.0, homeLon = 0.0;
@@ -188,6 +200,31 @@ static void TaskFlightLoop(void* /*arg*/) {
           notchGz.retune(centre, (float)FLIGHT_LOOP_HZ, NOTCH_Q);
           trackedNotchHz = centre;
         }
+
+#if DYN_NOTCH_HARMONIC
+        // The harmonic is retuned on its own schedule: it can appear and disappear
+        // while the fundamental stays put, because it depends on whether 2*f0 clears
+        // the DLPF corner as much as on whether the energy is there.
+        const float h2 = notchTracker.harmonicHz();
+        if (h2 > 0.0f) {
+          if (fabsf(h2 - harmonicTuned) >= DYN_NOTCH_RETUNE_HZ) {
+            notchH2x.retune(h2, (float)FLIGHT_LOOP_HZ, NOTCH_Q);
+            notchH2y.retune(h2, (float)FLIGHT_LOOP_HZ, NOTCH_Q);
+            notchH2z.retune(h2, (float)FLIGHT_LOOP_HZ, NOTCH_Q);
+            harmonicTuned = h2;
+          }
+        } else if (harmonicTuned != 0.0f) {
+          // Nothing there any more. Return the filters to pass-through rather than
+          // leaving a notch sitting on empty spectrum, which is phase lag for nothing.
+          notchH2x.bypass();
+          notchH2y.bypass();
+          notchH2z.bypass();
+          harmonicTuned = 0.0f;
+        }
+        trackedHarmonicHz = notchTracker.harmonicHz();
+        harmonicIsTracking = notchTracker.state().harmonicTracking;
+        harmonicIsVisible  = notchTracker.state().harmonicObservable;
+#endif
         notchIsTracking = notchTracker.state().tracking;
         notchConfidence = notchTracker.state().confidence;
       }
@@ -196,9 +233,17 @@ static void TaskFlightLoop(void* /*arg*/) {
     }
 #endif
 
-    const float gx = notchGx.apply(gxRaw);
-    const float gy = notchGy.apply(gyRaw);
-    const float gz = notchGz.apply(gzRaw);
+    float gx = notchGx.apply(gxRaw);
+    float gy = notchGy.apply(gyRaw);
+    float gz = notchGz.apply(gzRaw);
+
+#if DYN_NOTCH_HARMONIC
+    // In series after the fundamental. A pass-through when no harmonic is engaged, so
+    // the builds that cannot see one pay nothing but three function calls.
+    gx = notchH2x.apply(gx);
+    gy = notchH2y.apply(gy);
+    gz = notchH2z.apply(gz);
+#endif
 
     // ---- Attitude estimate ---------------------------------------------------------
     const float accelRoll  = atan2f(accel.y, accel.z) * 180.0f / (float)M_PI;
@@ -524,13 +569,21 @@ static void TaskFlightLoop(void* /*arg*/) {
       rec.notchCentreDeciHz = (uint16_t)constrain(trackedNotchHz * 10.0f, 0.0f, 65535.0f);
       rec.notchConfidence   = (uint8_t)constrain(notchConfidence, 0.0f, 255.0f);
       rec.notchFlags        = ODY_NOTCH_FLAG_DYNAMIC
-                            | (notchIsTracking ? ODY_NOTCH_FLAG_TRACKING : 0u);
+                            | (notchIsTracking ? ODY_NOTCH_FLAG_TRACKING : 0u)
+#if DYN_NOTCH_HARMONIC
+                            | (harmonicIsTracking ? ODY_NOTCH_FLAG_H2_TRACKING : 0u)
+                            | (harmonicIsVisible  ? ODY_NOTCH_FLAG_H2_VISIBLE  : 0u)
+#endif
+                            ;
+      rec.notchHarmonicDeciHz =
+          (uint16_t)constrain(trackedHarmonicHz * 10.0f, 0.0f, 65535.0f);
 #else
       // Still log the static centre, so a fixed-notch log and a tracked one can be
       // compared field-for-field rather than by eye.
       rec.notchCentreDeciHz = (uint16_t)(NOTCH_CENTER_HZ * 10.0f);
       rec.notchConfidence   = 0;
       rec.notchFlags        = 0;
+      rec.notchHarmonicDeciHz = 0;
 #endif
       blackbox.push(rec);
     }
@@ -1110,6 +1163,23 @@ void setup() {
                 min((float)IMU_DLPF_HZ, NOTCH_CENTER_HZ * DYN_NOTCH_BAND_HIGH),
                 DYN_NOTCH_BINS,
                 (float)FLIGHT_LOOP_HZ / (float)DYN_NOTCH_BINS);
+#if DYN_NOTCH_HARMONIC
+  {
+    // Say plainly whether the harmonic notch can do anything on this build. Most of
+    // the time it cannot, and that is a property of the IMU rather than a fault.
+    const float h2 = NOTCH_CENTER_HZ * DYN_NOTCH_H2_MULTIPLE;
+    const float ceiling = min((float)IMU_DLPF_HZ,
+                              (float)FLIGHT_LOOP_HZ * 0.5f * DYN_NOTCH_H2_NYQUIST_FRAC);
+    if (h2 <= ceiling) {
+      Serial.printf("             harmonic: tracking near %.0f Hz (ceiling %.0f Hz)\n",
+                    h2, ceiling);
+    } else {
+      Serial.printf("             harmonic: %.0f Hz is above the %.0f Hz ceiling "
+                    "(DLPF %d Hz) -- not observable, notch idle\n",
+                    h2, ceiling, IMU_DLPF_HZ);
+    }
+  }
+#endif
 #else
   Serial.println("             dynamic tracking DISABLED -- the fixed value above is "
                  "modelled, so measure it");
@@ -1176,6 +1246,13 @@ void setup() {
     // The tracker starts on the configured value and is bounded around it, so the worst
     // case if tracking never locks is exactly the static behaviour configured above.
     notchTracker.begin((float)FLIGHT_LOOP_HZ, NOTCH_CENTER_HZ);
+#endif
+#if DYN_NOTCH_HARMONIC
+    // Deliberately left unconfigured, which filters.h treats as a pass-through. The
+    // harmonic notch must not exist until the tracker has actually found a harmonic.
+    notchH2x.bypass();
+    notchH2y.bypass();
+    notchH2z.bypass();
 #endif
 
     navigator.begin();
