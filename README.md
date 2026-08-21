@@ -1,8 +1,8 @@
 # Odyssey-10 Pro
 
 [![host-tests](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml/badge.svg?branch=main)](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml)
-[![assertions](https://img.shields.io/badge/host_assertions-195-blue)](tools/host_tests/)
-[![consistency](https://img.shields.io/badge/consistency_checks-15-blue)](tools/check_consistency.py)
+[![assertions](https://img.shields.io/badge/host_assertions-203-blue)](tools/host_tests/)
+[![consistency](https://img.shields.io/badge/consistency_checks-16-blue)](tools/check_consistency.py)
 [![decoder](https://img.shields.io/badge/RID_decoder_tests-80-blue)](android/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-ESP32--P4%20%7C%20C3%20%7C%20C6-lightgrey)](firmware/)
@@ -10,7 +10,7 @@
 Autonomous long-range 9-inch quadcopter. ESP32-P4 dual-core RISC-V avionics, integrated
 perception, kinetic recovery and safety stack.
 
-**Status:** revision 2.9 — the gyro notch measures itself. All
+**Status:** revision 3.0 — the notch measurement is recorded in the flight log. All
 eighteen defects found in the revision 1.0 review are fixed. See
 [`docs/review-findings-resolution.md`](docs/review-findings-resolution.md) for the
 finding-by-finding index, or section 13 of the specification.
@@ -38,6 +38,7 @@ finding-by-finding index, or section 13 of the specification.
 | `hardware/bom.csv` | Bill of materials — the authoritative source for costs and masses |
 | `tools/blackbox_decode.py` | Decodes flight logs to CSV, prints a flight summary |
 | `tools/md2docx.py` | Regenerates the Word document from the Markdown |
+| `tools/test_blackbox_decode.py` | Verifies the BlackBox decoder scales and flags every field correctly |
 | `tools/host_tests/` | Compiles the real firmware headers on a PC and verifies the safety-critical algorithms |
 | `tools/check_consistency.py` | Checks the specification, firmware and BOM still agree; `--fix` repairs the mechanical ones |
 | `android/` | Remote ID test receiver for Android — verifies the aircraft broadcasts what you configured, at the required rate |

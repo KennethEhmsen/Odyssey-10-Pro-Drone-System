@@ -20,7 +20,7 @@
 set -e
 
 root=$(git rev-parse --show-toplevel)
-WATCHED="firmware shared tools/host_tests android"
+WATCHED="firmware shared tools/host_tests tools/blackbox_decode.py tools/test_blackbox_decode.py android"
 ZERO=0000000000000000000000000000000000000000
 
 should_run=no
@@ -91,6 +91,16 @@ if command -v javac >/dev/null 2>&1; then
 else
     echo "pre-push: no javac, skipping the Remote ID decoder tests"
 fi
+
+# The BlackBox decoder is how flight logs are read. A decoder that mis-scales a field
+# turns a recorded flight into confident nonsense, so it is checked on every push.
+if ! python "$root/tools/test_blackbox_decode.py" > /dev/null 2>&1; then
+    python "$root/tools/test_blackbox_decode.py" || true
+    echo
+    echo "pre-push: BlackBox decoder tests FAILED -- push aborted."
+    exit 1
+fi
+echo "pre-push: BlackBox decoder OK"
 
 echo "pre-push: running host verification..."
 log=$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/ody-tests.$$")

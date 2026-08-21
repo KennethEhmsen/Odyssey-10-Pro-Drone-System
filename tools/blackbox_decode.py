@@ -22,15 +22,19 @@ from pathlib import Path
 
 # Must match types.h
 BLACKBOX_MAGIC = 0x4F445931          # "ODY1"
-SUPPORTED_VERSIONS = (2,)
-
 HEADER_FMT = "<IHHII24s"
 HEADER_SIZE = struct.calcsize(HEADER_FMT)
 
-RECORD_FMT = "<I3h3h3h4H H h H h h h H H B B"
-RECORD_SIZE = struct.calcsize(RECORD_FMT)
+# v2 is still decodable. Logs are flight records -- a decoder that can only read the
+# newest format silently makes older flights unreadable, which is the opposite of what
+# a flight recorder is for.
+_V2_FMT = "<I3h3h3h4H H h H h h h H H B B"
+_V3_FMT = _V2_FMT + " H B B"          # notch centre, confidence, flags
 
-FIELDS = [
+RECORD_FMTS = {2: _V2_FMT, 3: _V3_FMT}
+SUPPORTED_VERSIONS = tuple(sorted(RECORD_FMTS))
+
+_BASE_FIELDS = [
     "timestamp_ms",
     "gyro_x_dps", "gyro_y_dps", "gyro_z_dps",
     "accel_x_mps2", "accel_y_mps2", "accel_z_mps2",
@@ -40,6 +44,12 @@ FIELDS = [
     "baro_agl_m", "tof_agl_m", "vario_mps",
     "obstacle_cm", "sensor_health", "flight_state", "mixer_sat_pct",
 ]
+_V3_FIELDS = ["notch_hz", "notch_confidence", "notch_tracking", "notch_dynamic"]
+
+FIELDS_BY_VERSION = {2: _BASE_FIELDS, 3: _BASE_FIELDS + _V3_FIELDS}
+
+NOTCH_FLAG_TRACKING = 1 << 0
+NOTCH_FLAG_DYNAMIC  = 1 << 1
 
 STATE_NAMES = {
     0: "BOOT", 1: "CALIBRATING", 2: "PREFLIGHT_FAIL", 3: "PREFLIGHT_OK",
@@ -68,9 +78,10 @@ def read_header(fh):
     if version not in SUPPORTED_VERSIONS:
         raise SystemExit(f"log format v{version} is not supported by this decoder "
                          f"(supported: {SUPPORTED_VERSIONS})")
-    if rec_bytes != RECORD_SIZE:
+    expect = struct.calcsize(RECORD_FMTS[version])
+    if rec_bytes != expect:
         raise SystemExit(f"record size mismatch: file says {rec_bytes} bytes, "
-                         f"decoder expects {RECORD_SIZE}")
+                         f"decoder expects {expect} for v{version}")
     return {
         "version": version,
         "record_bytes": rec_bytes,
@@ -80,9 +91,9 @@ def read_header(fh):
     }
 
 
-def decode_record(raw):
-    v = struct.unpack(RECORD_FMT, raw)
-    return {
+def decode_record(raw, version=3):
+    v = struct.unpack(RECORD_FMTS[version], raw)
+    out = {
         "timestamp_ms": v[0],
         "gyro_x_dps": v[1] / 10.0, "gyro_y_dps": v[2] / 10.0, "gyro_z_dps": v[3] / 10.0,
         "accel_x_mps2": v[4] / 100.0, "accel_y_mps2": v[5] / 100.0,
@@ -101,6 +112,12 @@ def decode_record(raw):
         "flight_state": v[22],
         "mixer_sat_pct": v[23],
     }
+    if version >= 3:
+        out["notch_hz"] = v[24] / 10.0
+        out["notch_confidence"] = v[25]
+        out["notch_tracking"] = bool(v[26] & NOTCH_FLAG_TRACKING)
+        out["notch_dynamic"] = bool(v[26] & NOTCH_FLAG_DYNAMIC)
+    return out
 
 
 def summarise(header, records):
@@ -167,6 +184,45 @@ def summarise(header, records):
     else:
         print("\nMixer saturation: none -- full control authority throughout")
 
+    # ---- Gyro notch --------------------------------------------------------------
+    #
+    # This is the section that settles the longest-running open question in the
+    # specification: where the motor peak actually is. It cannot be answered by
+    # spectral analysis of this file -- the logged gyro is post-notch and the log
+    # rate is 100 Hz, so a 120 Hz peak aliases to 20 Hz. The aircraft analyses the
+    # spectrum on board at the full loop rate and logs its conclusion; that
+    # conclusion is what follows.
+    if any("notch_hz" in r for r in records):
+        print("\nGyro notch:")
+        if not records[0].get("notch_dynamic"):
+            print("  dynamic tracking was DISABLED for this flight "
+                  f"(fixed at {records[0]['notch_hz']:.1f} Hz)")
+        else:
+            locked = [r for r in records if r["notch_tracking"]]
+            pct = 100.0 * len(locked) / len(records)
+            print(f"  tracking locked   : {pct:.1f}% of the flight")
+            if locked:
+                hz = [r["notch_hz"] for r in locked]
+                conf = [r["notch_confidence"] for r in locked]
+                lo, hi = min(hz), max(hz)
+                mean = sum(hz) / len(hz)
+                print(f"  tracked centre    : {lo:.1f} - {hi:.1f} Hz, mean {mean:.1f} Hz")
+                print(f"  confidence        : min {min(conf)}, "
+                      f"mean {sum(conf)/len(conf):.0f}")
+                print(f"\n  --> Set NOTCH_CENTER_HZ to {mean:.0f} in config.h. This is a "
+                      f"measurement,\n      not a model, and it is what section 8.3 asks "
+                      f"for.")
+                if hi - lo > 20.0:
+                    print(f"\n  NOTE: the peak moved {hi - lo:.0f} Hz during the flight. "
+                          f"A single fixed\n        value cannot cover that -- keep "
+                          f"dynamic tracking enabled.")
+            if pct < 50.0:
+                print("\n  WARNING: the tracker was unlocked for most of the flight, so "
+                      "the notch\n           sat at the compiled default. Either the "
+                      "motor peak is outside\n           the 0.6-1.6x search band, or "
+                      "the airframe is quieter than the\n           confidence "
+                      "threshold expects.")
+
     # Sensor dropouts
     print("\nSensor availability:")
     for bit, name in SENSOR_BITS:
@@ -188,18 +244,20 @@ def main():
 
     with args.logfile.open("rb") as fh:
         header = read_header(fh)
+        version = header["version"]
+        rec_size = struct.calcsize(RECORD_FMTS[version])
         records = []
         truncated = 0
         while True:
-            raw = fh.read(RECORD_SIZE)
+            raw = fh.read(rec_size)
             if not raw:
                 break
-            if len(raw) < RECORD_SIZE:
+            if len(raw) < rec_size:
                 # A log that ends mid-record means the aircraft lost power without a
                 # clean close. Report it rather than silently discarding the tail.
                 truncated = len(raw)
                 break
-            records.append(decode_record(raw))
+            records.append(decode_record(raw, version))
 
     summarise(header, records)
     if truncated:
@@ -211,7 +269,7 @@ def main():
         out = args.logfile.with_suffix(".csv")
     if out:
         with out.open("w", newline="", encoding="utf-8") as fh:
-            w = csv.DictWriter(fh, fieldnames=FIELDS)
+            w = csv.DictWriter(fh, fieldnames=FIELDS_BY_VERSION[version])
             w.writeheader()
             w.writerows(records)
         print(f"\nwrote {len(records)} rows to {out}")

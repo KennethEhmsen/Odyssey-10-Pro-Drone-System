@@ -465,45 +465,194 @@ def check_spec_constants(rep, fix):
 # =====================================================================================
 #  CHECK: BlackBox record layout agrees between firmware and decoder
 # =====================================================================================
+def _record_body():
+    """
+    The declaration body of BlackBoxRecord, and whether it is declared packed.
+
+    Located by NAME rather than by matching the whole declaration line. Matching the
+    full text meant that dropping the packed attribute made the struct simply not be
+    found, and the check died with an IndexError instead of reporting the one thing
+    that had actually gone wrong.
+    """
+    types = read(TYPES_H)
+    m = re.search(r"struct\s+([^{]*?)BlackBoxRecord\s*\{", types)
+    if not m:
+        return None, False
+    return types[m.end():].split("};")[0], ("packed" in m.group(1))
+
+
+def _record_field_names():
+    """Field names of BlackBoxRecord, in declaration order."""
+    body, _ = _record_body()
+    if body is None:
+        return []
+    names = []
+    for line in body.splitlines():
+        line = line.split("//")[0].strip().rstrip(";")
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(None, 1)
+        if len(parts) != 2:
+            continue
+        for n in parts[1].split(","):
+            n = n.strip()
+            if n:
+                names.append(n)
+    return names
+
+
+def _expand_fmt(fmt):
+    """'<I3h H' -> ['I','h','h','h','H'], so per-field offsets can be computed."""
+    codes, count = [], ""
+    for ch in fmt:
+        if ch in "<>=!@ ":
+            continue
+        if ch.isdigit():
+            count += ch
+            continue
+        codes.extend([ch] * (int(count) if count else 1))
+        count = ""
+    return codes
+
+
 def check_blackbox_layout(rep, fix):
+    """
+    Verifies the C struct and the Python decoder agree, FIELD BY FIELD.
+
+    The previous version summed a hand-written table of type sizes. That catches a
+    changed field but not a changed LAYOUT -- drop the packed attribute and the sum is
+    unchanged while every offset past the first misaligned member moves. A log decoded
+    against wrong offsets does not fail loudly; it produces plausible numbers that are
+    silently wrong, which is the worst possible outcome for a flight recorder. So the
+    real compiler is asked for the real offsets.
+    """
     rep.checks_run += 1
+    import shutil, subprocess, tempfile, os
+
     types = read(TYPES_H)
     dec = read(DECODER)
 
-    body = types.split("struct __attribute__((packed)) BlackBoxRecord {")[1].split("};")[0]
-    sizes = {"uint32_t": 4, "int32_t": 4, "uint16_t": 2, "int16_t": 2,
-             "uint8_t": 1, "int8_t": 1, "float": 4}
-    total = 0
-    for line in body.splitlines():
-        line = line.split("//")[0].strip().rstrip(";")
-        if not line:
+    # ---- the decoder's declared formats --------------------------------------------
+    fmts = {}
+    for m in re.finditer(r"_V(\d+)_FMT\s*=\s*(.+)", dec):
+        ver, expr = int(m.group(1)), m.group(2).strip()
+        lits = re.findall(r'"([^"]*)"', expr)
+        if not lits:
             continue
-        ty, names = line.split(None, 1)
-        if ty not in sizes:
-            rep.problem("blackbox", f"unhandled type '{ty}' in BlackBoxRecord")
-            return
-        total += sizes[ty] * len([x for x in names.split(",") if x.strip()])
-
-    m = re.search(r'RECORD_FMT\s*=\s*"([^"]+)"', dec)
-    if not m:
-        rep.problem("blackbox", "could not find RECORD_FMT in blackbox_decode.py")
+        base = re.search(r"_V(\d+)_FMT\s*\+", expr)
+        prefix = fmts.get(int(base.group(1)), "") if base else ""
+        fmts[ver] = prefix + "".join(lits)
+    if not fmts:
+        rep.problem("blackbox", "could not find any _V<n>_FMT in blackbox_decode.py")
         return
-    py = struct.calcsize(m.group(1))
 
-    if py != total:
+    # ---- the version gate must accept what the firmware writes ---------------------
+    fw = re.search(r"#define\s+BLACKBOX_VERSION\s+(\d+)", types)
+    if not fw:
+        rep.problem("blackbox", "could not find BLACKBOX_VERSION in types.h")
+        return
+    fw_ver = int(fw.group(1))
+    if fw_ver not in fmts:
         rep.problem("blackbox",
-                    f"BlackBoxRecord is {total} bytes in types.h but the decoder's "
-                    f"RECORD_FMT is {py} bytes -- logs would decode as garbage")
+                    f"firmware writes format v{fw_ver} but the decoder defines formats "
+                    f"for {sorted(fmts)} -- logs from this build would not decode")
+        return
 
-    # The decoder's version gate must accept what the firmware writes.
-    fw_ver = re.search(r"#define\s+BLACKBOX_VERSION\s+(\d+)", types)
-    dec_ver = re.search(r"SUPPORTED_VERSIONS\s*=\s*\(([^)]*)\)", dec)
-    if fw_ver and dec_ver:
-        supported = [int(x) for x in re.findall(r"\d+", dec_ver.group(1))]
-        if int(fw_ver.group(1)) not in supported:
+    # Older formats must stay readable. A flight recorder whose decoder only reads the
+    # newest format makes every previous flight unreadable on the next field change.
+    if fw_ver > 2 and len(fmts) < 2:
+        rep.problem("blackbox",
+                    f"the decoder handles only v{fw_ver}; earlier logs became unreadable "
+                    f"when the format was bumped", severity="warn")
+
+    body, packed = _record_body()
+    if body is None:
+        rep.problem("blackbox", "could not find struct BlackBoxRecord in types.h")
+        return
+    if not packed:
+        # The offset comparison below would catch this too, but naming the cause is
+        # more use than a byte count.
+        rep.problem("blackbox",
+                    "BlackBoxRecord is no longer declared __attribute__((packed)) -- the "
+                    "compiler may insert padding the decoder knows nothing about")
+        return
+
+    names = _record_field_names()
+    codes = _expand_fmt(fmts[fw_ver])
+    if len(names) != len(codes):
+        which = "decoder format" if len(codes) < len(names) else "struct"
+        rep.problem("blackbox",
+                    f"BlackBoxRecord has {len(names)} fields but the v{fw_ver} decoder "
+                    f"format has {len(codes)} -- the {which} is missing "
+                    f"{abs(len(names) - len(codes))}")
+        return
+
+    # ---- ask the compiler where the fields actually are ----------------------------
+    cc = shutil.which("g++") or shutil.which("clang++")
+    if not cc:
+        rep.problem("blackbox", "no C++ compiler available to verify the record layout",
+                    severity="warn")
+        return
+
+    probe = ["#include <cstddef>", "#include <cstdio>", '#include "types.h"',
+             "int main(){", '  printf("SIZE %zu\\n", sizeof(BlackBoxRecord));']
+    for n in names:
+        probe.append(f'  printf("OFF {n} %zu\\n", offsetof(BlackBoxRecord, {n}));')
+    probe += ["  return 0;", "}"]
+
+    with tempfile.TemporaryDirectory() as td:
+        src = os.path.join(td, "probe.cpp")
+        exe = os.path.join(td, "probe.exe")
+        with open(src, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(probe) + "\n")
+        cmd = [cc, "-std=c++17"]
+        for inc in (os.path.join(ROOT, "firmware", "flight-controller", "include"),
+                    os.path.join(ROOT, "tools", "host_tests"),
+                    os.path.join(ROOT, "shared")):
+            cmd += ["-I", str(inc)]
+        cmd += [src, "-o", exe]
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if r.returncode != 0:
+            detail = " / ".join(l.strip() for l in r.stderr.strip().splitlines()
+                                if "error" in l.lower())[:200]
             rep.problem("blackbox",
-                        f"firmware writes format v{fw_ver.group(1)} but the decoder "
-                        f"only accepts {supported}")
+                        f"the record-layout probe did not compile: "
+                        f"{detail or 'unknown error'}", severity="warn")
+            return
+        r = subprocess.run([exe], capture_output=True, text=True)
+        if r.returncode != 0:
+            rep.problem("blackbox", "the record-layout probe did not run", severity="warn")
+            return
+
+    c_size, c_off = None, {}
+    for line in r.stdout.splitlines():
+        p = line.split()
+        if len(p) == 2 and p[0] == "SIZE":
+            c_size = int(p[1])
+        elif len(p) == 3 and p[0] == "OFF":
+            c_off[p[1]] = int(p[2])
+
+    py_size = struct.calcsize(fmts[fw_ver])
+    if c_size != py_size:
+        rep.problem("blackbox",
+                    f"BlackBoxRecord is {c_size} bytes to the compiler but the v{fw_ver} "
+                    f"decoder format is {py_size} -- logs would decode as garbage")
+        return
+
+    off = 0
+    for name, code in zip(names, codes):
+        if c_off.get(name) != off:
+            rep.problem("blackbox",
+                        f"field '{name}' is at byte {c_off.get(name)} in the C struct but "
+                        f"byte {off} in the decoder format -- that field and every one "
+                        f"after it would decode as the wrong value")
+            return
+        off += struct.calcsize("<" + code)
+
+    rep.note = getattr(rep, "note", [])
+    rep.note.append(f"blackbox: v{fw_ver} record verified field-by-field against the "
+                    f"compiler ({len(names)} fields, {c_size} bytes)")
+
 
 
 # =====================================================================================
@@ -1170,6 +1319,83 @@ def check_prop_configs(rep, fix):
                     f"combinations coherent, distinct and correctly ordered")
 
 
+def check_notch_observability(rep, fix):
+    """
+    Guards the finding in section 8.3: the motor peak is NOT observable in the BlackBox
+    gyro trace, so the documentation must not tell anyone to look for it there.
+
+    This exists because the instruction survived every revision from 1.0 to 2.9. It
+    reads like standard practice -- it IS standard practice on a controller that logs
+    raw gyro at 2-8 kHz -- and nothing compared the log rate against the notch frequency.
+    A prose check is the only thing that catches a plausible-sounding sentence.
+    """
+    rep.checks_run += 1
+    spec = read(SPEC)
+
+    d = resolved_defines()
+    if not d:
+        rep.problem("notch-observability",
+                    "no C preprocessor available to resolve the log rate", severity="warn")
+        return
+
+    log_hz = d.get("BLACKBOX_LOG_HZ", 0)
+    nyquist = log_hz / 2.0
+    notch = d.get("PROP_NOTCH_DEFAULT_HZ", 0)
+    if not log_hz or not notch:
+        rep.problem("notch-observability", "could not resolve the log rate or the notch")
+        return
+
+    observable = notch < nyquist
+
+    # The prose must not promise a measurement the sample rate cannot deliver.
+    bad_phrases = [
+        r"[Tt]ake a BlackBox gyro trace[^.]*find the actual peak",
+        r"find the (?:actual )?peak[^.]*(?:in|from) the (?:BlackBox|gyro) (?:log|trace)",
+        r"FFT[^.]*(?:BlackBox|flight) log[^.]*peak",
+    ]
+    for pat in bad_phrases:
+        m = re.search(pat, spec)
+        if m and not observable:
+            rep.problem("notch-observability",
+                        f"the specification says \"{m.group(0)[:70]}...\" but the "
+                        f"{log_hz:.0f} Hz log cannot show a {notch:.0f} Hz peak "
+                        f"(Nyquist {nyquist:.0f} Hz) -- it aliases to "
+                        f"{abs(((notch + nyquist) % log_hz) - nyquist):.0f} Hz. "
+                        f"This is the defect recorded in section 8.3.")
+
+    # If it is not observable, the tracker's verdict is the only route to the number,
+    # so the record must actually carry it.
+    if not observable:
+        types = read(TYPES_H)
+        for field in ("notchCentreDeciHz", "notchFlags"):
+            if field not in types:
+                rep.problem("notch-observability",
+                            f"the motor peak is not observable in the log, so the "
+                            f"tracker's verdict is the only way to recover it -- but "
+                            f"BlackBoxRecord has no '{field}'")
+
+        if "aliases" not in spec and "alias" not in spec:
+            rep.problem("notch-observability",
+                        "the specification does not explain that the motor peak aliases "
+                        "in the flight log. Without that, the impossible measurement "
+                        "procedure reads as reasonable and comes back.", severity="warn")
+
+    # The logged gyro is post-notch. If that ever changes the finding's premise changes
+    # with it, so say so rather than letting the documentation drift out from under it.
+    main = read(ROOT / "firmware" / "flight-controller" / "src" / "main.cpp")
+    m = re.search(r"rec\.gyroX\s*=\s*\(int16_t\)\(\s*(\w+)", main)
+    if m and m.group(1).endswith("Raw"):
+        rep.problem("notch-observability",
+                    "the BlackBox now logs the RAW gyro. That changes the premise of the "
+                    "finding in section 8.3 -- the trace is no longer post-notch, though "
+                    f"the {log_hz:.0f} Hz sample rate still cannot show the peak. Update "
+                    f"the finding.", severity="warn")
+
+    rep.note = getattr(rep, "note", [])
+    rep.note.append(f"notch-observability: {notch:.0f} Hz peak vs a {log_hz:.0f} Hz log "
+                    f"(Nyquist {nyquist:.0f} Hz) -- not observable, verdict logged instead")
+
+
 # =====================================================================================
 #  Registry
 # =====================================================================================
@@ -1195,6 +1421,9 @@ CHECKS = [
     ("readme", "README badge counts and revision match reality", check_readme),
     ("prose-constants", "numbers stated in prose match the constants they quote",
      check_prose_constants),
+    ("notch-observability",
+     "the documentation does not promise a measurement the log rate cannot deliver",
+     check_notch_observability),
     ("build-configs",
      "every frame x motor x propeller build is coherent, distinct and correctly ordered",
      check_prop_configs),

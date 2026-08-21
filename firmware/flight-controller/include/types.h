@@ -149,7 +149,7 @@ struct PilotInput {
 //  exactly when you most want to see them.
 // -------------------------------------------------------------------------------------
 #define BLACKBOX_MAGIC    0x4F445931u   // "ODY1"
-#define BLACKBOX_VERSION   2
+#define BLACKBOX_VERSION   3
 
 struct __attribute__((packed)) BlackBoxHeader {
   uint32_t magic;
@@ -177,6 +177,28 @@ struct __attribute__((packed)) BlackBoxRecord {
   uint16_t sensorHealth;
   uint8_t  flightState;
   uint8_t  mixerSaturationPct;         // how much authority the mixer had to give up
+
+  // ---- v3: what the dynamic notch decided --------------------------------------------
+  //
+  // The tracker's VERDICT is logged, not the spectrum it derived it from. That is a
+  // deliberate distinction, and it is the only way this can work at all.
+  //
+  // The log runs at BLACKBOX_LOG_HZ (100 Hz), so its Nyquist limit is 50 Hz. Every notch
+  // frequency in the build matrix -- 88 to 180 Hz -- is above that. A 120 Hz motor peak
+  // recorded at 100 Hz does not appear at 120 Hz; it aliases down to 20 Hz. No amount of
+  // post-processing recovers it, because the information is gone before it reaches the
+  // card. Raising the log rate is not an option either: 400 Hz of gyro would need the SD
+  // bandwidth and would still only just clear the 7-inch's 180 Hz peak.
+  //
+  // So the spectrum is analysed ON BOARD, at the full flight-loop rate where the peak is
+  // genuinely visible, and only the resulting scalar is logged. A slowly-moving centre
+  // frequency samples perfectly well at 100 Hz.
+  uint16_t notchCentreDeciHz;          // tracked notch centre, 0.1 Hz
+  uint8_t  notchConfidence;            // peak/mean ratio, saturating at 255
+  uint8_t  notchFlags;                 // see ODY_NOTCH_FLAG_*
 };
+
+#define ODY_NOTCH_FLAG_TRACKING  (1u << 0)   // the tracker had a confident lock
+#define ODY_NOTCH_FLAG_DYNAMIC   (1u << 1)   // DYN_NOTCH_ENABLE was compiled in
 
 #endif // ODY_TYPES_H

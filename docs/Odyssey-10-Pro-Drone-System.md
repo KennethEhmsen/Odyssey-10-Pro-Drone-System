@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 2.9 — the gyro notch measures itself
+**Document revision:** 3.0 — the notch measurement is recorded, and the procedure that could never have produced it is withdrawn
 
 ---
 
@@ -1212,8 +1212,40 @@ leaves the filter attenuating empty spectrum.
 > This is precisely the coupled-constant failure the switches exist to prevent, which is
 > a fair argument that they should have existed sooner.
 
-**Measure it.** Take a BlackBox gyro trace at a stable hover, find the actual peak, and
-set `NOTCH_CENTER_HZ` from the data. None of the models above account for the frame
+> **FINDING 34. The measurement procedure this section gave could never have worked.**
+> Revisions 1.0 through 2.9 all said: take a BlackBox gyro trace at a stable hover, find
+> the peak, set `NOTCH_CENTER_HZ` from it. That instruction is impossible to carry out,
+> for two independent reasons, and both have been there since the log format was defined.
+>
+> **The logged gyro is post-notch.** `BlackBoxRecord.gyroX` is filled from the filtered
+> signal, downstream of the very notch the procedure is trying to tune. The peak has
+> already been attenuated by the time it reaches the card, so the trace shows the filter
+> working, not where the motors are.
+>
+> **The log rate is below the peak.** BlackBox records at `BLACKBOX_LOG_HZ` = 100 Hz, so
+> its Nyquist limit is 50 Hz. Every notch frequency in the build matrix — 88 to 180 Hz —
+> is *above* that. The peak does not appear at its own frequency; it aliases:
+>
+> | Real peak | Appears in a 100 Hz log at |
+> | --- | --- |
+> | 88 Hz | 12 Hz |
+> | 105 Hz | 5 Hz |
+> | **120 Hz (default)** | **20 Hz** |
+> | 150 Hz | 50 Hz |
+> | 180 Hz | 20 Hz |
+>
+> No post-processing recovers this. The information is destroyed at the sampling step,
+> before anything is written. Raising the log rate is not a fix either: covering the
+> 7-inch's 180 Hz peak honestly would need better than 400 Hz of three-axis gyro on the
+> SD card, and the notch would still be tuned from a trace rather than in flight.
+>
+> The instruction survived because it *sounds* like standard practice — it is what you do
+> on a flight controller that logs raw gyro at 2–8 kHz. This one does not, and nothing
+> compared the two numbers.
+
+**Measure it — here is how it actually works.** The aircraft analyses the spectrum on
+board, at the full flight-loop rate where the peak is genuinely visible, and records its
+conclusion. See §8.3.1 for the tracker and §8.3.2 for the procedure. None of the models above account for the frame
 itself: the 6 mm arms on this airframe are less stiff than the 7–8 mm arms originally
 specified, which moves the structural resonance independently of the propellers.
 Blade-pass energy sits near twice the fundamental, around 250 Hz, which the notch does
@@ -1294,6 +1326,55 @@ getting that number wrong, it does not make it unnecessary.
 Bidirectional DShot (§4.3) remains the better long-term answer, because RPM telemetry
 gives the shaft frequency directly instead of inferring it from the noise it produces.
 This is the version that could be built and tested without hardware.
+
+#### 8.3.2 Reading the measurement off a flight
+
+The tracker's verdict is written to the BlackBox log, so the number it found is
+recoverable on the ground. **The verdict is logged, not the spectrum** — that distinction
+is what makes it work at all, given the aliasing above. A slowly-moving centre frequency
+samples perfectly well at 100 Hz; the waveform it was derived from does not.
+
+Three fields were added in log format **v3**:
+
+| Field | Meaning |
+| --- | --- |
+| `notch_hz` | the tracked centre, 0.1 Hz resolution |
+| `notch_confidence` | peak-to-mean ratio at the moment of the lock |
+| `notch_tracking` / `notch_dynamic` | whether it had a confident lock, and whether tracking was compiled in |
+
+The procedure:
+
+1. Hover steadily for 30 seconds or more, in as little wind as you can find. The tracker
+   needs the motors doing steady work, not a hover fighting gusts.
+2. Pull `flight_NNNN.ody` off the card and run
+   `python tools/blackbox_decode.py flight_NNNN.ody`.
+3. Read the **Gyro notch** section of the summary. It reports the locked percentage, the
+   range and mean of the tracked centre, and the confidence.
+4. Set `NOTCH_CENTER_HZ` to the reported mean.
+
+That value is a measurement of your airframe with your propellers at your mass — not a
+model. It is what every previous revision of this section was asking for and could not
+deliver.
+
+Two things the summary will tell you that are worth acting on:
+
+- **If the tracked centre moved by more than 20 Hz across the flight**, no single fixed
+  value covers it. Leave dynamic tracking enabled; that spread is the argument for it.
+- **If the tracker was unlocked for most of the flight**, either the real peak is outside
+  the 0.6–1.6× search band — in which case the compiled value is badly wrong and worth
+  re-deriving from §8.3 — or the airframe is quieter than the confidence threshold
+  expects, which is a good problem to have.
+
+Setting `NOTCH_CENTER_HZ` from the measurement still matters even with tracking enabled,
+because the compiled value defines the centre of the search band and the fallback when
+tracking does not lock.
+
+> **Log format v3 and older logs.** The record grew by four bytes. `tools/blackbox_decode.py`
+> reads both v2 and v3, so logs recorded before this change remain readable — a decoder
+> that only reads the newest format would silently make every earlier flight unreadable.
+> The C struct and the Python format string are cross-checked field by field against the
+> real compiler by the `blackbox` consistency check, because a field at the wrong offset
+> does not fail loudly, it produces plausible numbers that are wrong.
 
 ### 8.4 Radio frequency plan
 
@@ -1632,6 +1713,14 @@ rebuilds all four.
 - [ ] **Thrust stand.** Measure per-motor thrust at 20 / 40 / 60 / 80 / 100% and correct
       the table in section 3.2 and `CRUISE_CURRENT_A` in `config.h`. The energy budget
       depends on these numbers being real.
+- [ ] **Gyro notch measurement.** Hover for 30 s or more in still air, then decode the
+      log and read the **Gyro notch** section:
+
+      python tools/blackbox_decode.py flight_0001.ody
+
+      Set `NOTCH_CENTER_HZ` in `config.h` to the reported mean. Do **not** attempt to
+      find the peak by spectral analysis of the logged gyro — that trace is post-notch
+      and sampled at 100 Hz, well below the peak. See the finding in section 8.3.
 
 ### 11.3 Safety systems
 
@@ -1969,6 +2058,7 @@ Revision 2.0 introduced or left standing the following, all corrected here.
 | `CRUISE_CURRENT_A` was set from HOVER power since revision 2.2, but it budgets the charge to fly home at CRUISE speed — about 10% more. The RTH energy reserve was therefore optimistic | Corrected to 9.7 A, and §3.3 now states which figure it is and why |
 | The pack was rated 45C against a 15C peak demand, carrying 40 g for capability the aircraft cannot use | Specified as 20C minimum. §3.3 explains that energy per gram, not C-rate, is the constraint on this platform |
 | 3-blade propellers on a long-range platform with thrust to spare | Changed to 9x5x2. About 10% better hover efficiency for ~12% of peak thrust: 24 min hover and 16 km one-way, up from 22 min and 14.1 km |
+| Every revision instructed the reader to find the motor peak in a BlackBox gyro trace. That was impossible twice over: the logged gyro is post-notch, and the 100 Hz log rate puts its Nyquist limit at 50 Hz while the peak is 88–180 Hz, so a 120 Hz peak aliases to 20 Hz | Instruction withdrawn. The spectrum is analysed on board at the full loop rate and the tracker's verdict is logged in format v3, so the measurement is recoverable on the ground. §8.3, §8.3.2 |
 | The gyro notch was a compile-time constant standing in for a quantity that varies with mass, air density, pack voltage and workload — it moved four times, two models of it disagreed by 7%, and when it last moved the IMU DLPF was left behind | A sliding DFT over the raw gyro now tracks the real peak at 20 Hz, bounded to 0.6–1.6× the compiled value so it cannot do worse than the constant it replaced. §8.3.1 |
 | The IMU anti-alias filter was left at 94 Hz while the gyro notch moved from 80 Hz to 120 Hz across four revisions, so the DLPF sat BELOW the notch — attenuating the peak the notch was aimed at, while keeping its phase lag in the control band | Corrected to 260 Hz (7-inch) and 184 Hz (9- and 10-inch), with an assertion requiring 30% clearance above the notch. Found by the build-matrix check in §3.2 |
 | The ESC was rated 50 A per channel against a 16.9 A peak — nearly 3× margin, carried over from the 10-inch build along with 9 g | Right-sized to 40 A/ch (2.4×). §4.3 now shows the sizing arithmetic and records bidirectional DShot as the route to an RPM-tracked notch |

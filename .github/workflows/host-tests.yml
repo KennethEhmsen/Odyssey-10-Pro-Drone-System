@@ -101,6 +101,11 @@ jobs:
       - name: Remote ID decoder tests
         run: sh tools/run_android_parser_tests.sh
 
+      # Proves the decoder turns bytes back into the right NUMBERS. The consistency
+      # check above proves the layout matches; it cannot prove the scaling does.
+      - name: BlackBox decoder tests
+        run: python3 tools/test_blackbox_decode.py
+
       - name: Build and run host tests
         env:
           EXTRA_CXXFLAGS: -Werror

@@ -15,6 +15,7 @@ uint32_t g_millis = 0;
 
 #include "odyssey_link.h"
 #include "config.h"
+#include "types.h"
 #include "mixer.h"
 #include "filters.h"
 #include "pid.h"
@@ -684,6 +685,48 @@ static void testDynamicNotchAcrossBuilds() {
   }
 }
 
+static void testNotchIsNotObservableInTheLog() {
+  section("BlackBox: why the notch verdict is logged, not the spectrum");
+
+  // Section 8.3 records a defect that survived every revision to 2.9: the reader was
+  // told to find the motor peak in a BlackBox gyro trace. These assertions state, in
+  // the firmware's own constants, why that could never work -- so the arithmetic lives
+  // next to the code rather than only in prose.
+  const float logNyquist = BLACKBOX_LOG_HZ / 2.0f;
+
+  check(PROP_NOTCH_DEFAULT_HZ > logNyquist,
+        "the motor peak is above the log's Nyquist limit, so it cannot appear in a "
+        "gyro trace at its own frequency");
+
+  // Where it does appear, if anyone tries.
+  float aliased = fmodf(PROP_NOTCH_DEFAULT_HZ, (float)BLACKBOX_LOG_HZ);
+  if (aliased > logNyquist) aliased = BLACKBOX_LOG_HZ - aliased;
+  check(fabsf(aliased - PROP_NOTCH_DEFAULT_HZ) > 1.0f,
+        "the peak aliases to a different frequency entirely in the log");
+
+  // The verdict, by contrast, is a slow scalar and samples fine at the log rate.
+  check((float)DYN_NOTCH_UPDATE_HZ < logNyquist,
+        "the tracker's update rate IS below the log's Nyquist limit, which is why "
+        "logging its verdict works where logging the spectrum cannot");
+
+  // And the record must actually carry it.
+  BlackBoxRecord rec{};
+  rec.notchCentreDeciHz = 1187;
+  rec.notchFlags = ODY_NOTCH_FLAG_TRACKING | ODY_NOTCH_FLAG_DYNAMIC;
+  checkNear(rec.notchCentreDeciHz / 10.0f, 118.7f, 0.01f,
+            "the notch centre round-trips through the record at 0.1 Hz resolution");
+  check((rec.notchFlags & ODY_NOTCH_FLAG_TRACKING) != 0,
+        "the tracking flag is readable back out");
+  check((rec.notchFlags & ODY_NOTCH_FLAG_DYNAMIC) != 0,
+        "the dynamic-enabled flag is independent of it");
+
+  // The layout the decoder assumes. The consistency check verifies this against the
+  // compiler field by field; this catches it at test time too.
+  check(sizeof(BlackBoxRecord) == 52,
+        "the v3 record is 52 bytes, as the decoder's format string expects");
+  check(BLACKBOX_VERSION == 3, "the firmware writes log format v3");
+}
+
 // =====================================================================================
 //  FINDING 17 -- Remote ID identifiers
 // =====================================================================================
@@ -856,6 +899,7 @@ int main() {
   testNotchFilter();
   testPid();
   testDebounce();
+  testNotchIsNotObservableInTheLog();
   testDynamicNotchTracking();
   testDynamicNotchRejectsNoise();
   testDynamicNotchIsBounded();

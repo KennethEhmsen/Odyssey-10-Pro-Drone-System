@@ -68,8 +68,9 @@ static BiQuadNotch notchGx, notchGy, notchGz;
 // it sees the strongest motor coupling on a Quad-X.
 static DynamicNotchTracker notchTracker;
 static int      notchDivider   = 0;
-static volatile float trackedNotchHz = NOTCH_CENTER_HZ;   // published for telemetry
+static volatile float trackedNotchHz = NOTCH_CENTER_HZ;   // recorded in the BlackBox log
 static volatile bool  notchIsTracking = false;
+static volatile float notchConfidence = 0.0f;
 #endif
 
 static double   homeLat = 0.0, homeLon = 0.0;
@@ -188,6 +189,7 @@ static void TaskFlightLoop(void* /*arg*/) {
           trackedNotchHz = centre;
         }
         notchIsTracking = notchTracker.state().tracking;
+        notchConfidence = notchTracker.state().confidence;
       }
     } else {
       notchDivider = 0;
@@ -513,6 +515,23 @@ static void TaskFlightLoop(void* /*arg*/) {
       rec.sensorHealth   = snapshot.sensorHealth;
       rec.flightState    = state;
       rec.mixerSaturationPct = (uint8_t)(out.saturation * 100.0f);
+
+      // The notch tracker's verdict. Without this the log cannot answer the one
+      // question the tracker exists to settle -- where the motor peak actually was --
+      // because the logged gyro is post-notch and the log rate is below the peak
+      // anyway. See the note on BlackBoxRecord in types.h.
+#if DYN_NOTCH_ENABLE
+      rec.notchCentreDeciHz = (uint16_t)constrain(trackedNotchHz * 10.0f, 0.0f, 65535.0f);
+      rec.notchConfidence   = (uint8_t)constrain(notchConfidence, 0.0f, 255.0f);
+      rec.notchFlags        = ODY_NOTCH_FLAG_DYNAMIC
+                            | (notchIsTracking ? ODY_NOTCH_FLAG_TRACKING : 0u);
+#else
+      // Still log the static centre, so a fixed-notch log and a tracked one can be
+      // compared field-for-field rather than by eye.
+      rec.notchCentreDeciHz = (uint16_t)(NOTCH_CENTER_HZ * 10.0f);
+      rec.notchConfidence   = 0;
+      rec.notchFlags        = 0;
+#endif
       blackbox.push(rec);
     }
 
