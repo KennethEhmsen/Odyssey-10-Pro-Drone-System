@@ -133,9 +133,35 @@ static void resetControllers() {
 // =====================================================================================
 //  FLIGHT LOOP -- Core 1, 500 Hz
 // =====================================================================================
+// The flight loop's period is expressed in FreeRTOS ticks, which makes the tick rate
+// a hard dependency of the control loop and not a detail of the build system.
+//
+// pdMS_TO_TICKS(ms) is (ms * configTICK_RATE_HZ) / 1000. At the ESP-IDF default tick of
+// 100 Hz, a 1 ms period evaluates to ZERO ticks, and vTaskDelayUntil() with a zero
+// period does not delay -- the loop would spin and starve everything else pinned to
+// that core. Arduino-ESP32 sets 1000 Hz, which is why the 1000 Hz 7-inch build works,
+// but nothing in this repository said so until now.
+static_assert(configTICK_RATE_HZ == 1000,
+              "The flight loop needs a 1000 Hz FreeRTOS tick. At a lower tick rate "
+              "pdMS_TO_TICKS() rounds the loop period down to zero and vTaskDelayUntil "
+              "stops delaying at all.");
+
+// 1000/FLIGHT_LOOP_HZ is integer division. 500 and 1000 Hz divide exactly; a rate that
+// does not would be silently rounded to a different loop period than the one every
+// derived constant -- dt, the notch, the log divider -- was computed from.
+static_assert(1000 % FLIGHT_LOOP_HZ == 0,
+              "FLIGHT_LOOP_HZ must divide 1000 exactly, or the tick period is rounded "
+              "and the real loop rate stops matching FLIGHT_LOOP_HZ");
+
 static void TaskFlightLoop(void* /*arg*/) {
   TickType_t      lastWake  = xTaskGetTickCount();
   const TickType_t period   = pdMS_TO_TICKS(1000 / FLIGHT_LOOP_HZ);
+
+  // One tick of slack at 500 Hz, none at 1000 Hz. At 1000 Hz any overrun misses the
+  // deadline outright rather than eating into margin -- see section 8.3.4.
+  static_assert(FLIGHT_LOOP_HZ <= 1000,
+                "Above 1000 Hz the loop period is under one FreeRTOS tick and "
+                "vTaskDelayUntil can no longer schedule it");
 
   float    rollEst = 0.0f, pitchEst = 0.0f;
   float    prevBaroAgl = 0.0f, vario = 0.0f;

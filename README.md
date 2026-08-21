@@ -1,7 +1,7 @@
 # Odyssey-10 Pro
 
 [![host-tests](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml/badge.svg?branch=main)](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml)
-[![assertions](https://img.shields.io/badge/host_assertions-238-blue)](tools/host_tests/)
+[![assertions](https://img.shields.io/badge/host_assertions-245-blue)](tools/host_tests/)
 [![consistency](https://img.shields.io/badge/consistency_checks-18-blue)](tools/check_consistency.py)
 [![decoder](https://img.shields.io/badge/RID_decoder_tests-80-blue)](android/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -10,7 +10,7 @@
 Autonomous long-range 9-inch quadcopter. ESP32-P4 dual-core RISC-V avionics, integrated
 perception, kinetic recovery and safety stack.
 
-**Status:** revision 3.1 — second-harmonic tracking, where the hardware can see it. All
+**Status:** revision 3.2 — the 1000 Hz loop costed and deferred. All
 eighteen defects found in the revision 1.0 review are fixed. See
 [`docs/review-findings-resolution.md`](docs/review-findings-resolution.md) for the
 finding-by-finding index, or section 13 of the specification.

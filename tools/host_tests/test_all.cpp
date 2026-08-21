@@ -685,6 +685,38 @@ static void testDynamicNotchAcrossBuilds() {
   }
 }
 
+static void testLoopRateIsSchedulable() {
+  section("Flight loop: the rate has to be one FreeRTOS can actually schedule");
+
+  // main.cpp expresses the loop period as pdMS_TO_TICKS(1000 / FLIGHT_LOOP_HZ), which
+  // is integer division. A rate that does not divide 1000 exactly is silently rounded,
+  // and the real loop rate stops matching the FLIGHT_LOOP_HZ that dt, the notch, the
+  // SDFT resolution and the log divider were all computed from.
+  check(1000 % FLIGHT_LOOP_HZ == 0,
+        "FLIGHT_LOOP_HZ divides 1000 exactly, so the tick period is not rounded");
+
+  // At a 1000 Hz tick, the period in ticks is 1000/FLIGHT_LOOP_HZ. It must be at least
+  // one tick or vTaskDelayUntil has nothing to wait for.
+  const int periodTicks = 1000 / FLIGHT_LOOP_HZ;
+  check(periodTicks >= 1,
+        "the loop period is at least one FreeRTOS tick at a 1000 Hz tick rate");
+  check(FLIGHT_LOOP_HZ <= 1000,
+        "the loop rate does not exceed what a 1000 Hz tick can schedule");
+
+  // Every divider derived from the loop rate must come out exact, for the same reason.
+  check(FLIGHT_LOOP_HZ % BLACKBOX_LOG_HZ == 0,
+        "the BlackBox log divider is exact");
+  check(FLIGHT_LOOP_HZ % DYN_NOTCH_UPDATE_HZ == 0,
+        "the dynamic notch update divider is exact");
+  check(FLIGHT_LOOP_HZ % 50 == 0, "the 50 Hz barometer divider is exact");
+
+  // The SDFT resolution follows the loop rate directly, and the notch band is only a
+  // few tens of hertz wide -- a coarse bin would make tracking meaningless.
+  const float resolution = (float)FLIGHT_LOOP_HZ / (float)DYN_NOTCH_BINS;
+  check(resolution <= 12.0f,
+        "the SDFT bin spacing is fine enough to place a notch usefully");
+}
+
 static void testNotchIsNotObservableInTheLog() {
   section("BlackBox: why the notch verdict is logged, not the spectrum");
 
@@ -1051,6 +1083,7 @@ int main() {
   testNotchFilter();
   testPid();
   testDebounce();
+  testLoopRateIsSchedulable();
   testNotchIsNotObservableInTheLog();
   testDynamicNotchTracking();
   testDynamicNotchRejectsNoise();

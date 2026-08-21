@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 3.1 — second-harmonic tracking, and an honest account of where the hardware can support it
+**Document revision:** 3.2 — the 1000 Hz loop costed, and a scheduling dependency nobody had declared
 
 ---
 
@@ -1425,14 +1425,115 @@ by measurement is precisely the mistake this subsystem exists to stop repeating.
 toward Nyquist trades a visible harmonic for aliased content folding into the control
 band, which is a worse problem than the one it solves. The real fix is a faster loop —
 1000 Hz on the 9- and 10-inch would put Nyquist at 500 Hz and allow a 260 Hz corner,
-making every build's harmonic visible. The MPU-6050's 1 kHz output ceiling makes that
-possible but leaves no margin, and it would change the PID timing, the CPU budget and
-the SDFT resolution together. It is recorded here as the route, not as a decision.
+making every build's harmonic visible. **§8.3.4 costs that change.** The short version is
+that it is affordable but wrongly sequenced: the actuator would still run at 400 Hz, and
+bidirectional DShot would locate the harmonic exactly rather than making it searchable.
 
 > Blade-pass frequency is `PROP_BLADES × f₀`, so it coincides with the second harmonic
 > only on a 2-blade propeller. On the 3-blade builds blade-pass is 3·f₀ — 300 Hz on the
 > 9-inch — which is further above the corner still. Earlier revisions of §8.3 described
 > blade-pass as "near twice the fundamental", which is true only for the 2-blade case.
+
+
+#### 8.3.4 Costing a 1000 Hz loop on the 9- and 10-inch
+
+§8.3.3 records a faster loop as the route to making the second harmonic observable.
+This is that route costed. **The recommendation is not to take it yet**, and the reason
+is not any of the costs below — it is that the loop rate is the wrong lever.
+
+**What it would buy.** At 1000 Hz, Nyquist moves to 500 Hz and the anti-alias corner can
+go to 260 Hz, which puts 2·f₀ inside the observable band on every build: 240 Hz on the
+9-inch 2-blade, 200 on the 9-inch 3-blade, 210 and 180 on the 10-inch. All ten
+configurations would gain a working harmonic notch instead of two.
+
+**What it would not buy.** The ESCs are driven by 400 Hz PWM. A 1000 Hz loop writes
+motor values 2.5 times per PWM period, so **60% of them are overwritten before they ever
+reach an ESC**. Actuator bandwidth stays at 400 Hz. The faster loop buys *filtering and
+estimation* resolution — which is exactly what the harmonic needs — but it buys nothing
+for control response, and it must not be described as if it did.
+
+##### The MPU-6050's output rate is not the obstacle
+
+Earlier revisions of this document said the 1 kHz output ceiling left "no margin". That
+was imprecise. The output rate is a function of the DLPF setting, not an independent
+limit:
+
+| `DLPF_CFG` | Gyro bandwidth | Output rate |
+| --- | --- | --- |
+| 0 | 256 Hz | **8 kHz** |
+| 1 | 188 Hz | 1 kHz |
+
+The 9-inch runs `DLPF_CFG` = 1 today, so the part does output at 1 kHz — and sampling a
+free-running 1 kHz source with a free-running 1 kHz loop would beat, which is a real
+objection to raising the loop rate *alone*. But a 1000 Hz loop requires moving the DLPF
+to 260 Hz anyway, to keep the corner above the notch, and that switches the part to
+8 kHz. The two changes have to move together, and once they do the ceiling does not bind.
+
+##### The I²C bus is the real constraint
+
+`mpu.getEvent()` reads 14 bytes — accel, temperature and gyro — every call. At 400 kHz
+each byte costs 22.5 µs and each transaction carries 72.5 µs of addressing overhead:
+
+| Loop | Primary IMU read | Per loop | Bus utilisation |
+| --- | --- | --- | --- |
+| 500 Hz | full, 14 bytes | 388 µs of 2000 µs | 39% |
+| **1000 Hz** | **full, 14 bytes** | **388 µs of 1000 µs** | **59%** |
+| 1000 Hz | gyro only, 6 bytes | 208 µs of 1000 µs | 41% |
+
+At 59% the bus is not saturated, but the flight loop would spend 39% of every period
+blocked on a shared, mutex-guarded bus that also carries the backup IMU, barometer,
+magnetometer and ToF sensor. That is the number that would need care.
+
+**The fix is not a faster bus** — 400 kHz is the MPU-6050's maximum. It is to stop
+reading the accelerometer at gyro rate. The complementary filter uses accel only for slow
+attitude correction; 200–250 Hz is ample. Splitting the read puts a 1000 Hz loop at
+41% bus utilisation, essentially the same as the 500 Hz loop costs today. **That split is
+the enabling change, and it is worth doing on its own merits even at 500 Hz.**
+
+##### Everything else is cheap
+
+| Item | Cost |
+| --- | --- |
+| SDFT | `DYN_NOTCH_BINS` must double to 256 to hold 3.9 Hz resolution. 0.13 MFLOP/s and 3 KB — still ~1% of a core |
+| PID | `dt` halves; gains carry over in principle because the D term is low-passed in seconds, not samples. Needs re-validation, not re-derivation |
+| Dividers | 1000 divides exactly by 100 (log), 20 (notch) and 50 (baro) |
+| Power | negligible; the core is already running |
+
+##### Scheduling has no slack left, and a dependency nobody declared
+
+The loop period is `pdMS_TO_TICKS(1000 / FLIGHT_LOOP_HZ)`. At 1000 Hz that is **one
+FreeRTOS tick**. Any overrun misses the deadline outright rather than eating into margin.
+
+> **FINDING 36, found while costing this and affecting the *existing* 7-inch build.**
+> `pdMS_TO_TICKS(ms)` expands to `(ms * configTICK_RATE_HZ) / 1000`. At the ESP-IDF
+> default tick rate of 100 Hz, a 1 ms period evaluates to **zero ticks**, and
+> `vTaskDelayUntil()` with a zero period does not delay — the flight loop would spin and
+> starve everything else pinned to that core.
+>
+> The 7-inch build has run at 1000 Hz since revision 2.8. It works only because
+> Arduino-ESP32 sets the tick to 1000 Hz, and **nothing in this repository said so**.
+> A `static_assert` on `configTICK_RATE_HZ` now does, along with one requiring
+> `FLIGHT_LOOP_HZ` to divide 1000 exactly — the division is integer, so a rate that does
+> not divide cleanly would be silently rounded to a different period than the one `dt`,
+> the notch and every divider were computed from.
+
+##### Recommendation
+
+**Do not raise the loop rate for the harmonic alone.** The costs are all manageable, but
+the sequencing is wrong:
+
+1. **Bidirectional DShot first** (§4.3). It gives shaft frequency directly instead of
+   inferring it from the noise, which makes the fundamental *and* its harmonics known
+   rather than searched for — and it raises actuator bandwidth, which is the thing a
+   1000 Hz loop cannot give you on its own.
+2. **Split the IMU read** — gyro at loop rate, accel at 250 Hz. Worth doing at 500 Hz,
+   and it is the precondition for 1000 Hz.
+3. **Then reconsider 1000 Hz**, at which point the actuator can use it and the bus can
+   afford it.
+
+Doing it in the other order buys a harmonic notch on two more airframes, at the cost of
+59% bus utilisation, a doubled SDFT, a PID re-validation and zero scheduling slack —
+to filter a peak that RPM telemetry would have located exactly.
 
 ### 8.4 Radio frequency plan
 
@@ -2116,6 +2217,7 @@ Revision 2.0 introduced or left standing the following, all corrected here.
 | `CRUISE_CURRENT_A` was set from HOVER power since revision 2.2, but it budgets the charge to fly home at CRUISE speed — about 10% more. The RTH energy reserve was therefore optimistic | Corrected to 9.7 A, and §3.3 now states which figure it is and why |
 | The pack was rated 45C against a 15C peak demand, carrying 40 g for capability the aircraft cannot use | Specified as 20C minimum. §3.3 explains that energy per gram, not C-rate, is the constraint on this platform |
 | 3-blade propellers on a long-range platform with thrust to spare | Changed to 9x5x2. About 10% better hover efficiency for ~12% of peak thrust: 24 min hover and 16 km one-way, up from 22 min and 14.1 km |
+| The flight loop's period is `pdMS_TO_TICKS(1000 / FLIGHT_LOOP_HZ)`, which at the ESP-IDF default 100 Hz tick rounds to ZERO ticks — `vTaskDelayUntil` would not delay and the loop would spin, starving its core. The 1000 Hz 7-inch build has depended on Arduino-ESP32's 1000 Hz tick since revision 2.8 with nothing declaring it | `static_assert` on `configTICK_RATE_HZ`, plus one requiring `FLIGHT_LOOP_HZ` to divide 1000 exactly. Host tests check every divider derived from the loop rate. §8.3.4 |
 | Second-harmonic notching was proposed on the assumption that the SDFT already computes those bins, so tracking the overtone would be a modest addition. The bins exist, but in 8 of 10 builds 2·f₀ lands above the MPU-6050 anti-alias corner, so the IMU has already attenuated it | Implemented, but gated on observability computed at runtime from the tracked fundamental. Where 2·f₀ does not clear the corner the notch never engages, because notching an already-filtered peak buys phase lag for nothing. §8.3.3 |
 | Every revision instructed the reader to find the motor peak in a BlackBox gyro trace. That was impossible twice over: the logged gyro is post-notch, and the 100 Hz log rate puts its Nyquist limit at 50 Hz while the peak is 88–180 Hz, so a 120 Hz peak aliases to 20 Hz | Instruction withdrawn. The spectrum is analysed on board at the full loop rate and the tracker's verdict is logged in format v3, so the measurement is recoverable on the ground. §8.3, §8.3.2 |
 | The gyro notch was a compile-time constant standing in for a quantity that varies with mass, air density, pack voltage and workload — it moved four times, two models of it disagreed by 7%, and when it last moved the IMU DLPF was left behind | A sliding DFT over the raw gyro now tracks the real peak at 20 Hz, bounded to 0.6–1.6× the compiled value so it cannot do worse than the constant it replaced. §8.3.1 |
