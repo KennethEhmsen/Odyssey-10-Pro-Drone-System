@@ -166,26 +166,54 @@ bool SensorHub::initIna226() {
 }
 
 // -------------------------------------------------------------------------------------
-//  500 Hz primary IMU read
+//  Primary IMU read -- gyro at the loop rate, accelerometer at IMU_ACCEL_READ_HZ
+//
+//  This deliberately bypasses the Adafruit driver's getEvent(), which always reads all
+//  14 bytes. The gyro needs the loop rate; the accelerometer does not, and on a shared
+//  400 kHz bus the difference is 388 us against 208 us per loop. See config.h.
 // -------------------------------------------------------------------------------------
+static inline int16_t be16(const uint8_t* p) {
+  return (int16_t)(((uint16_t)p[0] << 8) | p[1]);
+}
+
 bool SensorHub::readPrimaryImu(Vec3& gyroDps, Vec3& accelMps2) {
   if (!havePrimaryImu_) return false;
 
   I2cLock lk(pdMS_TO_TICKS(2));
   if (!lk.held) return false;          // bus busy; report a lost sample, not zeroes
 
-  sensors_event_t a, g, t;
-  if (!mpu.getEvent(&a, &g, &t)) return false;
+  const uint32_t nowMs = millis();
 
-  const float radToDeg = 180.0f / (float)M_PI;
-  gyroDps.x   = g.gyro.x * radToDeg;
-  gyroDps.y   = g.gyro.y * radToDeg;
-  gyroDps.z   = g.gyro.z * radToDeg;
-  accelMps2.x = a.acceleration.x;
-  accelMps2.y = a.acceleration.y;
-  accelMps2.z = a.acceleration.z;
+  // ---- Gyroscope, every loop -------------------------------------------------------
+  uint8_t g[6];
+  if (!i2cRead(I2C_ADDR_MPU6050, MPU6050_REG_GYRO_XOUT_H, g, sizeof(g))) return false;
+  gyroDps.x = be16(&g[0]) / MPU6050_GYRO_LSB_PER_DPS;
+  gyroDps.y = be16(&g[2]) / MPU6050_GYRO_LSB_PER_DPS;
+  gyroDps.z = be16(&g[4]) / MPU6050_GYRO_LSB_PER_DPS;
+  primaryGyro_.set(gyroDps, nowMs);
 
-  primaryGyro_.set(gyroDps, millis());
+  // ---- Accelerometer, every Nth loop ------------------------------------------------
+  if (accelDivider_ == 0) {
+    uint8_t a[6];
+    if (i2cRead(I2C_ADDR_MPU6050, MPU6050_REG_ACCEL_XOUT_H, a, sizeof(a))) {
+      Vec3 acc;
+      const float k = STANDARD_GRAVITY_MPS2 / MPU6050_ACCEL_LSB_PER_G;
+      acc.x = be16(&a[0]) * k;
+      acc.y = be16(&a[2]) * k;
+      acc.z = be16(&a[4]) * k;
+      primaryAccel_.set(acc, nowMs);
+    }
+    // A failed accelerometer read is NOT a failed IMU read. The gyro above succeeded and
+    // the flight loop needs it; the accelerometer keeps its timestamp and therefore
+    // keeps ageing, which is what makes the staleness visible below.
+  }
+  if (++accelDivider_ >= (uint16_t)(FLIGHT_LOOP_HZ / IMU_ACCEL_READ_HZ)) accelDivider_ = 0;
+
+  // The caller gets the most recent accelerometer sample. Before the first one arrives
+  // there is nothing honest to return, so the read is reported as failed rather than
+  // handing back a zero vector that free-fall detection would read as 0 m/s^2.
+  if (!primaryAccel_.everValid) return false;
+  accelMps2 = primaryAccel_.value;
   return true;
 }
 

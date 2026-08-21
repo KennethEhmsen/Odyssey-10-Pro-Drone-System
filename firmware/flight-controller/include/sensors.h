@@ -122,6 +122,11 @@ private:
   TimedValue<float>    currentA_;
   TimedValue<Vec3>     backupGyro_;
   TimedValue<Vec3>     primaryGyro_;
+  // The accelerometer is read at IMU_ACCEL_READ_HZ rather than at the loop rate, so it
+  // carries a timestamp like every other slower-than-loop sensor in this file. Nothing
+  // should use it without knowing how old it is.
+  TimedValue<Vec3>     primaryAccel_;
+  uint16_t             accelDivider_ = 0;
 
   BatteryState battery_;
   float        groundReferenceM_ = 0.0f;

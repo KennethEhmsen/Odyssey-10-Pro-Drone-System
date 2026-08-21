@@ -685,6 +685,80 @@ static void testDynamicNotchAcrossBuilds() {
   }
 }
 
+static void testImuReadSplit() {
+  section("Primary IMU: gyro at loop rate, accelerometer slower");
+
+  // ---- the divider -----------------------------------------------------------------
+  check(FLIGHT_LOOP_HZ % IMU_ACCEL_READ_HZ == 0,
+        "the accelerometer divider is exact, so it does not drift against the loop");
+  const int div = FLIGHT_LOOP_HZ / IMU_ACCEL_READ_HZ;
+  check(div >= 1, "the accelerometer is read at most once per loop");
+  check(IMU_ACCEL_READ_HZ <= FLIGHT_LOOP_HZ,
+        "the accelerometer is not read faster than the loop that reads it");
+
+  // Free-fall needs enough samples inside its hold window to be trustworthy. This is
+  // the assertion that stops someone dropping the accelerometer rate to 20 Hz to save
+  // bus time and quietly making parachute deployment depend on eight samples.
+  const int freefallSamples = (int)(IMU_ACCEL_READ_HZ * FREEFALL_HOLD_MS / 1000);
+  check(freefallSamples >= 20,
+        "at least 20 accelerometer samples fall inside the free-fall hold window");
+
+  // ---- scale factors ----------------------------------------------------------------
+  // Reading registers directly instead of through the driver makes these OURS to get
+  // right. They must match the ranges initMpu6050() actually sets: +/-8 g and +/-500 dps.
+  checkNear(MPU6050_ACCEL_LSB_PER_G, 32768.0f / 8.0f, 0.1f,
+            "the accelerometer scale matches the +/-8 g range that is configured");
+  checkNear(MPU6050_GYRO_LSB_PER_DPS, 32768.0f / 500.0f, 0.05f,
+            "the gyro scale matches the +/-500 dps range that is configured");
+
+  // A full-scale reading must come back as full scale, not saturated or halved.
+  const float gK = 1.0f / MPU6050_GYRO_LSB_PER_DPS;
+  checkNear(32767 * gK, 500.0f, 1.0f, "a full-scale gyro count decodes to 500 dps");
+  checkNear(-32768 * gK, -500.0f, 1.0f, "and negative full scale to -500 dps");
+
+  const float aK = STANDARD_GRAVITY_MPS2 / MPU6050_ACCEL_LSB_PER_G;
+  checkNear(4096 * aK, 9.80665f, 0.001f, "1 g decodes to 9.80665 m/s^2");
+  checkNear(32767 * aK, 8.0f * 9.80665f, 0.01f, "full scale decodes to 8 g");
+
+  // ---- byte order -------------------------------------------------------------------
+  // The MPU-6050 returns big-endian two's complement. Getting this backwards would
+  // produce plausible-looking noise rather than an obvious failure.
+  auto be16 = [](uint8_t hi, uint8_t lo) -> int16_t {
+    return (int16_t)(((uint16_t)hi << 8) | lo);
+  };
+  check(be16(0x00, 0x01) == 1, "0x0001 decodes to 1");
+  check(be16(0x01, 0x00) == 256, "0x0100 decodes to 256, not 1");
+  check(be16(0xFF, 0xFF) == -1, "0xFFFF decodes to -1, so the value is signed");
+  check(be16(0x80, 0x00) == -32768, "0x8000 is negative full scale");
+  check(be16(0x7F, 0xFF) == 32767, "0x7FFF is positive full scale");
+
+  // A realistic hover reading: roughly 1 g on Z, near zero on X and Y.
+  checkNear(be16(0x10, 0x00) * aK, 9.80665f, 0.001f,
+            "a raw 0x1000 on Z reads as 1 g, the value a level hover should give");
+
+  // ---- register addresses ------------------------------------------------------------
+  check(MPU6050_REG_ACCEL_XOUT_H == 0x3B, "accelerometer block starts at 0x3B");
+  check(MPU6050_REG_GYRO_XOUT_H == 0x43, "gyro block starts at 0x43");
+  check(MPU6050_REG_GYRO_XOUT_H - MPU6050_REG_ACCEL_XOUT_H == 8,
+        "the gyro block sits 8 bytes after the accelerometer: 6 accel plus 2 "
+        "temperature, which is exactly what the split read skips");
+
+  // ---- the bus saving this is for -----------------------------------------------------
+  // 400 kHz, 9 clocks per byte, 3 addressing bytes plus start/stop per transaction.
+  const float byteUs = 9.0f * 1e6f / (float)I2C_BUS_HZ;
+  const float overheadUs = 3.0f * byteUs + 5.0f;
+  const float fullUs = overheadUs + 14.0f * byteUs;      // getEvent(): accel+temp+gyro
+  const float gyroUs = overheadUs + 6.0f * byteUs;       // the split read
+  check(gyroUs < fullUs * 0.6f,
+        "the split read costs under 60% of the 14-byte read it replaces");
+
+  // Worst case, every loop reads gyro AND accel.
+  const float worstUs = gyroUs + (overheadUs + 6.0f * byteUs);
+  const float periodUs = 1e6f / (float)FLIGHT_LOOP_HZ;
+  check(worstUs < periodUs * 0.5f,
+        "even on a loop that reads both, the primary IMU takes under half the period");
+}
+
 static void testLoopRateIsSchedulable() {
   section("Flight loop: the rate has to be one FreeRTOS can actually schedule");
 
@@ -1083,6 +1157,7 @@ int main() {
   testNotchFilter();
   testPid();
   testDebounce();
+  testImuReadSplit();
   testLoopRateIsSchedulable();
   testNotchIsNotObservableInTheLog();
   testDynamicNotchTracking();

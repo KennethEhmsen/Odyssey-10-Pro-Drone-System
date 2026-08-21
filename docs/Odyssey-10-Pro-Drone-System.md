@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 3.2 — the 1000 Hz loop costed, and a scheduling dependency nobody had declared
+**Document revision:** 3.3 — the IMU read is split, which was step 2 of the 1000 Hz sequencing and pays at 500 Hz too
 
 ---
 
@@ -1487,8 +1487,27 @@ magnetometer and ToF sensor. That is the number that would need care.
 **The fix is not a faster bus** — 400 kHz is the MPU-6050's maximum. It is to stop
 reading the accelerometer at gyro rate. The complementary filter uses accel only for slow
 attitude correction; 200–250 Hz is ample. Splitting the read puts a 1000 Hz loop at
-41% bus utilisation, essentially the same as the 500 Hz loop costs today. **That split is
-the enabling change, and it is worth doing on its own merits even at 500 Hz.**
+41% bus utilisation, essentially the same as the 500 Hz loop costs today.
+
+> **Done in revision 3.3.** `SensorHub::readPrimaryImu()` no longer calls the driver's
+> `getEvent()`. It reads the 6-byte gyro block at 0x43 every loop and the 6-byte
+> accelerometer block at 0x3B at `IMU_ACCEL_READ_HZ`, default 250 Hz. **Bus utilisation
+> at 500 Hz drops from 39% to 30%**, and the precondition for a 1000 Hz loop is in place.
+>
+> Reading registers directly means the scale factors are ours rather than the driver's,
+> so they are asserted against the ranges `initMpu6050()` actually sets — ±8 g at
+> 4096 LSB/g and ±500 dps at 65.5 LSB/dps — along with the big-endian two's-complement
+> decode, which if reversed would produce plausible noise rather than an obvious failure.
+>
+> The accelerometer is now a `TimedValue` like every other slower-than-loop sensor, so
+> its age is visible rather than implied. Before the first sample arrives the read
+> reports failure rather than returning a zero vector, which free-fall detection would
+> otherwise read as 0 m/s² — a spurious parachute deployment on the bench.
+>
+> `IMU_ACCEL_READ_HZ` must divide `FLIGHT_LOOP_HZ` exactly and must leave at least 20
+> samples inside `FREEFALL_HOLD_MS`. Both are `static_assert`s: 30 Hz and 300 Hz are
+> rejected at compile time, which stops anyone buying bus time by quietly making
+> parachute deployment depend on eight samples.
 
 ##### Everything else is cheap
 
@@ -1526,8 +1545,8 @@ the sequencing is wrong:
    inferring it from the noise, which makes the fundamental *and* its harmonics known
    rather than searched for — and it raises actuator bandwidth, which is the thing a
    1000 Hz loop cannot give you on its own.
-2. **Split the IMU read** — gyro at loop rate, accel at 250 Hz. Worth doing at 500 Hz,
-   and it is the precondition for 1000 Hz.
+2. ~~**Split the IMU read** — gyro at loop rate, accel at 250 Hz.~~ **Done in
+   revision 3.3.** Bus utilisation at 500 Hz fell from 39% to 30%.
 3. **Then reconsider 1000 Hz**, at which point the actuator can use it and the bus can
    afford it.
 

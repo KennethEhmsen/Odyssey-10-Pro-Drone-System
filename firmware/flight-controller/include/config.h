@@ -702,6 +702,37 @@
 #define I2C_ADDR_INA226           0x40
 
 #define I2C_BUS_HZ                400000
+
+// -------------------------------------------------------------------------------------
+//  PRIMARY IMU READ SPLIT
+//
+//  The Adafruit driver's getEvent() reads 14 bytes every call -- accelerometer,
+//  temperature and gyroscope together. At 400 kHz that is 388 us, which is 19% of a
+//  500 Hz loop period and would be 39% of a 1000 Hz one, on a bus shared with the backup
+//  IMU, barometer, magnetometer and rangefinder.
+//
+//  The gyro genuinely needs the loop rate: it is integrated for attitude and it is the
+//  signal the notch filters work on. The accelerometer does not. It contributes only the
+//  slow correction term in the complementary filter -- ATT_COMP_ALPHA weights it at
+//  1-alpha per iteration -- and the free-fall detector, which needs 400 ms of sustained
+//  low magnitude and so sees a hundred samples at 250 Hz.
+//
+//  So the read is split. Gyro-only is 6 bytes and 208 us. See section 8.3.4 for the bus
+//  arithmetic; the short version is that this makes a 1000 Hz loop cost about what the
+//  500 Hz loop costs today, and it lowers bus pressure at 500 Hz in the meantime.
+// -------------------------------------------------------------------------------------
+#ifndef IMU_ACCEL_READ_HZ
+#define IMU_ACCEL_READ_HZ         250
+#endif
+
+// MPU-6050 register map and the scale factors for the ranges set in initMpu6050().
+// Reading registers directly means these are ours to get right rather than the
+// driver's, so they are asserted against the configured ranges in the host tests.
+#define MPU6050_REG_ACCEL_XOUT_H  0x3B
+#define MPU6050_REG_GYRO_XOUT_H   0x43
+#define MPU6050_ACCEL_LSB_PER_G   4096.0f    // +/-8 g range
+#define MPU6050_GYRO_LSB_PER_DPS  65.5f      // +/-500 dps range
+#define STANDARD_GRAVITY_MPS2     9.80665f
 #define INA226_SHUNT_OHMS         0.001f
 #define INA226_MAX_CURRENT_A      80.0f
 
@@ -730,6 +761,14 @@ static_assert(OBSTACLE_STOP_CM < OBSTACLE_SLOW_CM,
               "Obstacle brake distance must be inside the slow-down distance");
 static_assert(TOUCHDOWN_TOF_M < TOUCHDOWN_VETO_AGL_M,
               "Touchdown threshold must sit below the veto altitude");
+static_assert(IMU_ACCEL_READ_HZ > 0 && FLIGHT_LOOP_HZ % IMU_ACCEL_READ_HZ == 0,
+              "IMU_ACCEL_READ_HZ must divide FLIGHT_LOOP_HZ exactly, or the accelerometer "
+              "divider drifts against the loop");
+static_assert(IMU_ACCEL_READ_HZ <= FLIGHT_LOOP_HZ,
+              "The accelerometer cannot be read faster than the loop that reads it");
+// The free-fall detector needs enough samples inside its hold window to be trustworthy.
+static_assert(IMU_ACCEL_READ_HZ * FREEFALL_HOLD_MS / 1000 >= 20,
+              "Too few accelerometer samples inside the free-fall hold window");
 static_assert(FLIGHT_LOOP_HZ % BLACKBOX_LOG_HZ == 0,
               "BlackBox rate must divide the flight loop rate evenly");
 
