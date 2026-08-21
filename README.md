@@ -10,7 +10,7 @@
 Autonomous long-range 9-inch quadcopter. ESP32-P4 dual-core RISC-V avionics, integrated
 perception, kinetic recovery and safety stack.
 
-**Status:** revision 3.4 — DShot protocol and RPM telemetry, tested; driver awaits hardware. All
+**Status:** revision 3.5 — loop rate is a build switch; 1000 Hz uncovers the second harmonic. All
 eighteen defects found in the revision 1.0 review are fixed. See
 [`docs/review-findings-resolution.md`](docs/review-findings-resolution.md) for the
 finding-by-finding index, or section 13 of the specification.

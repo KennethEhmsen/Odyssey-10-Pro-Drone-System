@@ -1325,6 +1325,65 @@ def check_prop_configs(rep, fix):
     direction("FRAME_GAIN_SCALE",      frame_pairs, "less",
               "a bigger airframe has more rotational inertia")
 
+    # ---- the 1000 Hz option, where it exists ----------------------------------------
+    #
+    # FLIGHT_LOOP_HZ is a switch now, and a faster loop is only worth having if the
+    # constants that must move with it actually did. Checking the default build alone
+    # would miss exactly the coupled-constant drift these switches exist to prevent.
+    fast = {}
+    for frame, motors in FRAME_MOTORS.items():
+        if frame == 7:
+            continue          # already 1000 Hz by default
+        for mc in motors:
+            for pb in (2, 3):
+                d = resolved_defines((f"-DFRAME_SIZE_IN={frame}", f"-DMOTOR_CLASS={mc}",
+                                      f"-DPROP_BLADES={pb}", "-DFLIGHT_LOOP_HZ=1000",
+                                      "-DACCEPT_CONNECTOR_OVER_RATING=1"))
+                if d:
+                    fast[(frame, mc, pb)] = d
+
+    gained = 0
+    for key, d in sorted(fast.items()):
+        frame, mc, pb = key
+        label = f'{frame}"/{mc[6:]}/{pb}b @1kHz'
+        slow = builds.get(key, {})
+
+        if d.get("FLIGHT_LOOP_HZ") != 1000:
+            rep.problem("build-configs", f"{label}: the loop override did not take")
+            continue
+        # The anti-alias corner is the whole reason to go faster. If it stayed put, the
+        # extra loop rate bought nothing but CPU.
+        if d.get("IMU_DLPF_HZ", 0) <= slow.get("IMU_DLPF_HZ", 0):
+            rep.problem("build-configs",
+                        f"{label}: the loop doubled but the anti-alias corner did not "
+                        f"move, so the harmonic is still hidden and the change is pure "
+                        f"cost")
+        # Resolution is loop/bins, so the bin count must follow or it halves.
+        res_slow = slow.get("FLIGHT_LOOP_HZ", 1) / max(slow.get("DYN_NOTCH_BINS", 1), 1)
+        res_fast = d["FLIGHT_LOOP_HZ"] / max(d.get("DYN_NOTCH_BINS", 1), 1)
+        if res_fast > res_slow * 1.01:
+            rep.problem("build-configs",
+                        f"{label}: SDFT resolution got WORSE ({res_slow:.1f} -> "
+                        f"{res_fast:.1f} Hz) -- DYN_NOTCH_BINS did not follow the loop")
+        if d.get("IMU_DLPF_HZ", 0) >= d["FLIGHT_LOOP_HZ"] / 2:
+            rep.problem("build-configs",
+                        f"{label}: the anti-alias corner is at or above Nyquist")
+
+        f0 = d.get("PROP_NOTCH_DEFAULT_HZ", 0)
+        ceil_fast = min(d.get("IMU_DLPF_HZ", 0),
+                        d["FLIGHT_LOOP_HZ"] * 0.5 * d.get("DYN_NOTCH_H2_NYQUIST_FRAC", 0.8))
+        ceil_slow = min(slow.get("IMU_DLPF_HZ", 0),
+                        slow.get("FLIGHT_LOOP_HZ", 1) * 0.5
+                        * slow.get("DYN_NOTCH_H2_NYQUIST_FRAC", 0.8))
+        if 2 * f0 <= ceil_fast and 2 * f0 > ceil_slow:
+            gained += 1
+
+    if fast:
+        rep.note = getattr(rep, "note", [])
+        rep.note.append(f"loop-rate: {len(fast)} builds also verified at 1000 Hz; "
+                        f"{gained} of them gain an observable second harmonic that the "
+                        f"500 Hz build cannot see")
+
     # ---- can each build see its own second harmonic? --------------------------------
     #
     # Reported as a note rather than a problem: an unobservable harmonic is a property

@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 3.4 — DShot at the protocol level, with the RPM the notch has been estimating all along
+**Document revision:** 3.5 — the loop rate is a build switch, and at 1000 Hz the second harmonic finally appears
 
 ---
 
@@ -1578,6 +1578,41 @@ the sequencing is wrong:
    revision 3.3.** Bus utilisation at 500 Hz fell from 39% to 30%.
 3. **Then reconsider 1000 Hz**, at which point the actuator can use it and the bus can
    afford it.
+
+##### Available in revision 3.5, but not as a default
+
+`FLIGHT_LOOP_HZ` is now a build switch. `-DFLIGHT_LOOP_HZ=1000` is characterised and
+tested on all eight 9- and 10-inch configurations, and three constants move with it
+automatically rather than being left to be remembered:
+
+| Constant | 500 Hz | 1000 Hz | Why it has to move |
+| --- | --- | --- | --- |
+| `IMU_DLPF_HZ` | 184 Hz | **260 Hz** | Nyquist doubles, so the corner can rise — and this is the change that uncovers the harmonic |
+| `DYN_NOTCH_BINS` | 128 | **256** | Resolution is loop ÷ bins; without this it would fall from 3.9 Hz to 7.8 Hz |
+| every divider | — | — | log, notch-update, accelerometer and barometer rates all stay whole |
+
+**The result is the one §8.3.3 was missing.** At 1000 Hz the second harmonic becomes
+observable on **all six** 9- and 10-inch configurations, against two at 500 Hz:
+
+| | 500 Hz | 1000 Hz |
+| --- | --- | --- |
+| 9-inch, 2·f₀ = 240 Hz | above the 184 Hz corner | **below the 260 Hz corner** |
+| 10-inch 2-blade, 210 Hz | above | **below** |
+| 10-inch 3-blade, 180 Hz | below | below |
+
+The 7-inch is the exception and stays unobservable at any loop rate: its 2·f₀ is 360 Hz
+and the MPU-6050's widest DLPF setting is 260 Hz, so the part itself cannot pass it. That
+is a sensor limit, not a configuration one.
+
+**It is still not the default**, for the reason §8.3.4 opens with: the ESCs are driven at
+400 Hz, so 60% of motor writes are overwritten before reaching one. Until the DShot
+driver of §4.3.1 exists, a 1000 Hz loop buys filtering resolution and pays CPU, bus and
+scheduling slack for it. That is a reasonable trade to make deliberately and a poor one
+to make by default.
+
+```bash
+pio run -e odyssey-fc -- -DFLIGHT_LOOP_HZ=1000        # 9-inch, faster loop
+```
 
 Doing it in the other order buys a harmonic notch on two more airframes, at the cost of
 59% bus utilisation, a doubled SDFT, a PID re-validation and zero scheduling slack —

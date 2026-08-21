@@ -100,8 +100,8 @@
   #define PACK_CAPACITY_MAH       3000.0f
   #define PACK_MIN_C_RATE         50       // peak draw is high on a 7-inch
   #define PAYLOAD_RESERVE_G       100.0f
-  #define FLIGHT_LOOP_HZ          1000     // 180 Hz fundamental needs the headroom
-  #define IMU_DLPF_HZ             260      // must sit above the 180 Hz notch
+  #define FRAME_DEFAULT_LOOP_HZ   1000     // 180 Hz fundamental needs the headroom
+  #define FRAME_DEFAULT_DLPF_HZ   260      // must sit above the 180 Hz notch
   #define FRAME_GAIN_SCALE        1.29f    // ~9/7; smaller airframe, faster response
   #define FRAME_CRUISE_SPEED_MPS  14.0f
   #define FRAME_DEFAULT_MOTOR     MOTOR_2807
@@ -115,8 +115,8 @@
   #define PACK_CAPACITY_MAH       4500.0f
   #define PACK_MIN_C_RATE         20
   #define PAYLOAD_RESERVE_G       170.0f
-  #define FLIGHT_LOOP_HZ          500
-  #define IMU_DLPF_HZ             184      // must sit above the 120 Hz notch
+  #define FRAME_DEFAULT_LOOP_HZ   500
+  #define FRAME_DEFAULT_DLPF_HZ   184      // must sit above the 120 Hz notch
   #define FRAME_GAIN_SCALE        1.00f    // the reference airframe
   #define FRAME_CRUISE_SPEED_MPS  12.0f
   #define FRAME_DEFAULT_MOTOR     MOTOR_2810
@@ -130,8 +130,8 @@
   #define PACK_CAPACITY_MAH       4500.0f
   #define PACK_MIN_C_RATE         30
   #define PAYLOAD_RESERVE_G       200.0f
-  #define FLIGHT_LOOP_HZ          500
-  #define IMU_DLPF_HZ             184      // must sit above the 105 Hz notch
+  #define FRAME_DEFAULT_LOOP_HZ   500
+  #define FRAME_DEFAULT_DLPF_HZ   184      // must sit above the 105 Hz notch
   #define FRAME_GAIN_SCALE        0.90f    // ~9/10; larger airframe, slower response
   #define FRAME_CRUISE_SPEED_MPS  12.0f
   #define FRAME_DEFAULT_MOTOR     MOTOR_3115
@@ -338,7 +338,44 @@
 // =====================================================================================
 //  3. FLIGHT CONTROL LOOP
 // =====================================================================================
-// FLIGHT_LOOP_HZ is set by FRAME_SIZE_IN in section 1. A 7-inch runs at 1000 Hz
+// -------------------------------------------------------------------------------------
+//  LOOP RATE
+//
+//  The frame chooses a default; -DFLIGHT_LOOP_HZ=1000 overrides it. Three constants have
+//  to move with it and they are derived here rather than left to be remembered:
+//
+//    IMU_DLPF_HZ     the anti-alias corner can rise once Nyquist does, and at 1000 Hz it
+//                    goes to 260 Hz -- which is also what finally puts the second
+//                    harmonic below the corner on the 9- and 10-inch. See section 8.3.3.
+//    DYN_NOTCH_BINS  the SDFT's resolution is loop rate over bins, so the bin count has
+//                    to double to hold 3.9 Hz.
+//    every divider   the log, notch-update, accelerometer and barometer rates all divide
+//                    the loop rate, and all are asserted exact.
+//
+//  Leaving any of them behind is the DLPF defect of section 8.3 all over again, which is
+//  precisely why they are computed rather than configured.
+//
+//  1000 Hz IS NOT THE DEFAULT ON THE 9- AND 10-INCH, and section 8.3.4 says why: the
+//  ESCs are driven by 400 Hz PWM, so 60% of motor writes are overwritten before they
+//  reach one. A faster loop buys filtering resolution, not control authority. It becomes
+//  the right default when the DShot driver of section 4.3.1 exists.
+// -------------------------------------------------------------------------------------
+#ifndef FLIGHT_LOOP_HZ
+#define FLIGHT_LOOP_HZ            FRAME_DEFAULT_LOOP_HZ
+#endif
+
+#ifndef IMU_DLPF_HZ
+  #if FLIGHT_LOOP_HZ >= 1000
+    // Nyquist is 500 Hz, so the MPU-6050's widest setting is both legal and useful. It
+    // also switches the part from a 1 kHz output rate to 8 kHz, which is what makes
+    // sampling it at 1000 Hz honest rather than a beat between two free-running clocks.
+    #define IMU_DLPF_HZ           260
+  #else
+    #define IMU_DLPF_HZ           FRAME_DEFAULT_DLPF_HZ
+  #endif
+#endif
+
+// FLIGHT_LOOP_HZ was set by FRAME_SIZE_IN in section 1. A 7-inch runs at 1000 Hz
 // because its hover fundamental is near 180 Hz, and a 500 Hz loop puts that
 // uncomfortably close to Nyquist.
 #define FLIGHT_LOOP_DT            (1.0f / (float)FLIGHT_LOOP_HZ)
@@ -388,7 +425,16 @@
 #define DYN_NOTCH_ENABLE          1
 #endif
 
-#define DYN_NOTCH_BINS            128      // 3.9 Hz resolution at a 500 Hz loop
+// Resolution is FLIGHT_LOOP_HZ / DYN_NOTCH_BINS, so the bin count follows the loop
+// rate. 3.9 Hz either way; a 1000 Hz loop with 128 bins would give 7.8 Hz, which is
+// coarse against a notch band only a few tens of hertz wide.
+#ifndef DYN_NOTCH_BINS
+  #if FLIGHT_LOOP_HZ >= 1000
+    #define DYN_NOTCH_BINS        256
+  #else
+    #define DYN_NOTCH_BINS        128
+  #endif
+#endif
 #define DYN_NOTCH_UPDATE_HZ       20       // spectrum re-evaluation rate
 #define DYN_NOTCH_BAND_LOW        0.60f    // search from 0.6x the static centre
 #define DYN_NOTCH_BAND_HIGH       1.60f    // ...to 1.6x, further capped by the DLPF
@@ -804,6 +850,14 @@ static_assert((16 * 1000 / DSHOT_BITRATE_KHZ) + DSHOT_TELEM_TIMEOUT_US
               < (1000000 / FLIGHT_LOOP_HZ),
               "A DShot frame plus its telemetry reply does not fit inside one flight "
               "loop period at this bitrate");
+static_assert(FLIGHT_LOOP_HZ == 500 || FLIGHT_LOOP_HZ == 1000,
+              "Only 500 and 1000 Hz are characterised. Both divide 1000 exactly, which "
+              "the FreeRTOS tick period depends on, and both keep every derived divider "
+              "whole.");
+// The reason for a 1000 Hz loop is spectral, so check the spectrum actually improved.
+static_assert(FLIGHT_LOOP_HZ < 1000 || IMU_DLPF_HZ >= 260,
+              "A 1000 Hz loop that leaves the anti-alias corner where a 500 Hz loop put "
+              "it gains nothing -- the corner is what hides the second harmonic");
 static_assert(IMU_ACCEL_READ_HZ > 0 && FLIGHT_LOOP_HZ % IMU_ACCEL_READ_HZ == 0,
               "IMU_ACCEL_READ_HZ must divide FLIGHT_LOOP_HZ exactly, or the accelerometer "
               "divider drifts against the loop");
