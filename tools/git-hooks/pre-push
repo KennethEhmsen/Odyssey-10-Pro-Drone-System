@@ -20,7 +20,7 @@
 set -e
 
 root=$(git rev-parse --show-toplevel)
-WATCHED="firmware shared tools/host_tests tools/blackbox_decode.py tools/test_blackbox_decode.py android"
+WATCHED="firmware shared tools/host_tests tools/blackbox_decode.py tools/test_blackbox_decode.py tools/patchfile.py tools/test_patchfile.py android"
 ZERO=0000000000000000000000000000000000000000
 
 should_run=no
@@ -92,15 +92,19 @@ else
     echo "pre-push: no javac, skipping the Remote ID decoder tests"
 fi
 
-# The BlackBox decoder is how flight logs are read. A decoder that mis-scales a field
-# turns a recorded flight into confident nonsense, so it is checked on every push.
-if ! python "$root/tools/test_blackbox_decode.py" > /dev/null 2>&1; then
-    python "$root/tools/test_blackbox_decode.py" || true
-    echo
-    echo "pre-push: BlackBox decoder tests FAILED -- push aborted."
-    exit 1
-fi
-echo "pre-push: BlackBox decoder OK"
+# patchfile backs `check_consistency.py --fix`, which rewrites source in place. A bug
+# there damages files instead of reporting a problem, so it is checked first.
+# The BlackBox decoder is how flight logs are read; one that mis-scales a field turns a
+# recorded flight into confident nonsense.
+for t in test_patchfile test_blackbox_decode; do
+    if ! python "$root/tools/$t.py" > /dev/null 2>&1; then
+        python "$root/tools/$t.py" || true
+        echo
+        echo "pre-push: $t FAILED -- push aborted."
+        exit 1
+    fi
+done
+echo "pre-push: Python tool tests OK"
 
 echo "pre-push: running host verification..."
 log=$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/ody-tests.$$")

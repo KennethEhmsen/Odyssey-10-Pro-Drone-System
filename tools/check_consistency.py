@@ -1483,6 +1483,64 @@ def check_line_endings(rep, fix):
                     f".gitattributes")
 
 
+def check_hook_coverage(rep, fix):
+    """
+    Every test suite the pre-push hook runs behind its change gate must also appear in
+    the hook's WATCHED list.
+
+    The hook skips the expensive suites unless a WATCHED path changed. A suite that is
+    run but not watched therefore skips itself on exactly the change most likely to
+    break it -- a change to the suite, or to the module it covers.
+
+    This was not hypothetical: tools/patchfile.py and its tests were added to the hook
+    and to WATCHED in the same edit, a git checkout during unrelated testing reverted
+    both, and the next push ran only the consistency check without anything noticing.
+
+    Only the GATED section is examined. check_consistency.py runs unconditionally above
+    the gate, by design, so it neither needs nor gets a WATCHED entry.
+    """
+    rep.checks_run += 1
+    hook = ROOT / "tools" / "git-hooks" / "pre-push"
+    if not hook.exists():
+        rep.problem("hook-coverage", "tools/git-hooks/pre-push is missing", severity="warn")
+        return
+
+    text = read(hook)
+    m = re.search(r'WATCHED="([^"]*)"', text)
+    if not m:
+        rep.problem("hook-coverage", "could not find WATCHED in the pre-push hook")
+        return
+    watched = m.group(1).split()
+
+    # Everything after the gate is conditional on a WATCHED path having changed.
+    gate = re.search(r'if \[ "\$should_run" = no \]; then\s*\n\s*exit 0\s*\n\s*fi', text)
+    if not gate:
+        rep.problem("hook-coverage",
+                    "could not find the hook's change gate -- if it was removed, every "
+                    "push now runs the full suite", severity="warn")
+        return
+    gated = text[gate.end():]
+
+    def covered(path):
+        return any(path == w or path.startswith(w.rstrip("/") + "/") for w in watched)
+
+    run = set(f"tools/{n}.py" for n in re.findall(r'tools/([\w.]+)\.py', gated)
+              if "$" not in n)
+    # `for t in a b c; do ... tools/$t.py ...` runs each name in the list.
+    for names in re.findall(r"for t in ([\w \t]+); do", gated):
+        run.update(f"tools/{n}.py" for n in names.split())
+
+    missing = sorted(p for p in run if not covered(p))
+    for p in missing:
+        rep.problem("hook-coverage",
+                    f"the pre-push hook runs {p} behind its change gate but does not "
+                    f"watch it, so a change to that file would push untested")
+
+    if not missing:
+        rep.note = getattr(rep, "note", [])
+        rep.note.append(f"hook-coverage: all {len(run)} gated suites are in WATCHED")
+
+
 # =====================================================================================
 #  Registry
 # =====================================================================================
@@ -1494,6 +1552,9 @@ CHECKS = [
     ("bom", "BOM per-line arithmetic and the total quoted in the specification", check_bom),
     ("spec-constants", "battery thresholds, AUW and TWR agree with config.h",
      check_spec_constants),
+    ("hook-coverage",
+     "every suite the pre-push hook runs behind its gate is also watched by it",
+     check_hook_coverage),
     ("line-endings",
      "every tracked text file matches the line endings .gitattributes declares",
      check_line_endings),
