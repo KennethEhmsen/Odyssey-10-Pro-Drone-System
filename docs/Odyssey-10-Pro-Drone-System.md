@@ -637,15 +637,15 @@ one notch frequency. All of it is pure integer arithmetic and all of it is host-
 conventions and of every notch frequency in the build matrix through a wire-level
 telemetry word.
 
-**The RMT driver is deliberately NOT written.** Putting those frames on a wire means
-driving the ESP32-P4's RMT peripheral to a fraction of a microsecond and turning the line
-around fast enough to catch the ESC's reply. That code cannot be compiled in this
-environment, let alone verified, and it drives motors — a frame that misses a bit
-boundary does not fail politely, it becomes a throttle value the ESC acts on. Writing it
-untested would produce the appearance of a finished feature and none of the substance.
-What it needs is spelled out in §4.3.1.
+**Revision 3.6 added the RMT driver, and 3.7 wired it into the flight loop.** Its
+timing arithmetic and symbol encoding are host-tested; the ESP-IDF peripheral calls have
+never been compiled, because there is no IDF in the environment they were written in.
+§4.3.1 splits the two apart, lists the four assumptions the hardware has to confirm, and
+gives the bring-up order. **Nothing here has driven a motor.**
 
-`DSHOT_ENABLE` defaults to **0**, and analog PWM remains the default output.
+`DSHOT_ENABLE` defaults to **0**, and analog PWM remains the default output. The
+`unverified-defaults` check keeps it that way, so enabling it is a deliberate,
+reviewable change rather than a line left over from debugging.
 
 #### 4.3.1 The RMT driver
 
