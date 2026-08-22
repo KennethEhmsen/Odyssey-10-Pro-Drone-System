@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 3.9 — the other nine builds have a parts list, and mass is reconciled against the firmware
+**Document revision:** 4.0 — the DShot bench procedure, with the parts and the numbers to measure against
 
 ---
 
@@ -735,6 +735,114 @@ hardware or new timing-critical code, and it could be tested on the bench. RPM t
 would still be better, because it gives the shaft frequency directly rather than inferring
 it from the noise, but it is no longer the only thing standing between this design and a
 notch that knows where the peak actually is.
+
+
+#### 4.3.2 Bench procedure: what to wire and what to buy
+
+§4.3.1 lists four assumptions the hardware has to confirm. They are not equally expensive
+to test, and they are not in the order you might expect — **the one that could invalidate
+the design needs no instrument at all.**
+
+##### Step 0 — the serial console, and nothing else
+
+**Parts: none.** The flight controller, a USB cable, and a terminal.
+
+Build with DShot enabled and read what it says at boot:
+
+```bash
+pio run -e odyssey-fc -t upload -- -DDSHOT_ENABLE=1
+```
+
+`DShotRmt::begin()` reports each failure separately, on purpose. Assumptions 1 to 3 are
+answered here:
+
+| What you see | What it means |
+| --- | --- |
+| `DShot output active (analog PWM is NOT in use)` | assumptions 1–3 hold; go to step 1 |
+| `RX channel on GPIO n failed` | **assumption 1 is false.** A pin cannot carry both a TX and an RX channel. Bidirectional telemetry needs a different capture mechanism, not different settings — stop and change the design |
+| `TX channel on GPIO n failed` | the resolution or clock source was rejected. `DSHOT_RMT_RESOLUTION_HZ` needs to change, and §4.3.1's table says what it must still satisfy |
+| `copy encoder allocation failed` | out of RMT memory; reduce `mem_block_symbols` |
+
+> **Expect compile errors before you see any of this.** `dshot_rmt.cpp` has never been
+> through a compiler. The ESP-IDF RMT API changed between IDF 4 and 5, and the code is
+> written against 5. Getting it to build is part of step 0, not a sign anything is wrong.
+
+##### Step 1 — the signal
+
+**Parts: a USB logic analyser, about $12.** Eight channels at 24 MSa/s is ample — that is
+41 ns of resolution against a 3.3 µs bit, so about 79 samples per bit. PulseView (free)
+reads it. A scope also works and shows edge quality a logic analyser cannot, but for
+*timing* the analyser is the better instrument and a twentieth of the price.
+
+Wire it with **no ESC, no motor and no battery**:
+
+```
+  ESP32-P4  GPIO 4  (MOTOR1_PIN) ---------> logic analyser CH0
+  ESP32-P4  GND     ----------------------> logic analyser GND
+```
+
+One ground, shared. That is the single most common reason a capture looks like noise.
+
+The other three motor pins are **GPIO 5, 6 and 15** if you want all four at once.
+
+What you should see, with the aircraft disarmed and `DSHOT_BIDIRECTIONAL` on:
+
+| Measurement | Expected | Why it matters |
+| --- | --- | --- |
+| Idle level between frames | **HIGH** | bidirectional DShot idles high so the ESC can pull it down to reply. Idling low means the inversion is wrong, and the symptom is an ESC that ignores everything — indistinguishable from a dead pin |
+| Bit period | **3.30 µs** ±5% | 33 ticks at 10 MHz |
+| A `1` bit | low for **2.50 µs**, high for 0.80 µs | inverted, so the *pulse* is low |
+| A `0` bit | low for **1.20 µs**, high for 2.10 µs | a `1` is about twice a `0`; that ratio is the whole discrimination |
+| Frame length | **52.8 µs**, 16 bits | |
+| Frame interval | **2000 µs** (500 Hz), or 1000 µs on a 7-inch | 2.6% duty |
+| Frame content, disarmed | value 0 = `DSHOT_CMD_DISARM` | not 48. If you decode 48 here, `idleMotors()` is sending minimum throttle and motors would turn on a disarmed aircraft |
+
+##### Step 2 — one ESC, no propeller
+
+**Parts you likely already have:** the 4-in-1 ESC and one motor. **Parts worth buying:**
+
+| Item | Approx. | Why |
+| --- | --- | --- |
+| Bench PSU, 24 V / 5 A, current-limited | $60 | Set the limit to 1 A. A current limit turns a wiring mistake into a shutdown instead of a fire. Far safer than a LiPo for a first power-on |
+| *or* an XT60 smoke stopper | $10 | If you would rather use the 6S pack |
+| Dupont jumpers, ESC signal lead | $5 | |
+
+```
+  ESP32-P4  GPIO 4  --------+-------------> ESC channel 1 signal
+                            +-------------> logic analyser CH0
+  ESP32-P4  GND     --------+-------------> ESC GND ---> analyser GND
+  Bench PSU 24 V ------------------------> ESC power  (current limit 1 A)
+  ESC channel 1 ------------------------> motor, NO PROPELLER
+```
+
+Tap the signal line, do not break it. Analyser and ESC both see it.
+
+Then:
+
+1. The ESC should arm and beep. If it does not, decode the frame — a checksum the ESC
+   rejects usually means the copy encoder inserted a gap, which is assumption 3.
+2. Step throttle from idle to about 20%. The motor should turn smoothly.
+3. **Look for the reply**, roughly 30 µs after each frame ends: 21 bits at 2.60 µs each,
+   about 55 µs long, on the same wire. If the frame is there and the reply never is,
+   **assumption 4 is false** — RX cannot be armed while TX drives the pin, and the
+   capture needs restructuring.
+4. Check the console. A reply that fails GCR or its checksum is rejected by design, so
+   the symptom of a marginal capture is *silence*, not wrong numbers.
+
+##### Step 3 — thrust stand, still no propeller
+
+This is where `MOTOR_POLE_PAIRS` is confirmed. Compare commanded throttle against
+reported RPM across the range. A wrong pole count scales every derived frequency by a
+constant, which presents as a mis-tuned notch rather than as the units error it is.
+
+**Only after all of that does a propeller go on anything.**
+
+##### What to send back
+
+The useful artefact is a PulseView capture — or just the decoded numbers — of one frame
+and the gap after it, plus whatever the console printed. The four assumptions are
+answerable from that, and the driver can be corrected against what the peripheral
+actually did rather than against what its documentation says it should.
 
 ### 4.4 Mixer and desaturation
 
