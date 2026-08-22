@@ -12,6 +12,26 @@ build/
 *.bin
 *.hex
 *.map
+build-log.txt
+
+# ESP-IDF
+#
+# managed_components/ is 434 MB of downloaded dependencies -- arduino-esp32 and
+# everything the component manager pulled with it. dependencies.lock pins the
+# versions and IS committed, so the tree is reproducible without carrying it.
+#
+# sdkconfig is GENERATED from sdkconfig.defaults, and it records absolute paths
+# and the selected target. sdkconfig.defaults is the file that belongs in git;
+# committing the generated one guarantees a conflict on every machine.
+managed_components/
+sdkconfig
+sdkconfig.old
+
+# Vendored Arduino libraries. 13,600 lines of third-party source that
+# tools/fetch_arduino_libs.py reproduces exactly, at pinned tags, and that
+# components/README.md documents. Committing them would bury this project's
+# own code in someone else's.
+firmware/flight-controller/components/*/
 
 # Flight logs pulled off the aircraft
 *.ody

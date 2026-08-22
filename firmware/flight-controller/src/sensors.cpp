@@ -3,6 +3,9 @@
 // =====================================================================================
 
 #include "sensors.h"
+// SlewLimitedEma, used for the battery voltage filter below. This include was
+// missing: sensors.cpp had never been compiled by anything, so nothing noticed.
+#include "filters.h"
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_BMP280.h>
 #include <Adafruit_Sensor.h>
@@ -128,15 +131,22 @@ bool SensorHub::initQmc5883l() {
 
 bool SensorHub::initVl53l1x() {
   if (!i2cProbe(I2C_ADDR_VL53L1X)) return false;
+  // IDENTIFICATION__MODEL_ID (0x010F). The VL53L1X uses SIXTEEN-BIT register
+  // addressing, so the address goes out as two bytes -- exactly as readVl53l1x() does
+  // it below.
+  //
+  // This previously called i2cRead(..., 0x010F, ...), whose register parameter is a
+  // uint8_t. 0x010F silently truncated to 0x0F, so it addressed the wrong register
+  // entirely, and the correct two-byte form beneath it only ran if that malformed
+  // transaction happened to fail. The compiler says so plainly -- "changes value from
+  // 271 to 15" -- but sensors.cpp had never been compiled by anything. See section 10.4.
   uint8_t id[2];
-  if (!i2cRead(I2C_ADDR_VL53L1X, 0x010F, id, 2)) {
-    // 16-bit register addressing; fall back to the two-byte form.
-    Wire.beginTransmission(I2C_ADDR_VL53L1X);
-    Wire.write(0x01); Wire.write(0x0F);
-    if (Wire.endTransmission(false) != 0) return false;
-    if (Wire.requestFrom((int)I2C_ADDR_VL53L1X, 2) != 2) return false;
-    id[0] = Wire.read(); id[1] = Wire.read();
-  }
+  Wire.beginTransmission(I2C_ADDR_VL53L1X);
+  Wire.write(0x01); Wire.write(0x0F);
+  if (Wire.endTransmission(false) != 0) return false;
+  if (Wire.requestFrom((int)I2C_ADDR_VL53L1X, 2) != 2) return false;
+  id[0] = Wire.read(); id[1] = Wire.read();
+
   if (id[0] != 0xEA) return false;             // model ID
   // Short distance mode, 20 ms timing budget -> comfortably faster than the 50 Hz we
   // poll it at, and short mode is far more robust in daylight than long mode.

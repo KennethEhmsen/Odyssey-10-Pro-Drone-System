@@ -1,0 +1,28 @@
+# =====================================================================================
+#  Odyssey-10 Pro -- ESP-IDF defaults
+# =====================================================================================
+
+#  THE FLIGHT LOOP DEPENDS ON THIS, AND ESP-IDF DEFAULTS TO 100.
+#
+#  main.cpp expresses its period as pdMS_TO_TICKS(1000 / FLIGHT_LOOP_HZ), which is
+#  (ms * configTICK_RATE_HZ) / 1000. At a 100 Hz tick a 2 ms period evaluates to ZERO
+#  ticks, and vTaskDelayUntil() with a zero period does not delay -- the flight loop
+#  would spin and starve everything else pinned to that core.
+#
+#  Under Arduino-ESP32 the tick is 1000 and this worked by accident. Under ESP-IDF it
+#  would not have. There is a static_assert in main.cpp that refuses to compile without
+#  this line, added when section 8.3.4 costed the 1000 Hz loop and found the dependency
+#  undeclared -- see finding 36.
+CONFIG_FREERTOS_HZ=1000
+
+#  setup() and loop() are called for us, as they are under Arduino.
+CONFIG_AUTOSTART_ARDUINO=y
+
+#  The P4 has no radio of its own; the EV board's C6 provides Wi-Fi over SDIO. The
+#  flight controller does not use it -- see section 1 -- so nothing here enables it.
+
+#  Matches the -DCORE_DEBUG_LEVEL=1 in platformio.ini.
+CONFIG_ARDUHAL_LOG_DEFAULT_LEVEL_ERROR=y
+
+#  BlackBox writes to a MicroSD over SPI and the specification calls for a 32 GB card.
+CONFIG_FATFS_LFN_HEAP=y

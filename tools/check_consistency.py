@@ -261,10 +261,27 @@ def strip_c_comments(src):
     return "".join(out)
 
 
+#  Directories holding code this project did not write and must not modify.
+#
+#  Until the ESP-IDF build existed there was no third-party source in the tree, so
+#  source_files() could glob freely. The first `--fix` run after it appeared rewrote
+#  whitespace in 255 files belonging to arduino-esp32, esp-modem and esp-dl, and
+#  reported brace imbalances in their examples as though they were defects here.
+#
+#  Nothing was committed -- both directories are gitignored -- but a tool that edits
+#  vendored code on its own initiative is a tool that will eventually do so somewhere
+#  that matters.
+VENDORED_DIRS = ("managed_components", "components", "build", ".git")
+
+
+def _is_vendored(path):
+    return any(part in VENDORED_DIRS for part in path.parts)
+
+
 def source_files():
     files = []
     for g in SOURCE_GLOBS:
-        files.extend(sorted(ROOT.glob(g)))
+        files.extend(p for p in sorted(ROOT.glob(g)) if not _is_vendored(p))
     return files
 
 

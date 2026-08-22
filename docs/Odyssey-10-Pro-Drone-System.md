@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 4.5 — the documented build command does not work, and why
+**Document revision:** 4.6 — eight of nine source files had never been compiled
 
 ---
 
@@ -2147,6 +2147,11 @@ Odyssey-10-Pro-Drone-System/
 |   |   |   +-- navigation.h        RTH + energy budget            [findings 1, 4]
 |   |   |   +-- radio_link.h        CRSF + LoRa + AUX bus          [findings 3, 7]
 |   |   |   +-- blackbox.h          Ring-buffered SD recorder
+|   |   +-- CMakeLists.txt          ESP-IDF build; PlatformIO cannot target the P4
+|   |   +-- sdkconfig.defaults      CONFIG_FREERTOS_HZ=1000 -- the loop depends on it
+|   |   +-- main/CMakeLists.txt     component wiring
+|   |   +-- main/idf_component.yml  pulls arduino-esp32
+|   |   +-- components/README.md    vendored Arduino libraries, pinned
 |   |   +-- src/
 |   |       +-- main.cpp            Tasks, control, arming         [findings 5, 11, 12]
 |   |       +-- sensors.cpp         Split IMU read: gyro at loop rate, accel slower
@@ -2174,6 +2179,7 @@ Odyssey-10-Pro-Drone-System/
 |   +-- patchfile.py                Line-ending-safe in-place edits
 |   +-- test_patchfile.py           ...and its tests
 |   +-- md2docx.py                  Regenerates the Word documents, reproducibly
+|   +-- fetch_arduino_libs.py       Vendors the Arduino libraries as IDF components
 |   +-- run_android_parser_tests.sh Decoder tests with plain javac
 |   +-- git-hooks/pre-push          Runs the whole gate before every push
 |   +-- host_tests/                 Compiles the real headers on a PC
@@ -2284,6 +2290,47 @@ rebuilds all four.
 
 ---
 
+
+### 10.4 What the host tests do not cover
+
+> **FINDING 40, and the largest gap this project has had.** Eight of the nine `.cpp`
+> files in this repository had **never been compiled by anything** — not by CI, not by
+> the host tests, not by a developer — until the ESP-IDF toolchain was installed on
+> hardware day.
+
+The host suite compiles the real *headers* against a small Arduino shim, and most of this
+project's logic genuinely lives in headers: the mixer, the PID, the filters, the state
+machine, the sliding DFT, the DShot frame arithmetic, every compile-time assertion in
+`config.h`. That is why 387 assertions felt like broad coverage.
+
+But it links exactly one implementation file, `identity.cpp`, because that one has no
+Arduino dependencies. Everything else — `main.cpp`, `sensors.cpp`, `navigation.cpp`,
+`radio_link.cpp`, `blackbox.cpp`, `dshot_rmt.cpp`, and both Remote ID sources — needs
+`Wire`, `Serial`, FreeRTOS and the ESP-IDF drivers, none of which the shim provides. So
+they were never built.
+
+**The first real compile found a defect in the first file it reached.** `sensors.cpp`
+used `SlewLimitedEma` for the battery voltage filter without including `filters.h`, where
+it is declared. Not a subtle error — the kind any compiler catches instantly, sitting
+undisturbed in a file that had passed every review and every check this project runs.
+
+| | |
+| --- | --- |
+| Covered by host tests | headers: `config.h`, `types.h`, `filters.h`, `pid.h`, `mixer.h`, `state_machine.h`, `dynamic_notch.h`, `dshot.h`, `dshot_rmt.h`, plus `identity.cpp` |
+| **Not covered** | `main.cpp`, `sensors.cpp`, `navigation.cpp`, `radio_link.cpp`, `blackbox.cpp`, `dshot_rmt.cpp`, `remote-id/main.cpp`, `odid_transport.cpp` |
+| Covered now by | `idf.py build`, which is the only thing that compiles them |
+
+**So a green host-test run does not mean the firmware compiles.** It never did. It means
+the algorithms are right, which is worth having and is not the same claim. The ESP-IDF
+build is now the compile check for the other eight files, and §11.1 asks for it before
+any flashing.
+
+This is the same shape as every other finding here — a verification that looked
+comprehensive with an unexamined hole in it — but it is the one that had been open
+longest and covered the most code.
+
+---
+
 ## 11. Pre-Flight and Field Commissioning Checklist
 
 ### 11.1 Bench
@@ -2311,6 +2358,7 @@ rebuilds all four.
 
 ### 11.2 Propulsion
 
+- [ ] **`idf.py build` completes.** This is the only thing that compiles `main.cpp`, `sensors.cpp`, `navigation.cpp`, `radio_link.cpp`, `blackbox.cpp` and `dshot_rmt.cpp` — the host tests do not, and never did. See §10.4.
 - [ ] **Weigh the flight-controller board and correct §2.** The BOM carries 9 g, which assumes a module on a compact carrier rather than a development board. This is the least-supported mass in the BOM and it propagates into `AIRFRAME_AUW_G`, the hover point and the return-to-home reserve — see §2.2.
 - [ ] **ESC endpoint calibration** for 400 Hz PWM input (1000–2000 µs).
 - [ ] **Motor direction (props-out), propellers removed.** Against section 4.2:
@@ -2676,6 +2724,8 @@ Revision 2.0 introduced or left standing the following, all corrected here.
 | `CRUISE_CURRENT_A` was set from HOVER power since revision 2.2, but it budgets the charge to fly home at CRUISE speed — about 10% more. The RTH energy reserve was therefore optimistic | Corrected to 9.7 A, and §3.3 now states which figure it is and why |
 | The pack was rated 45C against a 15C peak demand, carrying 40 g for capability the aircraft cannot use | Specified as 20C minimum. §3.3 explains that energy per gram, not C-rate, is the constraint on this platform |
 | 3-blade propellers on a long-range platform with thrust to spare | Changed to 9x5x2. About 10% better hover efficiency for ~12% of peak thrust: 24 min hover and 16 km one-way, up from 22 min and 14.1 km |
+| `initVl53l1x()` read the downward rangefinder's model ID through `i2cRead(..., 0x010F, ...)`, whose register parameter is a `uint8_t`. The VL53L1X uses 16-bit register addressing, so 0x010F truncated to 0x0F and addressed the wrong register; the correct two-byte fallback beneath it ran only if that malformed transaction happened to fail. The landing flare and touchdown veto depend on this sensor | Corrected to two-byte addressing, matching `readVl53l1x()`. Found by the compiler on the first build of the file — "changes value from 271 to 15" |
+| Eight of the nine `.cpp` files in the repository had never been compiled by anything. The host suite builds the headers, where most of the logic lives, but links only `identity.cpp` — every other implementation file needs Arduino and ESP-IDF, so none was ever built. The first real compile found `sensors.cpp` using `SlewLimitedEma` without including `filters.h` | Recorded in §10.4. `idf.py build` is now the compile check for those files and §11.1 requires it before flashing. A green host run means the algorithms are right, not that the firmware compiles |
 | The build command given throughout the specification, `pio run -e odyssey-fc`, cannot work. PlatformIO's stock `espressif32` platform has no `esp32-p4-function-ev-board` — the board `platformio.ini` names — so the build fails resolving the board before reaching a compiler. Every `pio run` line in the document was written without ever being run | Recorded in §3.2. ESP-IDF 5.5 chosen over the pioarduino community fork; the instructions will be rewritten when a build succeeds, not before |
 | Nine of the ten build combinations had no parts list. The BOM covered the 9-inch reference only, while `config.h` happily built 7-inch and 10-inch aircraft whose frame, motors, propellers, battery and ESC were nowhere specified | `hardware/bom-variants.csv` covers all ten, and the `bom-mass` check reconciles every build's parts against the mass model in `config.h`. §2.1 |
 | `check_bom()` verified BOM arithmetic and the price quoted in §2, but nothing compared BOM **mass** against `config.h` — `AIRFRAME_AUW_G` sizes thrust-to-weight, hover power and the energy budget, and was free to drift from the parts that produce it | Reconciled for all ten builds, including an explicit `Airborne Mass g` column so the ground-station radio the BOM also buys is not counted as flying mass |

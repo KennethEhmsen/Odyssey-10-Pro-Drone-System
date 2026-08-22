@@ -1,0 +1,11 @@
+## Arduino is pulled in as a managed component rather than vendored.
+##
+## The firmware is written against the Arduino API -- Serial, Wire, ledcWrite, the
+## Arduino String and the Arduino FreeRTOS wrappers -- and rewriting it to native IDF
+## calls would be a large change with no bearing on anything this project is trying to
+## verify. ESP-IDF supports Arduino as a component precisely for this case.
+dependencies:
+  idf:
+    version: ">=5.3"
+  espressif/arduino-esp32:
+    version: "^3.3.0"
