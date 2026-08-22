@@ -1570,6 +1570,23 @@ def check_line_endings(rep, fix):
             rep.problem("line-endings",
                         f"{rel} contains {lone_cr} bare CR characters")
 
+        # Any other C0 control character is either a mangled escape sequence or a
+        # corrupted file. Both are INVISIBLE in an editor, which is why they need
+        # catching mechanically: a stray 0x08 in check_consistency.py once passed
+        # review, passed a diff, and only surfaced as an unrelated regex failing.
+        for offset, byte in enumerate(raw):
+            if byte < 0x20 and byte not in (0x09, 0x0A, 0x0D) or byte == 0x7F:
+                name = {0x00: "NUL", 0x07: "BEL", 0x08: "BACKSPACE", 0x0B: "VT",
+                        0x0C: "FORM FEED", 0x1B: "ESC",
+                        0x7F: "DEL"}.get(byte, f"0x{byte:02X}")
+                line = raw[:offset].count(b"\n") + 1
+                rep.problem("line-endings",
+                            f"{rel} line {line} contains a {name} control character. "
+                            f"It is invisible in an editor and is almost always a "
+                            f"backslash escape mangled on its way through a shell -- "
+                            f"see the note at the top of tools/patchfile.py")
+                break     # one report per file is enough to act on
+
         if "eol=lf" in meta and crlf:
             rep.problem("line-endings",
                         f"{rel} is declared eol=lf in .gitattributes but has {crlf} CRLF "

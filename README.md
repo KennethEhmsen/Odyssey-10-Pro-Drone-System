@@ -39,7 +39,7 @@ finding-by-finding index, or section 13 of the specification.
 | `tools/blackbox_decode.py` | Decodes flight logs to CSV, prints a flight summary |
 | `tools/md2docx.py` | Regenerates the Word document from the Markdown |
 | `tools/test_blackbox_decode.py` | Verifies the BlackBox decoder scales and flags every field correctly |
-| `tools/patchfile.py` | In-place source edits that preserve line endings and refuse ambiguous anchors |
+| `tools/patchfile.py` | In-place source edits that preserve line endings, refuse ambiguous anchors and reject shell-mangled content |
 | `tools/test_patchfile.py` | Tests for the above, including the whole-file anchor bug that motivated it |
 | `tools/host_tests/` | Compiles the real firmware headers on a PC and verifies the safety-critical algorithms |
 | `tools/check_consistency.py` | Checks the specification, firmware and BOM still agree; `--fix` repairs the mechanical ones |
@@ -191,6 +191,15 @@ together, because nothing checked that the parts still agreed.
 ```bash
 python tools/check_consistency.py --fix
 ```
+
+> **Editing these files programmatically?** Write the script to a file and run it by
+> path. A script piped to `python` through a shell heredoc loses one level of backslash
+> escaping before the shell sees it, and quoting does not help — even a `<<'EOF'`
+> heredoc, which the shell guarantees is literal, arrives mangled. A `\\b` intended as
+> backslash-b becomes `\b`, which Python reads as a **backspace character**, and that
+> gets written into the source invisibly. It happened to `check_consistency.py` and
+> needed a restore from git. `tools/patchfile.py` now refuses control characters, and
+> the `line-endings` check scans every tracked file for them.
 
 21 checks. `--fix` repairs whitespace, BOM totals and any specification constant that has
 drifted from `config.h` — the code is the source of truth, and the fixer rewrites the

@@ -34,6 +34,30 @@ So the primitives here refuse the ambiguous cases rather than guessing:
 
 Nothing is written if any replacement fails, so a partially-applied patch is not a
 state this module can produce.
+
+WRITE THESE SCRIPTS TO A FILE. DO NOT PIPE THEM THROUGH A SHELL HEREDOC.
+
+A script delivered to python via a shell heredoc loses one level of backslash escaping
+before the shell ever sees it, and quoting does not help -- a `<<'EOF'` heredoc, which
+the shell guarantees is literal, still arrives mangled, because the damage happens
+upstream of the shell. Demonstrated:
+
+    printed into a quoted heredoc:   \\d     arrives as:  \d
+    echo '\\d' in single quotes:       \\d     prints as:   \d
+
+The consequences are silent and specific:
+
+    "\\n"  intended as backslash-n   ->  "\n"  ->  Python reads a NEWLINE
+    "\\b"  intended as backslash-b   ->  "\b"  ->  Python reads a BACKSPACE (0x08)
+    r"\\d"  intended as a regex       ->  r"\d"  ->  a different pattern entirely
+
+The third is merely wrong. The second is worse: it writes a raw control character into
+a source file, where it is invisible in every editor and breaks the file for everyone.
+That happened to tools/check_consistency.py and cost a restore from git.
+
+The reliable method is to write the patch script to a file and run it by path, so the
+script's bytes never pass through shell escaping at all. The guards below exist because
+"be careful" is not a mechanism.
 """
 
 from __future__ import annotations
@@ -47,6 +71,37 @@ __all__ = ["detect_eol", "read_text", "write_text", "TextFile", "PatchError"]
 
 class PatchError(Exception):
     """A patch could not be applied safely. Nothing was written."""
+
+
+#  Control characters that should never appear in this project's source. Tab and
+#  newline are legitimate; carriage return is handled as a line ending. Everything else
+#  in the C0 range is either a mangled escape sequence or a corrupted file, and both are
+#  invisible in an editor -- which is exactly why they need catching mechanically.
+_FORBIDDEN_CONTROLS = {c for c in range(0x20)} - {0x09, 0x0A, 0x0D}
+_FORBIDDEN_CONTROLS.add(0x7F)
+
+_CONTROL_NAMES = {0x00: "NUL", 0x07: "BEL", 0x08: "BACKSPACE", 0x0B: "VT",
+                  0x0C: "FORM FEED", 0x1B: "ESC", 0x7F: "DEL"}
+
+
+def _reject_controls(text, what):
+    """
+    Raises if `text` holds a control character.
+
+    A BACKSPACE here almost always means a "\\b" in a patch script lost a backslash on
+    its way through a shell and became Python's \x08. The character is invisible, the
+    file still looks right, and the next tool to read it fails somewhere unrelated.
+    """
+    for i, ch in enumerate(text):
+        o = ord(ch)
+        if o in _FORBIDDEN_CONTROLS:
+            name = _CONTROL_NAMES.get(o, f"0x{o:02X}")
+            ctx = repr(text[max(0, i - 30):i + 30])
+            raise PatchError(
+                f"{what} contains a {name} control character at offset {i}. This is "
+                f"almost always a backslash escape that was mangled on its way through "
+                f"a shell -- write the patch script to a file and run it by path "
+                f"instead of piping it through a heredoc. Context: {ctx}")
 
 
 # -------------------------------------------------------------------------------------
@@ -104,6 +159,8 @@ def write_text(path, text: str, eol: str, *, allow_shrink: bool = False) -> None
                 f"really is intended."
             )
 
+    _reject_controls(text, f"the text being written to {path}")
+
     if path.suffix == ".py":
         try:
             ast.parse(text)
@@ -149,6 +206,8 @@ class TextFile:
         """
         if not old:
             raise PatchError(f"{self.path}: empty anchor")
+        _reject_controls(old, f"{self.path}: the anchor")
+        _reject_controls(new, f"{self.path}: the replacement")
         if old == self.text:
             raise PatchError(
                 f"{self.path}: the anchor matches the ENTIRE file. This is what a "
@@ -173,6 +232,8 @@ class TextFile:
         """Replaces every occurrence. `expect` asserts how many there should be."""
         if not old:
             raise PatchError(f"{self.path}: empty anchor")
+        _reject_controls(old, f"{self.path}: the anchor")
+        _reject_controls(new, f"{self.path}: the replacement")
         n = self.text.count(old)
         if n == 0:
             raise PatchError(f"{self.path}: anchor not found: {_excerpt(old)}")

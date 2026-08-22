@@ -17,7 +17,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from patchfile import (PatchError, TextFile, detect_eol, read_text, write_text)
+from patchfile import (PatchError, TextFile, detect_eol, read_text,
+                       write_text)
 
 _pass = 0
 _fail = 0
@@ -235,6 +236,64 @@ def test_nothing_written_on_failure():
               "a no-op patch does not rewrite the file at all")
 
 
+def test_shell_mangling_is_refused():
+    section("Content mangled by a shell is refused, not written")
+
+    # A patch script piped through a shell heredoc loses one level of backslash
+    # escaping before the shell sees it, and quoting does not help -- the damage is
+    # upstream. "\\b" intended as backslash-b becomes "\b", which Python reads as a
+    # BACKSPACE. That is invisible in every editor, and it corrupted
+    # tools/check_consistency.py badly enough to need a restore from git.
+    BACKSPACE = chr(0x08)
+
+    data = b"alpha\nbeta\ngamma\n"
+    with tmpfile(data) as p:
+        f = TextFile(p)
+        raises(lambda: f.replace_once("beta", "re.search(r'x" + BACKSPACE + "y')"),
+               "a BACKSPACE in the replacement is refused")
+        raises(lambda: f.replace_once("be" + BACKSPACE + "ta", "x"),
+               "a BACKSPACE in the anchor is refused")
+        check(p.read_bytes() == data, "and the file is untouched by either")
+
+    # The message has to name the cause, or the next person sees an opaque rejection
+    # of a string that looks perfectly ordinary on screen.
+    with tmpfile(data) as p:
+        f = TextFile(p)
+        try:
+            f.replace_once("beta", "x" + BACKSPACE + "y")
+            check(False, "should have raised")
+        except PatchError as exc:
+            msg = str(exc)
+            check("BACKSPACE" in msg, "the error names the control character")
+            check("heredoc" in msg or "shell" in msg,
+                  "and points at the shell as the likely cause")
+
+    # Every other C0 control is caught too -- NUL, ESC, form feed, DEL.
+    for code, label in ((0x00, "NUL"), (0x1B, "ESC"), (0x0C, "form feed"), (0x7F, "DEL")):
+        with tmpfile(data) as p:
+            f = TextFile(p)
+            raises(lambda: f.replace_once("beta", "x" + chr(code) + "y"),
+                   "a " + label + " character is refused")
+
+    # Tab, newline and CR are legitimate and must still pass.
+    with tmpfile(data) as p:
+        with TextFile(p) as f:
+            f.replace_once("beta", "col1\tcol2\nnextline")
+        check(b"\tcol2" in p.read_bytes(), "tabs and newlines are still allowed")
+
+    # replace_all is guarded identically -- a guard on one entry point only is no guard.
+    with tmpfile(b"x\nx\n") as p:
+        f = TextFile(p)
+        raises(lambda: f.replace_all("x", "y" + BACKSPACE),
+               "replace_all rejects control characters too")
+
+    # And write_text is the last line of defence, for text assembled some other way.
+    with tmpfile(data) as p:
+        raises(lambda: write_text(p, "alpha" + BACKSPACE + "\n", "\n"),
+               "write_text refuses to put a control character on disk")
+        check(p.read_bytes() == data, "leaving the file as it was")
+
+
 def test_insert_helpers():
     section("Insertion helpers")
 
@@ -260,6 +319,7 @@ def main():
     test_bad_anchors()
     test_python_must_still_parse()
     test_nothing_written_on_failure()
+    test_shell_mangling_is_refused()
     test_insert_helpers()
     print("\n" + "=" * 69)
     print(f" {_pass} passed, {_fail} failed")
