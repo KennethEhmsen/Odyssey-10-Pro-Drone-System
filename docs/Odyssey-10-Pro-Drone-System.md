@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 4.4 — the EV board's on-board C6 claims four of the project's pins
+**Document revision:** 4.5 — the documented build command does not work, and why
 
 ---
 
@@ -420,6 +420,21 @@ pio run -e odyssey-fc -- -DFRAME_SIZE_IN=10 -DMOTOR_CLASS=MOTOR_3115 -DPROP_BLAD
 | 7-inch | 2807 | 2807 | 295 mm | 1000 Hz | 180 / 150 Hz |
 | **9-inch** | 2810, 3110 | **2810** | 387 mm | 500 Hz | **120** / 100 Hz |
 | 10-inch | 3110, 3115 | 3115 | 430 mm | 500 Hz | 105 / 90 Hz |
+
+> **The `pio run` commands above do not work today, and this was verified on hardware
+> day.** PlatformIO's stock `espressif32` platform lists 242 boards and
+> `esp32-p4-function-ev-board` — the board `firmware/flight-controller/platformio.ini`
+> names — is not among them. `pio run -e odyssey-fc` fails resolving the board, before it
+> reaches a compiler. The ESP32-P4 is simply newer than the stock platform.
+>
+> Two routes exist. **pioarduino**, a community fork of the platform carrying a current
+> Arduino-ESP32, keeps the build file almost unchanged but points the toolchain at a
+> third-party fork. **ESP-IDF 5.5**, which is official and supports the P4 directly, but
+> means an IDF project layout with Arduino pulled in as a component.
+>
+> **ESP-IDF was chosen.** The build instructions in this section will be rewritten once a
+> build has actually succeeded — not before. Documenting a command that has never run is
+> what produced this note in the first place.
 
 Ten combinations, all building and passing the host tests. Invalid pairings stop the
 build with a specific message — a 2807 on a 10-inch frame is under-stator'd and a 3115 on
@@ -2661,6 +2676,7 @@ Revision 2.0 introduced or left standing the following, all corrected here.
 | `CRUISE_CURRENT_A` was set from HOVER power since revision 2.2, but it budgets the charge to fly home at CRUISE speed — about 10% more. The RTH energy reserve was therefore optimistic | Corrected to 9.7 A, and §3.3 now states which figure it is and why |
 | The pack was rated 45C against a 15C peak demand, carrying 40 g for capability the aircraft cannot use | Specified as 20C minimum. §3.3 explains that energy per gram, not C-rate, is the constraint on this platform |
 | 3-blade propellers on a long-range platform with thrust to spare | Changed to 9x5x2. About 10% better hover efficiency for ~12% of peak thrust: 24 min hover and 16 km one-way, up from 22 min and 14.1 km |
+| The build command given throughout the specification, `pio run -e odyssey-fc`, cannot work. PlatformIO's stock `espressif32` platform has no `esp32-p4-function-ev-board` — the board `platformio.ini` names — so the build fails resolving the board before reaching a compiler. Every `pio run` line in the document was written without ever being run | Recorded in §3.2. ESP-IDF 5.5 chosen over the pioarduino community fork; the instructions will be rewritten when a build succeeds, not before |
 | Nine of the ten build combinations had no parts list. The BOM covered the 9-inch reference only, while `config.h` happily built 7-inch and 10-inch aircraft whose frame, motors, propellers, battery and ESC were nowhere specified | `hardware/bom-variants.csv` covers all ten, and the `bom-mass` check reconciles every build's parts against the mass model in `config.h`. §2.1 |
 | `check_bom()` verified BOM arithmetic and the price quoted in §2, but nothing compared BOM **mass** against `config.h` — `AIRFRAME_AUW_G` sizes thrust-to-weight, hover power and the energy budget, and was free to drift from the parts that produce it | Reconciled for all ten builds, including an explicit `Airborne Mass g` column so the ground-station radio the BOM also buys is not counted as flying mass |
 | The bidirectional-DShot GCR decode read its four 5-bit groups from the wrong bit offsets, and most-significant group first. Every legal group still decoded to a legal nibble, so a corrupted RPM would have passed its checksum and been fed to the notch as a measurement | Corrected to read groups low-first at offsets 0/5/10/15. Caught by a full encode/decode round trip, which is why the test builds the wire format rather than trusting the decoder against itself |
