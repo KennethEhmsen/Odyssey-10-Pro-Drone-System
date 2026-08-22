@@ -2188,6 +2188,60 @@ def check_quoted_totals(rep, fix):
                     f"agree with bom.csv")
 
 
+#  Pins the ESP32-P4-Function-EV-Board wires to its on-board ESP32-C6 over SDIO.
+#  Documented at
+#  https://github.com/espressif/esp-hosted-mcu/blob/main/docs/esp32_p4_function_ev_board.md
+EV_BOARD_RESERVED = {
+    14: "SDIO D0", 15: "SDIO D1", 16: "SDIO D2", 17: "SDIO D3",
+    18: "SDIO CLK", 19: "SDIO CMD", 54: "C6 reset",
+}
+
+
+def check_devboard_pins(rep, fix):
+    """
+    Reports which project pins are unusable on the development board.
+
+    A WARNING, not an error. The aircraft's flight controller is a P4 module on a
+    carrier with no C6 on SDIO, so the pinout in section 9 is correct for the thing
+    being built. It is wrong for the board the bring-up actually happens on, and
+    discovering that with a scope attached and nothing on the wire wastes an evening.
+
+    The list is worth keeping current as other boards get used: the failure it prevents
+    is silent, because a pin driven by two peripherals produces a signal that looks
+    plausible rather than absent.
+    """
+    rep.checks_run += 1
+    text = read(CONFIG_H)
+
+    assigned = {}
+    for m in re.finditer(r"^\s*#define\s+(PIN_[A-Z0-9_]+|MOTOR[0-9]_PIN)\s+(\d+)\b",
+                         text, re.M):
+        assigned.setdefault(int(m.group(2)), []).append(m.group(1))
+
+    clashes = []
+    for gpio, why in sorted(EV_BOARD_RESERVED.items()):
+        for name in assigned.get(gpio, []):
+            clashes.append(f"{name} (GPIO {gpio}) vs {why}")
+
+    if clashes:
+        rep.problem("devboard-pins",
+                    "on an ESP32-P4-Function-EV-Board these pins are taken by the "
+                    "on-board C6: " + "; ".join(clashes) +
+                    ". Fine on the aircraft, which has no C6 on SDIO -- see section "
+                    "4.3.2 before wiring the bench",
+                    severity="warn")
+    else:
+        rep.note = getattr(rep, "note", [])
+        rep.note.append("devboard-pins: no project pin collides with the EV board's C6")
+
+    # A pin driven twice is a defect on ANY board, so that stays an error.
+    for gpio, names in sorted(assigned.items()):
+        if len(names) > 1:
+            rep.problem("devboard-pins",
+                        f"GPIO {gpio} is assigned to {len(names)} functions: "
+                        + ", ".join(names))
+
+
 # =====================================================================================
 #  Registry
 # =====================================================================================
@@ -2202,6 +2256,9 @@ CHECKS = [
     ("quoted-totals",
      "every figure the documents call a total matches bom.csv",
      check_quoted_totals),
+    ("devboard-pins",
+     "project pins versus what the development board has already claimed",
+     check_devboard_pins),
     ("bom-mass",
      "the parts list and config.h agree on mass, ESC margin and connector, for every build",
      check_bom_mass),

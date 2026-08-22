@@ -2,7 +2,7 @@
 
 [![host-tests](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml/badge.svg?branch=main)](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml)
 [![assertions](https://img.shields.io/badge/host_assertions-387-blue)](tools/host_tests/)
-[![consistency](https://img.shields.io/badge/consistency_checks-24-blue)](tools/check_consistency.py)
+[![consistency](https://img.shields.io/badge/consistency_checks-25-blue)](tools/check_consistency.py)
 [![decoder](https://img.shields.io/badge/RID_decoder_tests-80-blue)](android/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-ESP32--P4%20%7C%20C3%20%7C%20C6-lightgrey)](firmware/)
@@ -10,7 +10,7 @@
 Autonomous long-range 9-inch quadcopter. ESP32-P4 dual-core RISC-V avionics, integrated
 perception, kinetic recovery and safety stack.
 
-**Status:** revision 4.3 — DShot bench procedure ready; the driver awaits its first contact with hardware. All eighteen defects found in the
+**Status:** revision 4.4 — DShot bench procedure ready; the driver awaits its first contact with hardware. All eighteen defects found in the
 revision 1.0 review are fixed — and eighteen was not the end of it. Reworking them
 surfaced more, and the work since has surfaced more again, several worse than
 anything in the original list. See
@@ -205,7 +205,7 @@ python tools/check_consistency.py --fix
 > needed a restore from git. `tools/patchfile.py` now refuses control characters, and
 > the `line-endings` check scans every tracked file for them.
 
-24 checks. `--fix` repairs whitespace, BOM totals and any specification constant that has
+25 checks. `--fix` repairs whitespace, BOM totals and any specification constant that has
 drifted from `config.h` — the code is the source of truth, and the fixer rewrites the
 documentation to match, never the reverse. It runs in the pre-push hook on every push,
 including documentation-only ones.

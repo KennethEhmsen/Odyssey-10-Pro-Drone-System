@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 4.3 — a real price for the P4 board, and the mass question it exposes
+**Document revision:** 4.4 — the EV board's on-board C6 claims four of the project's pins
 
 ---
 
@@ -802,6 +802,46 @@ answered here:
 > through a compiler. The ESP-IDF RMT API changed between IDF 4 and 5, and the code is
 > written against 5. Getting it to build is part of step 0, not a sign anything is wrong.
 
+##### The EV board's on-board ESP32-C6 takes four of these pins
+
+The ESP32-P4 has no radio, so the Function-EV-Board carries an **ESP32-C6-MINI-1** as its
+Wi-Fi and Bluetooth co-processor. The two talk over **SDIO**, and that bus is wired to
+fixed pins:
+
+| P4 GPIO | SDIO function | This project wants it for |
+| --- | --- | --- |
+| 14 | D0 | — |
+| **15** | **D1** | **`MOTOR4_PIN`** |
+| 16 | D2 | — |
+| **17** | **D3** | **`PIN_GNSS_RX`** |
+| **18** | **CLK** | **`PIN_GNSS_TX`** |
+| **19** | **CMD** | **`PIN_VTX_TX`** |
+| 54 | C6 reset | — |
+
+**This is a development-board constraint, not a design defect.** The aircraft's flight
+controller is an ESP32-P4 module on a carrier with no C6 on SDIO — the project's own C6
+is the Remote ID module in §12, attached over UART, not SDIO. On that board GPIO 15, 17,
+18 and 19 are free and the pinout in §9 stands.
+
+But on *this* board those four are spoken for, and the consequences for bench work are:
+
+| | |
+| --- | --- |
+| **Motors 1, 2 and 3** — GPIO 4, 5, 6 | free on header J1, use these |
+| **Motor 4** — GPIO 15 | **unavailable.** §4.3.2 only needs one channel, so this does not block the DShot bring-up, but all four cannot be exercised on this board |
+| **GNSS** — GPIO 17, 18 | unavailable; remap if bench-testing the GNSS |
+| **VTX** — GPIO 19 | unavailable |
+
+If you want all four motor channels on this board, remap `MOTOR4_PIN` to a free J1 pin
+for the bench only — do **not** change §9's pinout, which describes the aircraft.
+
+> **A useful side effect.** The board gives you a real ESP32-C6 to experiment with, and
+> the C6 is exactly the part §12 specifies for Remote ID. It is wired here as an
+> SDIO co-processor rather than the UART-attached module the design uses, so it is not a
+> drop-in — but it is a C6 with an antenna, which is enough to develop and range-test the
+> ASTM F3411 broadcast against the Android receiver in `android/` long before the real
+> module arrives.
+
 ##### Step 1 — the signal
 
 **Parts: a USB logic analyser, about $12.** Eight channels at 24 MSa/s is ample — that is
@@ -818,7 +858,7 @@ Wire it with **no ESC, no motor and no battery**:
 
 One ground, shared. That is the single most common reason a capture looks like noise.
 
-The other three motor pins are **GPIO 5, 6 and 15** if you want all four at once.
+Motors 2 and 3 are **GPIO 5 and 6**, both free. **Motor 4 is GPIO 15, which this board wires to the C6's SDIO bus** — see above. One channel is all step 1 needs.
 
 What you should see, with the aircraft disarmed and `DSHOT_BIDIRECTIONAL` on:
 
@@ -2113,7 +2153,7 @@ Odyssey-10-Pro-Drone-System/
 |   +-- bom.csv                     9-inch reference build
 |   +-- bom-variants.csv            what differs in the other nine
 +-- tools/
-|   +-- check_consistency.py        The specification-vs-code gate     [24 checks]
+|   +-- check_consistency.py        The specification-vs-code gate     [25 checks]
 |   +-- blackbox_decode.py          Flight log decoder, formats v2-v4
 |   +-- test_blackbox_decode.py     ...and its tests
 |   +-- patchfile.py                Line-ending-safe in-place edits
