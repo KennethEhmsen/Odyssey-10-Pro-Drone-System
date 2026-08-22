@@ -1943,12 +1943,12 @@ Odyssey-10-Pro-Drone-System/
 |   +-- bom.csv                     9-inch reference build
 |   +-- bom-variants.csv            what differs in the other nine
 +-- tools/
-|   +-- check_consistency.py        The specification-vs-code gate     [22 checks]
+|   +-- check_consistency.py        The specification-vs-code gate     [23 checks]
 |   +-- blackbox_decode.py          Flight log decoder, formats v2-v4
 |   +-- test_blackbox_decode.py     ...and its tests
 |   +-- patchfile.py                Line-ending-safe in-place edits
 |   +-- test_patchfile.py           ...and its tests
-|   +-- md2docx.py                  Regenerates the Word documents
+|   +-- md2docx.py                  Regenerates the Word documents, reproducibly
 |   +-- run_android_parser_tests.sh Decoder tests with plain javac
 |   +-- git-hooks/pre-push          Runs the whole gate before every push
 |   +-- host_tests/                 Compiles the real headers on a PC

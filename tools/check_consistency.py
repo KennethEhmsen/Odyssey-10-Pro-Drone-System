@@ -2049,6 +2049,99 @@ def check_bom_mass(rep, fix):
                     f"{sum(len(m) * 2 for m in FRAME_MOTORS.values())} builds")
 
 
+#  Every generated Word document, and the subtitle it is generated with.
+DOCX_TARGETS = {
+    "Odyssey-10-Pro-Drone-System": "Engineering Master Specification",
+    "review-findings-resolution":  "Resolution Record",
+    "remote-id-regulatory-notes":  "Regulatory Notes",
+}
+
+
+def check_docx_current(rep, fix):
+    """
+    Each .docx must be what its .md currently produces.
+
+    The Word documents are committed, so they are what most people actually read, and
+    they have twice drifted days behind the Markdown without anyone noticing -- once for
+    two full revisions. A timestamp comparison would not have caught it either, since
+    regenerating one document touches its mtime whether or not the content moved.
+
+    So this regenerates into a temporary file and compares bytes. That is only possible
+    because md2docx is byte-reproducible; before that, every run produced a different
+    file and there was nothing to compare against.
+
+    --fix regenerates. The check needs python-docx, which CI does not install, so it
+    downgrades to a warning there rather than failing a build over a missing optional
+    dependency.
+    """
+    rep.checks_run += 1
+    import subprocess, tempfile, os, hashlib
+
+    md2docx = ROOT / "tools" / "md2docx.py"
+    if not md2docx.exists():
+        rep.problem("docx", "tools/md2docx.py is missing", severity="warn")
+        return
+
+    probe = subprocess.run([sys.executable, "-c", "import docx"],
+                           capture_output=True, text=True)
+    if probe.returncode != 0:
+        rep.problem("docx",
+                    "python-docx is not installed, so the Word documents cannot be "
+                    "verified against their Markdown here", severity="warn")
+        return
+
+    stale, checked = [], 0
+    with tempfile.TemporaryDirectory() as td:
+        for stem, subtitle in DOCX_TARGETS.items():
+            md = ROOT / "docs" / f"{stem}.md"
+            docx = ROOT / "docs" / f"{stem}.docx"
+            if not md.exists():
+                rep.problem("docx", f"docs/{stem}.md is missing")
+                continue
+            if not docx.exists():
+                if not fix:
+                    rep.problem("docx", f"docs/{stem}.docx has never been generated",
+                                fixable=True)
+                stale.append((stem, subtitle))
+                continue
+
+            out = os.path.join(td, f"{stem}.docx")
+            r = subprocess.run([sys.executable, str(md2docx), str(md), out,
+                                "--subtitle", subtitle],
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                rep.problem("docx",
+                            f"regenerating {stem}.docx failed: "
+                            f"{r.stderr.strip().splitlines()[-1] if r.stderr.strip() else '?'}",
+                            severity="warn")
+                continue
+
+            checked += 1
+            want = hashlib.sha256(open(out, "rb").read()).hexdigest()
+            have = hashlib.sha256(docx.read_bytes()).hexdigest()
+            if want != have:
+                stale.append((stem, subtitle))
+                if not fix:
+                    rep.problem("docx",
+                                f"docs/{stem}.docx does not match docs/{stem}.md -- the "
+                                f"Word document people read is not the document that "
+                                f"was written", fixable=True)
+
+    if fix and stale:
+        for stem, subtitle in stale:
+            md = ROOT / "docs" / f"{stem}.md"
+            docx = ROOT / "docs" / f"{stem}.docx"
+            r = subprocess.run([sys.executable, str(md2docx), str(md), str(docx),
+                                "--subtitle", subtitle], capture_output=True, text=True)
+            if r.returncode == 0:
+                rep.fix("docx", f"regenerated {stem}.docx from its Markdown")
+
+    if checked and not stale:
+        rep.note = getattr(rep, "note", [])
+        rep.note.append(f"docx: all {checked} Word documents match their Markdown "
+                        f"byte for byte")
+
+
 # =====================================================================================
 #  Registry
 # =====================================================================================
@@ -2098,6 +2191,12 @@ CHECKS = [
     ("build-configs",
      "every frame x motor x propeller build is coherent, distinct and correctly ordered",
      check_prop_configs),
+    #  LAST, deliberately. readme and repo-layout rewrite the
+    #  specification Markdown when they fix their counts, so a Word
+    #  document generated before them would be stale on arrival.
+    ("docx",
+     "every generated Word document matches the Markdown it came from",
+     check_docx_current),
 ]
 
 

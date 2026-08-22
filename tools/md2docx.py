@@ -16,6 +16,18 @@ it handles them properly:
   * Bulleted and numbered lists, including nesting
   * Block quotes, used in the specification for the safety callouts
 
+Output is BYTE-REPRODUCIBLE: the same Markdown always produces the same .docx. That is
+not free -- a .docx is a zip, and python-docx stamps every entry with the current time,
+so regenerating an unchanged document used to produce a different file every run.
+
+It mattered for two reasons. Committed binaries churned on every regeneration, so the
+history could not distinguish "the specification changed" from "someone re-ran the
+converter". And nothing could check whether a Word file was actually up to date, which
+is why they twice drifted days behind their Markdown without anyone noticing.
+
+With the timestamps normalised, a differing .docx means the source genuinely changed,
+and `check_consistency.py` can regenerate into a temporary file and compare.
+
 Usage:
     python md2docx.py input.md output.docx
     python md2docx.py input.md output.docx --title "..." --subtitle "..."
@@ -23,7 +35,9 @@ Usage:
 
 import argparse
 import re
+import shutil
 import sys
+import zipfile
 from pathlib import Path
 
 try:
@@ -412,6 +426,37 @@ def add_page_numbers(doc):
 
 
 # =====================================================================================
+#  The epoch a zip can represent. Any fixed value works; this is the conventional one
+#  and is what other reproducible-build tooling uses.
+_ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)
+
+
+def make_reproducible(path):
+    """
+    Rewrites a .docx so its zip entries carry a fixed timestamp.
+
+    The document's own metadata is already fixed -- python-docx inherits the created and
+    modified dates from its template -- so the entry timestamps are the whole of the
+    non-determinism. Entry order, names, contents and compression are preserved exactly;
+    only the dates change.
+    """
+    path = Path(path)
+    with zipfile.ZipFile(path) as src:
+        entries = [(info, src.read(info.filename)) for info in src.infolist()]
+
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as out:
+        for info, blob in entries:
+            fixed = zipfile.ZipInfo(info.filename, date_time=_ZIP_EPOCH)
+            fixed.compress_type = info.compress_type
+            fixed.external_attr = info.external_attr
+            fixed.internal_attr = info.internal_attr
+            fixed.create_system = 0          # not the host OS, which also varies
+            out.writestr(fixed, blob)
+
+    shutil.move(str(tmp), str(path))
+
+
 def main():
     ap = argparse.ArgumentParser(description="Convert the Odyssey specification to .docx")
     ap.add_argument("input", type=Path)
@@ -454,6 +499,8 @@ def main():
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     doc.save(args.output)
+    # Same Markdown in, same bytes out. See make_reproducible().
+    make_reproducible(args.output)
 
     paragraphs = len(doc.paragraphs)
     tables = len(doc.tables)
