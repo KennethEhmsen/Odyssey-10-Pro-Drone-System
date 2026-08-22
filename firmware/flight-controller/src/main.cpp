@@ -29,6 +29,7 @@
 #include "odyssey_link.h"
 #include "filters.h"
 #include "dynamic_notch.h"
+#include "dshot_rmt.h"
 #include "pid.h"
 #include "mixer.h"
 #include "state_machine.h"
@@ -83,6 +84,7 @@ static volatile float notchConfidence = 0.0f;
 static volatile float trackedHarmonicHz = 0.0f;
 static volatile bool  harmonicIsTracking = false;
 static volatile bool  harmonicIsVisible = false;
+static volatile bool  notchFromTelemetry = false;
 #endif
 
 static double   homeLat = 0.0, homeLon = 0.0;
@@ -109,18 +111,40 @@ static volatile uint32_t selftestFreefallUntil = 0;
 // =====================================================================================
 //  Small helpers
 // =====================================================================================
+#if DSHOT_ENABLE
+static DShotTelemetry dshotTelem;
+#endif
+
 static inline void setMotors(const MixerOutput& out) {
+#if DSHOT_ENABLE
+  // The mixer's output is unchanged -- only the transport differs. Keeping the mixer in
+  // the PWM count domain means §4.2's desaturation arithmetic, and every test of it, is
+  // untouched by this.
+  const uint16_t v[4] = {
+      dshotFromPwmCounts(out.motor[0]), dshotFromPwmCounts(out.motor[1]),
+      dshotFromPwmCounts(out.motor[2]), dshotFromPwmCounts(out.motor[3]) };
+  dshotRmt.write(v, DSHOT_BIDIRECTIONAL != 0);
+#else
   ledcWrite(MOTOR1_PIN, out.motor[0]);
   ledcWrite(MOTOR2_PIN, out.motor[1]);
   ledcWrite(MOTOR3_PIN, out.motor[2]);
   ledcWrite(MOTOR4_PIN, out.motor[3]);
+#endif
 }
 
 static void idleMotors() {
+#if DSHOT_ENABLE
+  // DISARM, not minimum throttle. On PWM these are the same signal; on DShot they are
+  // not, and sending 48 here would leave four motors turning on a disarmed aircraft.
+  const uint16_t stop[4] = { DSHOT_CMD_DISARM, DSHOT_CMD_DISARM,
+                             DSHOT_CMD_DISARM, DSHOT_CMD_DISARM };
+  dshotRmt.write(stop, false);
+#else
   ledcWrite(MOTOR1_PIN, PWM_MIN);
   ledcWrite(MOTOR2_PIN, PWM_MIN);
   ledcWrite(MOTOR3_PIN, PWM_MIN);
   ledcWrite(MOTOR4_PIN, PWM_MIN);
+#endif
 }
 
 static void resetControllers() {
@@ -214,9 +238,28 @@ static void TaskFlightLoop(void* /*arg*/) {
     // bench would be carried into the air.
     if (odyMotorsAreLive(state)) {
       notchTracker.push(gxRaw);
+#if DSHOT_ENABLE && DSHOT_BIDIRECTIONAL
+      // Collect whatever the ESCs sent back since the last frame. Non-blocking: a reply
+      // that has not arrived is simply not there this iteration.
+      dshotRmt.pollTelemetry(dshotTelem, nowMs);
+      dshotTelem.update(nowMs);
+#endif
       if (++notchDivider >= FLIGHT_LOOP_HZ / DYN_NOTCH_UPDATE_HZ) {
         notchDivider = 0;
-        if (notchTracker.update()) {
+
+        // Prefer the measurement over the search. dshotTelem returns 0 unless all four
+        // motors reported recently AND agree closely enough for one notch to cover
+        // them -- under a hard roll the diagonals diverge and the sliding DFT, which
+        // sees the blend of all four, is the better answer.
+        bool notchMoved = false;
+#if DSHOT_ENABLE && DSHOT_BIDIRECTIONAL
+        const float measuredHz = dshotTelem.notchHz();
+        if (measuredHz > 0.0f) notchMoved = notchTracker.applyMeasured(measuredHz);
+        else                   notchMoved = notchTracker.update();
+#else
+        notchMoved = notchTracker.update();
+#endif
+        if (notchMoved) {
           const float centre = notchTracker.centreHz();
           // retune(), not configure(): configure() clears the delay line, which would
           // punch a transient straight through the rate loop every time the notch
@@ -253,6 +296,7 @@ static void TaskFlightLoop(void* /*arg*/) {
 #endif
         notchIsTracking = notchTracker.state().tracking;
         notchConfidence = notchTracker.state().confidence;
+        notchFromTelemetry = notchTracker.state().fromTelemetry;
       }
     } else {
       notchDivider = 0;
@@ -599,6 +643,7 @@ static void TaskFlightLoop(void* /*arg*/) {
 #if DYN_NOTCH_HARMONIC
                             | (harmonicIsTracking ? ODY_NOTCH_FLAG_H2_TRACKING : 0u)
                             | (harmonicIsVisible  ? ODY_NOTCH_FLAG_H2_VISIBLE  : 0u)
+                            | (notchFromTelemetry ? ODY_NOTCH_FLAG_MEASURED   : 0u)
 #endif
                             ;
       rec.notchHarmonicDeciHz =
@@ -1219,10 +1264,25 @@ void setup() {
   ledcAttach(PIN_PARACHUTE_SRV, SERVO_FREQ_HZ, SERVO_RES_BITS);
   ledcWrite(PIN_PARACHUTE_SRV, SERVO_LOCKED);
 
+#if DSHOT_ENABLE
+  {
+    const uint8_t motorPins[4] = { MOTOR1_PIN, MOTOR2_PIN, MOTOR3_PIN, MOTOR4_PIN };
+    if (!dshotRmt.begin(motorPins)) {
+      // There is no falling back to PWM here. The pins have been handed to the RMT
+      // peripheral, and a half-initialised output stage driving motors is worse than
+      // one that plainly refuses to start. Preflight will fail and the aircraft will
+      // not arm.
+      Serial.println("FATAL: DShot init failed -- see section 4.3.1. NOT arming.");
+    } else {
+      Serial.println("DShot output active (analog PWM is NOT in use)");
+    }
+  }
+#else
   ledcAttach(MOTOR1_PIN, PWM_FREQ_HZ, PWM_RES_BITS);
   ledcAttach(MOTOR2_PIN, PWM_FREQ_HZ, PWM_RES_BITS);
   ledcAttach(MOTOR3_PIN, PWM_FREQ_HZ, PWM_RES_BITS);
   ledcAttach(MOTOR4_PIN, PWM_FREQ_HZ, PWM_RES_BITS);
+#endif
   idleMotors();
 
   pinMode(PIN_ARM_BUTTON, INPUT_PULLUP);

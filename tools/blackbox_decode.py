@@ -46,7 +46,8 @@ _BASE_FIELDS = [
     "obstacle_cm", "sensor_health", "flight_state", "mixer_sat_pct",
 ]
 _V3_FIELDS = ["notch_hz", "notch_confidence", "notch_tracking", "notch_dynamic"]
-_V4_FIELDS = ["harmonic_hz", "harmonic_tracking", "harmonic_observable"]
+_V4_FIELDS = ["harmonic_hz", "harmonic_tracking", "harmonic_observable",
+              "notch_measured"]
 
 FIELDS_BY_VERSION = {
     2: _BASE_FIELDS,
@@ -58,6 +59,7 @@ NOTCH_FLAG_TRACKING    = 1 << 0
 NOTCH_FLAG_DYNAMIC     = 1 << 1
 NOTCH_FLAG_H2_TRACKING = 1 << 2
 NOTCH_FLAG_H2_VISIBLE  = 1 << 3
+NOTCH_FLAG_MEASURED    = 1 << 4
 
 STATE_NAMES = {
     0: "BOOT", 1: "CALIBRATING", 2: "PREFLIGHT_FAIL", 3: "PREFLIGHT_OK",
@@ -129,6 +131,8 @@ def decode_record(raw, version=3):
         out["harmonic_hz"] = v[27] / 10.0
         out["harmonic_tracking"] = bool(v[26] & NOTCH_FLAG_H2_TRACKING)
         out["harmonic_observable"] = bool(v[26] & NOTCH_FLAG_H2_VISIBLE)
+        # Always False in a v4 log, which is correct: DShot telemetry did not exist.
+        out["notch_measured"] = bool(v[26] & NOTCH_FLAG_MEASURED)
     return out
 
 
@@ -218,6 +222,13 @@ def summarise(header, records):
                 conf = [r["notch_confidence"] for r in locked]
                 lo, hi = min(hz), max(hz)
                 mean = sum(hz) / len(hz)
+                measured = sum(1 for r in locked if r.get("notch_measured"))
+                if measured:
+                    print(f"  source            : ESC RPM telemetry for "
+                          f"{100.0*measured/len(locked):.0f}% of the locked time, "
+                          f"spectrum search for the rest")
+                else:
+                    print("  source            : spectrum search (no RPM telemetry)")
                 print(f"  tracked centre    : {lo:.1f} - {hi:.1f} Hz, mean {mean:.1f} Hz")
                 print(f"  confidence        : min {min(conf)}, "
                       f"mean {sum(conf)/len(conf):.0f}")

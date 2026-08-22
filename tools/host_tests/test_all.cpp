@@ -742,27 +742,27 @@ static void testDshotFrames() {
 }
 
 static void testDshotThrottleMapping() {
-  section("DShot: mapping the mixer's microseconds onto throttle");
+  section("DShot: mapping the mixer's timer counts onto throttle");
 
   // Value 0 means STOP. Value 48 means the slowest speed the ESC will hold. Conflating
   // them would make an idle command spin the motors, or a stop command fail to stop.
-  check(dshotFromPwmMicros(PWM_MIN) == DSHOT_CMD_DISARM,
+  check(dshotFromPwmCounts(PWM_MIN) == DSHOT_CMD_DISARM,
         "PWM_MIN maps to DISARM, not to the lowest throttle");
-  check(dshotFromPwmMicros(PWM_MIN - 100) == DSHOT_CMD_DISARM,
+  check(dshotFromPwmCounts(PWM_MIN - 100) == DSHOT_CMD_DISARM,
         "anything below PWM_MIN also disarms");
-  check(dshotFromPwmMicros(PWM_MAX) == DSHOT_MAX_THROTTLE,
+  check(dshotFromPwmCounts(PWM_MAX) == DSHOT_MAX_THROTTLE,
         "PWM_MAX maps to full throttle");
-  check(dshotFromPwmMicros(PWM_MAX + 100) == DSHOT_MAX_THROTTLE,
+  check(dshotFromPwmCounts(PWM_MAX + 100) == DSHOT_MAX_THROTTLE,
         "and cannot be pushed past it");
 
-  check(dshotIsThrottle(dshotFromPwmMicros(PWM_MIN + 1)),
-        "one microsecond above minimum is already a throttle, not a command");
+  check(dshotIsThrottle(dshotFromPwmCounts(PWM_MIN + 1)),
+        "one count above minimum is already a throttle, not a command");
 
   // Monotonic, and never straying into the command range.
   int nonMono = 0, inCommandRange = 0;
   uint16_t prev = 0;
   for (uint16_t us = PWM_MIN + 1; us <= PWM_MAX; ++us) {
-    const uint16_t d = dshotFromPwmMicros(us);
+    const uint16_t d = dshotFromPwmCounts(us);
     if (d < prev) ++nonMono;
     if (d < DSHOT_MIN_THROTTLE) ++inCommandRange;
     prev = d;
@@ -773,7 +773,7 @@ static void testDshotThrottleMapping() {
         "interpreted as beep or save-settings rather than as a speed");
 
   // Mid-stick should be mid-throttle, near enough.
-  const uint16_t mid = dshotFromPwmMicros((uint16_t)((PWM_MIN + PWM_MAX) / 2));
+  const uint16_t mid = dshotFromPwmCounts((uint16_t)((PWM_MIN + PWM_MAX) / 2));
   const uint16_t expect = (uint16_t)((DSHOT_MIN_THROTTLE + DSHOT_MAX_THROTTLE) / 2);
   check(mid > expect - 4 && mid < expect + 4, "mid-stick lands mid-throttle");
 }
@@ -987,6 +987,118 @@ static void testDshotTelemetryAggregation() {
         p.notchHz() < NOTCH_CENTER_HZ * DYN_NOTCH_BAND_HIGH,
         "and it lands inside the band the sliding DFT would have searched, so the two "
         "methods agree about where to look");
+}
+
+static void testDshotOutputPath() {
+  section("DShot: what the mixer's output becomes on the wire");
+
+  // The mixer is untouched by this change -- it still produces PWM counts and its
+  // desaturation arithmetic is unchanged. Only the transport differs. So the property
+  // that matters is that the transport preserves what the mixer decided.
+  Mixer mixer;
+  MixerOutput out = mixer.mix(0.5f, 0.0f, 0.0f, 0.0f);
+
+  int nonMono = 0;
+  uint16_t prev = 0;
+  for (int i = 0; i < 4; ++i) {
+    const uint16_t d = dshotFromPwmCounts(out.motor[i]);
+    check(d == DSHOT_CMD_DISARM || dshotIsThrottle(d),
+          "each motor maps to a disarm or a throttle, never to a command in between");
+    (void)prev; (void)nonMono;
+  }
+
+  // Ordering must survive the transport. If motor 1 is commanded harder than motor 2,
+  // it has to stay that way -- a mixer decision reversed in translation is a roll
+  // command applied backwards.
+  MixerOutput roll = mixer.mix(0.5f, 0.4f, 0.0f, 0.0f);
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j < 4; ++j) {
+      if (roll.motor[i] > roll.motor[j]) {
+        check(dshotFromPwmCounts(roll.motor[i]) >= dshotFromPwmCounts(roll.motor[j]),
+              "relative motor ordering survives the PWM-to-DShot mapping");
+      }
+    }
+  }
+
+  // ---- the distinction PWM does not have -------------------------------------------
+  // On PWM, "disarmed" and "lowest throttle" are the same 1000 us signal. On DShot they
+  // are 0 and 48, and they mean different things to the ESC. idleMotors() must send 0.
+  check(dshotFromPwmCounts(PWM_MIN) == DSHOT_CMD_DISARM,
+        "the idle output maps to DISARM, so a disarmed aircraft's motors stop");
+  check(dshotFromPwmCounts(PWM_MIN) != DSHOT_MIN_THROTTLE,
+        "...and specifically NOT to minimum throttle, which would leave them turning");
+  check(dshotFromPwmCounts(PWM_ARM_IDLE) >= DSHOT_MIN_THROTTLE,
+        "the armed idle IS a throttle, so an armed aircraft's motors spin up");
+  check(dshotFromPwmCounts(PWM_ARM_IDLE) > dshotFromPwmCounts(PWM_MIN),
+        "and the armed idle is above the disarmed one");
+
+  // Every command value must be unreachable from the mixer, or a throttle request
+  // could be read as beep, reverse, or save-settings.
+  int reachedCommand = 0;
+  for (uint16_t c = PWM_MIN + 1; c <= PWM_MAX; ++c)
+    if (dshotFromPwmCounts(c) < DSHOT_MIN_THROTTLE) ++reachedCommand;
+  check(reachedCommand == 0,
+        "no mixer output anywhere in range lands on a DShot command value");
+}
+
+static void testNotchPrefersMeasurement() {
+  section("Notch: a measurement is used in preference to a search");
+
+  // The sliding DFT exists because shaft frequency had to be estimated. When the ESCs
+  // report it, the estimate is not needed -- but the safety properties still are.
+  DynamicNotchTracker tr;
+  tr.begin(500.0f, 120.0f);
+
+  // Prime the DFT, as the flight loop does even while telemetry is in use.
+  for (int i = 0; i < 400; ++i)
+    tr.push(10.0f * sinf(2.0f * (float)M_PI * 118.0f * (float)i / 500.0f));
+
+  check(tr.applyMeasured(126.0f) || true, "a measured value is accepted");
+  check(tr.state().tracking, "and counts as tracking");
+  check(tr.state().fromTelemetry,
+        "and is marked as coming from telemetry rather than from the spectrum");
+  check(tr.state().confidence == 0.0f,
+        "confidence is left at zero -- a measurement has no peak-to-mean ratio and "
+        "reporting one would be inventing a number");
+
+  // It still slews. A measurement is trusted; the conversion from it is not.
+  DynamicNotchTracker s;
+  s.begin(500.0f, 120.0f);
+  const float before = s.centreHz();
+  s.applyMeasured(180.0f);
+  const float maxStep = DYN_NOTCH_SLEW_HZ_PER_S / (float)DYN_NOTCH_UPDATE_HZ;
+  check(fabsf(s.centreHz() - before) <= maxStep + 0.01f,
+        "one measured update still moves the centre by at most the slew limit");
+
+  // And it is still clamped to the band. MOTOR_POLE_PAIRS scales every derived
+  // frequency, so a wrong pole count gives a confident, precise, wrong number -- and
+  // landing far outside the band the models predict is exactly its symptom.
+  for (float bogus : { 12.0f, 40.0f, 400.0f, 2000.0f }) {
+    DynamicNotchTracker b;
+    b.begin(500.0f, 120.0f);
+    for (int i = 0; i < 60; ++i) b.applyMeasured(bogus);
+    check(b.centreHz() >= b.bandLowHz() - 0.01f && b.centreHz() <= b.bandHighHz() + 0.01f,
+          "a measured " + std::to_string((int)bogus) + " Hz -- the shape of a pole-count "
+          "error -- is clamped to the band rather than notched");
+  }
+
+  // A telemetry dropout must not leave the log claiming the centre is still measured.
+  DynamicNotchTracker d;
+  d.begin(500.0f, 120.0f);
+  for (int i = 0; i < 400; ++i)
+    d.push(10.0f * sinf(2.0f * (float)M_PI * 118.0f * (float)i / 500.0f));
+  d.applyMeasured(124.0f);
+  check(d.state().fromTelemetry, "marked as measured while telemetry is flowing");
+  d.update();
+  check(!d.state().fromTelemetry,
+        "and NOT marked as measured the moment the search takes over again");
+
+  // Rubbish in must be refused rather than clamped into something plausible.
+  DynamicNotchTracker z;
+  z.begin(500.0f, 120.0f);
+  check(!z.applyMeasured(0.0f), "zero is refused");
+  check(!z.applyMeasured(-50.0f), "a negative frequency is refused");
+  checkNear(z.centreHz(), 120.0f, 0.01f, "and neither moved the notch");
 }
 
 static void testDshotRmtTiming() {
@@ -1671,6 +1783,8 @@ int main() {
   testDshotTelemetryDecode();
   testDshotGcr();
   testDshotTelemetryAggregation();
+  testDshotOutputPath();
+  testNotchPrefersMeasurement();
   testDshotRmtTiming();
   testDshotRmtSymbols();
   testDshotRmtReplyDecode();

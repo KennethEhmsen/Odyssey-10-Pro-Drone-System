@@ -108,19 +108,23 @@ static inline bool dshotFrameValid(uint16_t frame, bool bidirectional) {
 }
 
 /**
- * Maps the mixer's PWM-domain output onto DShot's throttle range.
+ * Maps the mixer's output onto DShot's throttle range.
  *
- * The mixer still works in microseconds because that is what §4.2's desaturation
- * arithmetic is written in, and changing that would mean re-deriving the mixer to gain
- * nothing. Anything at or below PWM_MIN is a disarm rather than the lowest throttle:
- * DShot value 0 means "stop", and 48 means "the slowest speed you can hold", which are
- * different requests and must not be conflated.
+ * The argument is LEDC timer counts, not microseconds -- PWM_MIN is 1638, being 1000 us
+ * at 400 Hz and 12-bit resolution. The mixer works in that domain because §4.2's
+ * desaturation arithmetic is written in it, and re-deriving the mixer to change units
+ * would gain nothing.
+ *
+ * Anything at or below PWM_MIN is a DISARM rather than the lowest throttle. DShot value
+ * 0 means "stop" and 48 means "the slowest speed you can hold"; they are different
+ * requests and conflating them either leaves motors turning on a disarm or refuses to
+ * idle on an arm.
  */
-static inline uint16_t dshotFromPwmMicros(uint16_t pwmUs) {
-    if (pwmUs <= PWM_MIN) return DSHOT_CMD_DISARM;
-    if (pwmUs >= PWM_MAX) return DSHOT_MAX_THROTTLE;
+static inline uint16_t dshotFromPwmCounts(uint16_t counts) {
+    if (counts <= PWM_MIN) return DSHOT_CMD_DISARM;
+    if (counts >= PWM_MAX) return DSHOT_MAX_THROTTLE;
     const uint32_t span = (uint32_t)(PWM_MAX - PWM_MIN);
-    const uint32_t step = (uint32_t)(pwmUs - PWM_MIN);
+    const uint32_t step = (uint32_t)(counts - PWM_MIN);
     const uint32_t range = DSHOT_MAX_THROTTLE - DSHOT_MIN_THROTTLE;
     return (uint16_t)(DSHOT_MIN_THROTTLE + (step * range + span / 2) / span);
 }

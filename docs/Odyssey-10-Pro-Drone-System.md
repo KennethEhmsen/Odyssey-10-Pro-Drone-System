@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 3.6 — the RMT driver is written, and the half of it that can be tested is
+**Document revision:** 3.7 — DShot is wired into the flight loop, and the notch prefers a measurement to a search
 
 ---
 
@@ -642,6 +642,37 @@ numbered assumptions in its own comments, and this is the order to check them:
    count scales every derived frequency by a constant and presents as a mis-tuned notch
    rather than as the units error it is.
 5. **Only then** anything that could spin a blade.
+
+##### Wired into the flight loop in revision 3.7
+
+With `DSHOT_ENABLE=1`, four things change and nothing else does:
+
+| | |
+| --- | --- |
+| Output | `setMotors()` maps the mixer's PWM counts through `dshotFromPwmCounts()`. **The mixer is untouched** — it still works in the count domain, so §4.2's desaturation arithmetic and every test of it are unaffected |
+| Disarm | `idleMotors()` sends `DSHOT_CMD_DISARM`, not minimum throttle. On PWM those are the same 1000 µs signal; on DShot they are 0 and 48 and mean different things. Sending 48 there would leave four motors turning on a disarmed aircraft |
+| Telemetry | polled each loop, aggregated across the four motors, and fed to the notch |
+| Init failure | **does not fall back to PWM.** The pins have been handed to the RMT peripheral, and a half-initialised output stage driving motors is worse than one that plainly refuses to start |
+
+**The notch now prefers a measurement to a search.** When all four ESCs report recently
+and agree closely enough for one notch to cover them, `applyMeasured()` takes the
+frequency directly and the sliding DFT is not consulted. Under a hard roll the diagonals
+diverge, coherence is lost, and the search takes over — which is the right way round,
+because the DFT sees the blend of all four shafts and does not care that they differ.
+
+Gyro samples keep being pushed into the DFT even while telemetry is in use. The harmonic
+search still runs on the spectrum, and the transform has to stay primed against a
+telemetry dropout mid-flight.
+
+A measured centre is **still clamped to the band and still slewed.** Not because the
+measurement is doubted, but because the conversion from it is not: `MOTOR_POLE_PAIRS`
+scales every derived frequency, so a wrong pole count yields a confident, precise, wrong
+number. Landing far outside the band the models predict is exactly that error's symptom,
+and clamping turns it into a bounded error rather than a notch in the wrong place.
+
+The log records which source was used, in `notch_measured`. That needed no format bump:
+the bit was always zero in v4, and zero is the *truthful* reading for those logs rather
+than merely a safe one, because DShot telemetry did not exist when they were written.
 
 `DSHOT_ENABLE` defaults to **0**, and the `unverified-defaults` consistency check keeps
 it there — flipping it has to be a deliberate, reviewable change rather than a line left

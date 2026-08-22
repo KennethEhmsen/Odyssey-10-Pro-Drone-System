@@ -211,5 +211,10 @@ struct __attribute__((packed)) BlackBoxRecord {
 #define ODY_NOTCH_FLAG_DYNAMIC     (1u << 1)  // DYN_NOTCH_ENABLE was compiled in
 #define ODY_NOTCH_FLAG_H2_TRACKING (1u << 2)  // the harmonic had a confident lock
 #define ODY_NOTCH_FLAG_H2_VISIBLE  (1u << 3)  // 2*f0 was below the DLPF/Nyquist ceiling
+// Bit 4 needs no format bump. It occupies a bit that was always zero in v4, and zero is
+// the TRUTHFUL reading for a v4 log: DShot telemetry did not exist when those were
+// written, so "the centre did not come from telemetry" is correct rather than merely
+// safe. A version bump would be ceremony over a field that already decodes right.
+#define ODY_NOTCH_FLAG_MEASURED    (1u << 4)  // centre came from RPM, not from the DFT
 
 #endif // ODY_TYPES_H

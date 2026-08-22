@@ -146,6 +146,14 @@ def test_notch_flags():
     _, recs = decode_all(4, [build_record(4, notch_flags=8, harmonic_decihz=0)])
     check(recs[0]["harmonic_observable"] and not recs[0]["harmonic_tracking"],
           "observable-but-not-found is distinguishable from not-observable")
+
+    # Bit 4 records whether the centre was MEASURED from RPM or searched for. It needs
+    # no format bump: it was always zero in v4, and zero is the truthful reading there.
+    _, recs = decode_all(4, [build_record(4, notch_flags=0b10011)])
+    check(recs[0]["notch_measured"], "the measured-source flag is decoded")
+    _, recs = decode_all(4, [build_record(4, notch_flags=0b00011)])
+    check(not recs[0]["notch_measured"],
+          "and reads False when the centre came from the spectrum search")
     _, recs = decode_all(4, [build_record(4, notch_flags=0)])
     check(not recs[0]["harmonic_observable"] and not recs[0]["harmonic_tracking"],
           "not-observable is its own state")

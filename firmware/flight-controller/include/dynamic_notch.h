@@ -134,6 +134,7 @@ struct DynamicNotchState {
     float harmonicConf      = 0.0f;
     bool  harmonicTracking  = false;  // a confident lock on the harmonic
     bool  harmonicObservable = false; // 2*f0 clears the DLPF corner and Nyquist margin
+    bool  fromTelemetry      = false; // the centre came from RPM, not from the DFT
 };
 
 // -------------------------------------------------------------------------------------
@@ -185,12 +186,43 @@ public:
     void push(float gyroDps) { dft_.push(gyroDps); }
 
     /**
+     * Supplies a fundamental MEASURED from ESC RPM telemetry, instead of searching.
+     *
+     * This is what the whole sliding-DFT apparatus is a substitute for. When the ESCs
+     * report and agree, there is nothing to estimate.
+     *
+     * It is still CLAMPED to the same band, and still slews. Not because the measurement
+     * is doubted, but because the conversion from it is not: MOTOR_POLE_PAIRS scales
+     * every derived frequency, and a wrong pole count produces a confident, precise,
+     * wrong number. Landing outside the band the models predict is exactly the symptom,
+     * and clamping turns it into a bounded error rather than a notch in the wrong place.
+     *
+     * Gyro samples must keep being push()ed even while this is in use -- the harmonic
+     * search still runs on the spectrum, and the DFT has to stay primed in case
+     * telemetry drops out mid-flight.
+     *
+     * @return true if the notch centre moved enough to be worth retuning
+     */
+    bool applyMeasured(float hz) {
+        if (!(hz > 0.0f)) return false;
+        state_.detectedHz = hz;
+        state_.tracking = true;
+        state_.fromTelemetry = true;
+        state_.confidence = 0.0f;      // not a peak-to-mean ratio; do not pretend it is
+        slewTowards(constrain(hz, minHz_, maxHz_));
+        const bool moved = commit();
+        updateHarmonic();
+        return moved;
+    }
+
+    /**
      * Re-evaluates the peak. Call at DYN_NOTCH_UPDATE_HZ, not every sample -- the
      * spectrum does not change faster than the aircraft's mass does.
      *
      * @return true if the notch centre moved enough to be worth retuning the biquad
      */
     bool update() {
+        state_.fromTelemetry = false;
         if (!dft_.ready()) return false;
 
         const int kLo = dft_.hzToBin(minHz_);
