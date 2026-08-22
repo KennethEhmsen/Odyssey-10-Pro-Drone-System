@@ -1,27 +1,27 @@
-Category,Component,Key Specifications,Qty,Unit Price USD,Total USD,Mass g,Primary Function,Notes
-Airframe,RJXHOBBY Mark4 V2 387 mm carbon frame,387 mm wheelbase / 3K carbon / 6 mm arms / 9 inch,1,55.00,55.00,230,Structural chassis and motor mounting,"Mass includes standoffs, gel dampers and hardware"
-Propulsion,2810 / 2812 brushless motor,"900 KV, 28 mm stator, 4S-6S, M5 shaft",4,22.00,88.00,208,Primary thrust generation,52 g each installed. 28 mm stator is the 8-9 inch class; the 3110 previously specified is a 10-11 inch motor
-Propellers,HQProp / Gemfan 9x5x2,"9 inch, TWO blade, glass-nylon, 2 CW + 2 CCW, props-out",2 pair,6.00,12.00,28,Aerodynamic lift,7 g each. Two blades for cruise efficiency; a 3-blade is the option if you want wind authority over range
-Drive,4-in-1 ESC (BLHeli_32 / AM32),"40 A cont. / 50 A burst per channel, 6S, DShot300",1,38.00,38.00,25,Motor commutation and power delivery,Sized from 16.9 A peak per motor (2.4x margin). The 50 A rating previously specified was for the 3110 / 10-inch build
-Main Battery,6S LiPo pack,"22.2 V nominal, 4500 mAh, 20C minimum",1,110.00,110.00,640,Primary flight energy source,"Peak draw is 15C, so 20C is ample. The 45C previously specified cost 40 g for capability the aircraft cannot use. Li-ion 6S2P alternative: 8400 mAh / 870 g, see docs 3.3"
-Main MCU,ESP32-P4 RISC-V dev board,Dual-core 400 MHz / 3.3 V / no radio,1,14.00,14.00,9,Central flight controller,NO Wi-Fi and NO Bluetooth - see the Remote ID line
-Primary IMU,InvenSense MPU-6050 breakout,+/-500 deg/s gyro / +/-8 g accel / I2C,1,3.50,3.50,2,Attitude and angular rate sensing,Polled at 500 Hz by the flight core only
-Backup IMU,ICM-42688-P breakout,Low-noise 6-axis / redundant failover,1,4.00,4.00,2,Sensor fault detection and voting,Cross-checked at 50 Hz (sensors.cpp)
-Barometer,Bosch BMP280,0.16 m resolution / I2C,1,2.50,2.50,1,Altitude hold and vertical speed,Ground reference re-latched at each arm
-GNSS Unit,Beitian BN-220,Multi-GNSS / 10 Hz / UART,1,14.00,14.00,14,Position / ground speed / RTH navigation,Firmware negotiates 115200 baud - see finding 16
-Compass,QMC5883L magnetometer,3-axis / I2C,1,3.50,3.50,3,Absolute heading reference,Required by the RTH controller - was unimplemented
-Forward LiDAR,Benewake TFmini-S,0.1-12 m / 100 Hz / UART,1,22.00,22.00,5,Forward collision avoidance and step-over,Readings expire after 200 ms - see finding 15
-Downward ToF,ST VL53L1X,0-4 m laser rangefinder / I2C,1,6.50,6.50,2,Precision landing flare and touchdown veto,Required by the landing logic - was unimplemented
-Current Shunt,INA226 power sensor,High-side bidirectional / 1 mOhm / I2C,1,3.50,3.50,2,Coulomb counting and energy budget,Required by the energy budget - was unimplemented
-Telemetry Link,Semtech SX1278 (Ra-02),433 MHz LoRa / +20 dBm / SPI,2,6.00,12.00,12,Supervisory telemetry and command link,One flies (6 g); the second is the ground station radio
-RC Receiver,ExpressLRS 2.4 GHz RX,CRSF over UART / 50-500 Hz / hardware failsafe,1,20.00,20.00,3,Manual stick control link,"ADDED - the original had no RC receiver at all. 2.4 GHz deliberately, to avoid the 433 MHz second harmonic at 866 MHz (see docs 8.4)"
-Remote ID,ESP32-C6-MINI-1 module,BLE 5 Long Range + Wi-Fi / UART,1,6.50,6.50,4,ASTM F3411 Direct Remote ID broadcast,ADDED - legally required above 250 g / finding 17
-Video Tx,5.8 GHz VTX,48 channels / 7-26 V / MSP OSD,1,38.00,38.00,32,First-person video downlink,Set output power to your jurisdiction's limit
-FPV Camera,RunCam Phoenix 2 Micro,1/1.8 inch starlight / 1200 TVL / 2.1 mm,1,29.00,29.00,13,Cockpit video capture,Video subsystem (VTX + camera + antennas) totals 59 g
-Power Regs,Dual step-down BEC module,6S in / 5 V 3 A logic / 12 V 3 A video,1,8.00,8.00,14,Isolated filtered power rails,Also feeds the beacon keep-alive diode-OR
-BlackBox Logger,SPI MicroSD adapter + 32 GB card,High-speed SPI / Class 10,1,3.00,3.00,4,100 Hz binary flight data recording,Dedicated SPI bus / one file per flight
-Parachute Mech,Ejection canister + micro servo,Spring-loaded tube / 9 g metal-gear servo,1,9.00,9.00,55,Ballistic free-fall mitigation,Minimum deployment altitude 8 m AGL
-Beacon Unit,Standalone node (ESP32-C3),Ultra-low power / 100 dB piezo / strobe LED,1,7.00,7.00,6,Autonomous recovery transmitter,Now receives live position over the AUX bus
-Beacon Battery,1S LiPo cell,3.7 V 800 mAh with PCM,1,6.00,6.00,16,Isolated reserve for the beacon,72+ h at the duty-cycle-compliant schedule
-Power Latch,Solid-state switch,SI2301DS P-FET + 2N3904 driver,1,2.50,2.50,2,Latches the 1S cell on MCU pulse or VBAT loss,Beacon subsystem totals 45 g
-Wiring/Passives,XT90-S / caps / TVS / Schottky / resistors,XT90-S anti-spark / 1000 uF 35 V / SMBJ28A / BAT54C,1 lot,16.00,16.00,88,Power safety and surge damping,INCREASED - adds the beacon diode-OR and power sense
+Category,Component,Key Specifications,Qty,Unit Price USD,Total USD,Mass g,Airborne Mass g,Primary Function,Notes
+Airframe,RJXHOBBY Mark4 V2 387 mm carbon frame,387 mm wheelbase / 3K carbon / 6 mm arms / 9 inch,1,55.00,55.00,230,230,Structural chassis and motor mounting,"Mass includes standoffs, gel dampers and hardware"
+Propulsion,2810 / 2812 brushless motor,"900 KV, 28 mm stator, 4S-6S, M5 shaft",4,22.00,88.00,208,208,Primary thrust generation,52 g each installed. 28 mm stator is the 8-9 inch class; the 3110 previously specified is a 10-11 inch motor
+Propellers,HQProp / Gemfan 9x5x2,"9 inch, TWO blade, glass-nylon, 2 CW + 2 CCW, props-out",2 pair,6.00,12.00,28,28,Aerodynamic lift,7 g each. Two blades for cruise efficiency; a 3-blade is the option if you want wind authority over range
+Drive,4-in-1 ESC (BLHeli_32 / AM32),"40 A cont. / 50 A burst per channel, 6S, DShot300",1,38.00,38.00,25,25,Motor commutation and power delivery,Sized from 16.9 A peak per motor (2.4x margin). The 50 A rating previously specified was for the 3110 / 10-inch build
+Main Battery,6S LiPo pack,"22.2 V nominal, 4500 mAh, 20C minimum",1,110.00,110.00,640,640,Primary flight energy source,"Peak draw is 15C, so 20C is ample. The 45C previously specified cost 40 g for capability the aircraft cannot use. Li-ion 6S2P alternative: 8400 mAh / 870 g, see docs 3.3"
+Main MCU,ESP32-P4 RISC-V dev board,Dual-core 400 MHz / 3.3 V / no radio,1,14.00,14.00,9,9,Central flight controller,NO Wi-Fi and NO Bluetooth - see the Remote ID line
+Primary IMU,InvenSense MPU-6050 breakout,+/-500 deg/s gyro / +/-8 g accel / I2C,1,3.50,3.50,2,2,Attitude and angular rate sensing,Polled at 500 Hz by the flight core only
+Backup IMU,ICM-42688-P breakout,Low-noise 6-axis / redundant failover,1,4.00,4.00,2,2,Sensor fault detection and voting,Cross-checked at 50 Hz (sensors.cpp)
+Barometer,Bosch BMP280,0.16 m resolution / I2C,1,2.50,2.50,1,1,Altitude hold and vertical speed,Ground reference re-latched at each arm
+GNSS Unit,Beitian BN-220,Multi-GNSS / 10 Hz / UART,1,14.00,14.00,14,14,Position / ground speed / RTH navigation,Firmware negotiates 115200 baud - see finding 16
+Compass,QMC5883L magnetometer,3-axis / I2C,1,3.50,3.50,3,3,Absolute heading reference,Required by the RTH controller - was unimplemented
+Forward LiDAR,Benewake TFmini-S,0.1-12 m / 100 Hz / UART,1,22.00,22.00,5,5,Forward collision avoidance and step-over,Readings expire after 200 ms - see finding 15
+Downward ToF,ST VL53L1X,0-4 m laser rangefinder / I2C,1,6.50,6.50,2,2,Precision landing flare and touchdown veto,Required by the landing logic - was unimplemented
+Current Shunt,INA226 power sensor,High-side bidirectional / 1 mOhm / I2C,1,3.50,3.50,2,2,Coulomb counting and energy budget,Required by the energy budget - was unimplemented
+Telemetry Link,Semtech SX1278 (Ra-02),433 MHz LoRa / +20 dBm / SPI,2,6.00,12.00,12,6,Supervisory telemetry and command link,One flies (6 g); the second is the ground station radio
+RC Receiver,ExpressLRS 2.4 GHz RX,CRSF over UART / 50-500 Hz / hardware failsafe,1,20.00,20.00,3,3,Manual stick control link,"ADDED - the original had no RC receiver at all. 2.4 GHz deliberately, to avoid the 433 MHz second harmonic at 866 MHz (see docs 8.4)"
+Remote ID,ESP32-C6-MINI-1 module,BLE 5 Long Range + Wi-Fi / UART,1,6.50,6.50,4,4,ASTM F3411 Direct Remote ID broadcast,ADDED - legally required above 250 g / finding 17
+Video Tx,5.8 GHz VTX,48 channels / 7-26 V / MSP OSD,1,38.00,38.00,32,32,First-person video downlink,Set output power to your jurisdiction's limit
+FPV Camera,RunCam Phoenix 2 Micro,1/1.8 inch starlight / 1200 TVL / 2.1 mm,1,29.00,29.00,13,13,Cockpit video capture,Video subsystem (VTX + camera + antennas) totals 59 g
+Power Regs,Dual step-down BEC module,6S in / 5 V 3 A logic / 12 V 3 A video,1,8.00,8.00,14,14,Isolated filtered power rails,Also feeds the beacon keep-alive diode-OR
+BlackBox Logger,SPI MicroSD adapter + 32 GB card,High-speed SPI / Class 10,1,3.00,3.00,4,4,100 Hz binary flight data recording,Dedicated SPI bus / one file per flight
+Parachute Mech,Ejection canister + micro servo,Spring-loaded tube / 9 g metal-gear servo,1,9.00,9.00,55,55,Ballistic free-fall mitigation,Minimum deployment altitude 8 m AGL
+Beacon Unit,Standalone node (ESP32-C3),Ultra-low power / 100 dB piezo / strobe LED,1,7.00,7.00,6,6,Autonomous recovery transmitter,Now receives live position over the AUX bus
+Beacon Battery,1S LiPo cell,3.7 V 800 mAh with PCM,1,6.00,6.00,16,16,Isolated reserve for the beacon,72+ h at the duty-cycle-compliant schedule
+Power Latch,Solid-state switch,SI2301DS P-FET + 2N3904 driver,1,2.50,2.50,2,2,Latches the 1S cell on MCU pulse or VBAT loss,Beacon subsystem totals 45 g
+Wiring/Passives,XT90-S / caps / TVS / Schottky / resistors,XT90-S anti-spark / 1000 uF 35 V / SMBJ28A / BAT54C,1 lot,16.00,16.00,88,88,Power safety and surge damping,INCREASED - adds the beacon diode-OR and power sense

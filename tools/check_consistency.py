@@ -1874,6 +1874,181 @@ def check_repo_layout(rep, fix):
         rep.note.append("repo-layout: section 10.1 accounts for every source file")
 
 
+BOM_VARIANTS = ROOT / "hardware" / "bom-variants.csv"
+
+#  Mass that is bought but does not fly. The BOM buys two SX1278 radios and only one
+#  leaves the ground, so a naive sum of "Mass g" overstates the airframe by 6 g. The
+#  distinction used to live in a prose note inside a CSV cell, where nothing could
+#  check it; it is now the "Airborne Mass g" column, and this reconciles it.
+BOM_SHARED_AVIONICS_G = 308.0
+
+
+def check_bom_mass(rep, fix):
+    """
+    The parts list and the firmware's mass model must agree, for every build.
+
+    check_bom() has always verified BOM arithmetic and the price quoted in the
+    specification. Nothing verified MASS against config.h -- so AIRFRAME_AUW_G, which
+    sizes thrust-to-weight, hover power and the whole energy budget, was free to drift
+    away from the parts that produce it.
+
+    And until now only one of the ten builds had a parts list at all.
+    """
+    rep.checks_run += 1
+    if not BOM.exists():
+        return
+
+    import csv, io
+
+    # ---- the reference build ---------------------------------------------------------
+    rows = list(csv.DictReader(io.StringIO(read(BOM))))
+    if "Airborne Mass g" not in (rows[0].keys() if rows else {}):
+        rep.problem("bom-mass",
+                    "hardware/bom.csv has no 'Airborne Mass g' column, so mass that is "
+                    "bought but does not fly cannot be told apart from mass that does")
+        return
+
+    by_cat = {}
+    for r in rows:
+        by_cat[r["Category"]] = by_cat.get(r["Category"], 0.0) + float(r["Airborne Mass g"])
+
+    d = resolved_defines()
+    if not d:
+        rep.problem("bom-mass", "no C preprocessor available", severity="warn")
+        return
+
+    shared = sum(v for k, v in by_cat.items()
+                 if k not in ("Airframe", "Propulsion", "Propellers", "Main Battery"))
+    if abs(shared - BOM_SHARED_AVIONICS_G) > 1.0:
+        rep.problem("bom-mass",
+                    f"the shared avionics mass is {shared:.0f} g, but the variant BOM is "
+                    f"written around {BOM_SHARED_AVIONICS_G:.0f} g -- every frame's dry "
+                    f"mass is that figure plus its own airframe")
+
+    checks = [
+        ("frame + avionics", by_cat.get("Airframe", 0) + shared, d["FRAME_BASE_DRY_G"]),
+        ("motors",           by_cat.get("Propulsion", 0), 4 * d["MOTOR_MASS_G_EACH"]),
+        ("propellers",       by_cat.get("Propellers", 0), 4 * d["PROP_MASS_G_EACH"]),
+        ("battery",          by_cat.get("Main Battery", 0), d["BATTERY_MASS_G"]),
+    ]
+    for label, bom_g, cfg_g in checks:
+        if abs(bom_g - cfg_g) > 1.0:
+            rep.problem("bom-mass",
+                        f"reference build {label}: bom.csv says {bom_g:.0f} g, config.h "
+                        f"says {cfg_g:.0f} g")
+
+    total = sum(by_cat.values()) + d["PAYLOAD_RESERVE_G"]
+    if abs(total - d["AIRFRAME_AUW_G"]) > 1.5:
+        rep.problem("bom-mass",
+                    f"reference build AUW: the parts plus the {d['PAYLOAD_RESERVE_G']:.0f} g "
+                    f"payload reserve come to {total:.0f} g, config.h says "
+                    f"{d['AIRFRAME_AUW_G']:.0f} g")
+
+    # ---- the other nine --------------------------------------------------------------
+    if not BOM_VARIANTS.exists():
+        rep.problem("bom-variants",
+                    "hardware/bom-variants.csv is missing -- nine of the ten build "
+                    "combinations would have no parts list")
+        return
+
+    vrows = list(csv.DictReader(io.StringIO(read(BOM_VARIANTS))))
+
+    def pick(frame, motor, blades, category):
+        """The variant row for one build and category, matching 'any' wildcards."""
+        for r in vrows:
+            if r["Category"] != category:
+                continue
+            if r["Frame in"] not in (str(frame), "any"):
+                continue
+            if r["Motor"] not in (motor, "any"):
+                continue
+            if r["Blades"] not in (str(blades), "any"):
+                continue
+            return r
+        return None
+
+    covered = 0
+    for frame, motors in FRAME_MOTORS.items():
+        for mc in motors:
+            for pb in (2, 3):
+                motor = mc[6:]
+                label = f'{frame}"/{motor}/{pb}b'
+                cfg = resolved_defines((f"-DFRAME_SIZE_IN={frame}",
+                                        f"-DMOTOR_CLASS={mc}", f"-DPROP_BLADES={pb}",
+                                        "-DACCEPT_CONNECTOR_OVER_RATING=1"))
+                if not cfg:
+                    continue
+
+                parts = {c: pick(frame, motor, pb, c)
+                         for c in ("Airframe", "Propulsion", "Propellers",
+                                   "Main Battery", "Drive")}
+                missing = [c for c, r in parts.items() if r is None]
+                if missing:
+                    rep.problem("bom-variants",
+                                f"{label}: no parts listed for {', '.join(missing)}")
+                    continue
+                covered += 1
+
+                frame_g = float(parts["Airframe"]["Airborne Mass g"])
+                if abs(frame_g + shared - cfg["FRAME_BASE_DRY_G"]) > 1.0:
+                    rep.problem("bom-variants",
+                                f"{label}: airframe {frame_g:.0f} g plus {shared:.0f} g "
+                                f"of avionics is {frame_g + shared:.0f} g, but "
+                                f"FRAME_BASE_DRY_G is {cfg['FRAME_BASE_DRY_G']:.0f} g")
+
+                for cat, cfg_key, mult in (("Propulsion", "MOTOR_MASS_G_EACH", 4),
+                                           ("Propellers", "PROP_MASS_G_EACH", 4),
+                                           ("Main Battery", "BATTERY_MASS_G", 1)):
+                    got = float(parts[cat]["Airborne Mass g"])
+                    want = mult * cfg[cfg_key]
+                    if abs(got - want) > 1.0:
+                        rep.problem("bom-variants",
+                                    f"{label}: {cat} mass {got:.0f} g in the BOM, "
+                                    f"{want:.0f} g in config.h")
+
+                auw = (frame_g + shared + float(parts["Propulsion"]["Airborne Mass g"])
+                       + float(parts["Propellers"]["Airborne Mass g"])
+                       + float(parts["Main Battery"]["Airborne Mass g"])
+                       + cfg["PAYLOAD_RESERVE_G"])
+                if abs(auw - cfg["AIRFRAME_AUW_G"]) > 1.5:
+                    rep.problem("bom-variants",
+                                f"{label}: the parts come to {auw:.0f} g AUW, config.h "
+                                f"says {cfg['AIRFRAME_AUW_G']:.0f} g")
+
+                # The ESC has to survive the current this build actually draws.
+                spec = parts["Drive"]["Key Specifications"]
+                m = re.search(r"(\d+)\s*A\s*cont", spec)
+                if not m:
+                    rep.problem("bom-variants",
+                                f"{label}: cannot read a continuous rating from the ESC "
+                                f"specification")
+                    continue
+                rating = float(m.group(1))
+                per_motor = cfg["PROP_PEAK_PACK_A"] / 4.0
+                margin = rating / per_motor if per_motor else 0.0
+                if margin < 2.0:
+                    rep.problem("bom-variants",
+                                f"{label}: the listed {rating:.0f} A/channel ESC gives "
+                                f"only {margin:.1f}x on a {per_motor:.1f} A per-motor "
+                                f"peak. Section 4.3 argues for 2x on a hover-heavy "
+                                f"profile, because published ESC ratings assume forced "
+                                f"airflow")
+
+                # And the connector, where the XT90-S is not enough.
+                if cfg["PROP_PEAK_PACK_A"] > cfg.get("CONNECTOR_RATING_A", 90):
+                    if pick(frame, motor, pb, "Wiring/Passives") is None:
+                        rep.problem("bom-variants",
+                                    f"{label}: peaks at "
+                                    f"{cfg['PROP_PEAK_PACK_A']:.0f} A, above the "
+                                    f"{cfg.get('CONNECTOR_RATING_A', 90):.0f} A "
+                                    f"XT90-S rating, but no replacement connector is "
+                                    f"listed")
+
+    rep.note = getattr(rep, "note", [])
+    rep.note.append(f"bom-mass: parts and config.h agree on mass for {covered} of "
+                    f"{sum(len(m) * 2 for m in FRAME_MOTORS.values())} builds")
+
+
 # =====================================================================================
 #  Registry
 # =====================================================================================
@@ -1885,6 +2060,9 @@ CHECKS = [
     ("bom", "BOM per-line arithmetic and the total quoted in the specification", check_bom),
     ("spec-constants", "battery thresholds, AUW and TWR agree with config.h",
      check_spec_constants),
+    ("bom-mass",
+     "the parts list and config.h agree on mass, ESC margin and connector, for every build",
+     check_bom_mass),
     ("repo-layout",
      "section 10.1 lists every source file that exists",
      check_repo_layout),

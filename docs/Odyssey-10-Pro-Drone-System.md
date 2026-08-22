@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 3.8 — documentation brought back into line with the repository, and a check so it stays there
+**Document revision:** 3.9 — the other nine builds have a parts list, and mass is reconciled against the firmware
 
 ---
 
@@ -200,6 +200,55 @@ section 7 requires.
 
 Airborne dry mass is 1414 g (the second SX1278 module is the ground station radio and
 does not fly). See section 3.1.
+
+---
+
+
+### 2.1 The other nine builds
+
+`hardware/bom.csv` is the **9-inch / 2810 / 2-blade reference**. `config.h` supports ten
+combinations, and until revision 3.9 nine of them compiled, passed every test, and had
+no parts list — anyone building one was on their own for frame, motors, propellers,
+battery and ESC.
+
+`hardware/bom-variants.csv` closes that. It lists only what **differs** by build;
+everything else — every sensor, both radios, the flight controller, the recovery system,
+308 g of shared avionics — is identical across all ten, and repeating it three times
+would be three places for it to drift.
+
+| Frame | Airframe | Motors | Battery | Dry mass |
+| --- | --- | --- | --- | --- |
+| 7-inch | 295 mm, 5 mm arms, 132 g | 2807, 45 g each | 3000 mAh **50C** | 440 g |
+| **9-inch** | **387 mm, 6 mm arms, 230 g** | **2810 or 3110** | **4500 mAh 20C** | **538 g** |
+| 10-inch | 430 mm, 6 mm arms, 286 g | 3110 or 3115, 68–78 g | 4500 mAh **30C** | 594 g |
+
+The 7-inch takes a smaller pack at a much higher C rating, because it peaks at 99 A on
+three blades — 33C from 3000 mAh, where the 9-inch's peak is only 15C from 4500.
+
+**Three builds need a bigger ESC than the reference.** The 40 A/channel part is sized on
+the 9-inch 3-blade figure of 16.9 A per motor, a 2.4× margin. The 7-inch 3-blade and both
+10-inch 3-blade builds peak at 23–25 A per motor, which the same ESC would meet at only
+1.6–1.7× — below the 2× §4.3 argues for on a hover-heavy profile where thermal soak
+matters more than burst rating. Those three list a 60 A/channel ESC instead, at +$14 and
++9 g.
+
+Those same three also exceed the XT90-S's 90 A rating and list an AS150 in its place. The
+build already refuses to compile without either that part or an explicit
+`-DACCEPT_CONNECTOR_OVER_RATING=1`; now the parts list says what to buy instead of only
+what to acknowledge.
+
+> **Mass that does not fly.** The BOM buys **two** SX1278 radios and only one leaves the
+> ground — the second is the ground station. A naive sum of the mass column therefore
+> overstates the airframe by 6 g. That distinction used to live in a prose note inside a
+> CSV cell, where nothing could check it; there is now an explicit `Airborne Mass g`
+> column, and the `bom-mass` check reconciles it against `FRAME_BASE_DRY_G`,
+> `MOTOR_MASS_G_EACH`, `PROP_MASS_G_EACH`, `BATTERY_MASS_G` and `AIRFRAME_AUW_G` for
+> every one of the ten builds.
+>
+> `check_bom()` had verified BOM *arithmetic* and the *price* quoted here since the
+> original review. Nothing verified **mass** against `config.h` — so `AIRFRAME_AUW_G`,
+> which sizes thrust-to-weight, hover power and the entire energy budget, was free to
+> drift away from the parts that produce it.
 
 ---
 
@@ -1890,9 +1939,11 @@ Odyssey-10-Pro-Drone-System/
 |   |   +-- odid/                   Decoder with NO Android imports, so it host-tests
 |   |   +-- scan/                   BLE and Wi-Fi scanners
 |   +-- app/src/test/java/...       OdidParserTest
-+-- hardware/bom.csv
++-- hardware/
+|   +-- bom.csv                     9-inch reference build
+|   +-- bom-variants.csv            what differs in the other nine
 +-- tools/
-|   +-- check_consistency.py        The specification-vs-code gate     [21 checks]
+|   +-- check_consistency.py        The specification-vs-code gate     [22 checks]
 |   +-- blackbox_decode.py          Flight log decoder, formats v2-v4
 |   +-- test_blackbox_decode.py     ...and its tests
 |   +-- patchfile.py                Line-ending-safe in-place edits
@@ -2399,6 +2450,8 @@ Revision 2.0 introduced or left standing the following, all corrected here.
 | `CRUISE_CURRENT_A` was set from HOVER power since revision 2.2, but it budgets the charge to fly home at CRUISE speed — about 10% more. The RTH energy reserve was therefore optimistic | Corrected to 9.7 A, and §3.3 now states which figure it is and why |
 | The pack was rated 45C against a 15C peak demand, carrying 40 g for capability the aircraft cannot use | Specified as 20C minimum. §3.3 explains that energy per gram, not C-rate, is the constraint on this platform |
 | 3-blade propellers on a long-range platform with thrust to spare | Changed to 9x5x2. About 10% better hover efficiency for ~12% of peak thrust: 24 min hover and 16 km one-way, up from 22 min and 14.1 km |
+| Nine of the ten build combinations had no parts list. The BOM covered the 9-inch reference only, while `config.h` happily built 7-inch and 10-inch aircraft whose frame, motors, propellers, battery and ESC were nowhere specified | `hardware/bom-variants.csv` covers all ten, and the `bom-mass` check reconciles every build's parts against the mass model in `config.h`. §2.1 |
+| `check_bom()` verified BOM arithmetic and the price quoted in §2, but nothing compared BOM **mass** against `config.h` — `AIRFRAME_AUW_G` sizes thrust-to-weight, hover power and the energy budget, and was free to drift from the parts that produce it | Reconciled for all ten builds, including an explicit `Airborne Mass g` column so the ground-station radio the BOM also buys is not counted as flying mass |
 | The bidirectional-DShot GCR decode read its four 5-bit groups from the wrong bit offsets, and most-significant group first. Every legal group still decoded to a legal nibble, so a corrupted RPM would have passed its checksum and been fed to the notch as a measurement | Corrected to read groups low-first at offsets 0/5/10/15. Caught by a full encode/decode round trip, which is why the test builds the wire format rather than trusting the decoder against itself |
 | The flight loop's period is `pdMS_TO_TICKS(1000 / FLIGHT_LOOP_HZ)`, which at the ESP-IDF default 100 Hz tick rounds to ZERO ticks — `vTaskDelayUntil` would not delay and the loop would spin, starving its core. The 1000 Hz 7-inch build has depended on Arduino-ESP32's 1000 Hz tick since revision 2.8 with nothing declaring it | `static_assert` on `configTICK_RATE_HZ`, plus one requiring `FLIGHT_LOOP_HZ` to divide 1000 exactly. Host tests check every divider derived from the loop rate. §8.3.4 |
 | Second-harmonic notching was proposed on the assumption that the SDFT already computes those bins, so tracking the overtone would be a modest addition. The bins exist, but in 8 of 10 builds 2·f₀ lands above the MPU-6050 anti-alias corner, so the IMU has already attenuated it | Implemented, but gated on observability computed at runtime from the tracked fundamental. Where 2·f₀ does not clear the corner the notch never engages, because notching an already-filtered peak buys phase lag for nothing. §8.3.3 |

@@ -1,0 +1,31 @@
+Frame in,Motor,Blades,Category,Component,Key Specifications,Qty,Unit Price USD,Total USD,Airborne Mass g,Notes
+7,any,any,Airframe,Generic 295 mm 5-arm carbon frame,295 mm wheelbase / 3K carbon / 5 mm arms / 7 inch,1,44.00,44.00,132,"440 g dry incl. avionics. Thinner arms than the 9-inch: the structural mode sits higher, which suits the 180 Hz notch"
+9,any,any,Airframe,RJXHOBBY Mark4 V2 387 mm carbon frame,387 mm wheelbase / 3K carbon / 6 mm arms / 9 inch,1,55.00,55.00,230,REFERENCE BUILD. 538 g dry incl. avionics
+10,any,any,Airframe,Generic 430 mm carbon frame,430 mm wheelbase / 3K carbon / 6 mm arms / 10 inch,1,62.00,62.00,286,594 g dry incl. avionics
+7,2807,any,Propulsion,2807 brushless motor,"1300 KV, 28 mm stator / 12 mm height, 6S, M5",4,19.00,76.00,180,45 g each. Short stator suits a 7-inch disc; do not fit to a 10-inch
+9,2810,any,Propulsion,2810 / 2812 brushless motor,"900 KV, 28 mm stator, 4S-6S, M5 shaft",4,22.00,88.00,208,52 g each. REFERENCE BUILD motor
+9,3110,any,Propulsion,3110 brushless motor,"900 KV, 31 mm stator / 10 mm height, 6S, M5",4,27.00,108.00,272,"68 g each. Taller stator holds RPM better under load; ~3% more thrust on the same propeller, which is prop-limited -- the gain is thermal headroom"
+10,3110,any,Propulsion,3110 brushless motor,"900 KV, 31 mm stator / 10 mm height, 6S, M5",4,27.00,108.00,272,"68 g each. Taller stator holds RPM better under load; ~3% more thrust on the same propeller, which is prop-limited -- the gain is thermal headroom"
+10,3115,any,Propulsion,3115 brushless motor,"900 KV, 31 mm stator / 15 mm height, 6S, M5",4,31.00,124.00,312,"78 g each. The 10-inch default. 15 mm stator, more thermal mass again"
+7,any,2,Propellers,HQProp 7x4x2,"7 inch, TWO blade, 2 CW + 2 CCW, props-out",2 pair,5.00,10.00,20,Two blades spin faster for the same thrust
+7,any,3,Propellers,HQProp 7x4x3,"7 inch, THREE blade, 2 CW + 2 CCW, props-out",2 pair,6.00,12.00,24,"Three blades buy thrust per unit diameter and cost efficiency; the hover fundamental drops about 17%, so the notch moves with them"
+9,any,2,Propellers,HQProp / Gemfan 9x5x2,"9 inch, TWO blade, glass-nylon, props-out",2 pair,6.00,12.00,28,REFERENCE BUILD propeller
+9,any,3,Propellers,HQProp / Gemfan 9x5x3,"9 inch, THREE blade, glass-nylon, props-out",2 pair,7.50,15.00,36,"Three blades buy thrust per unit diameter and cost efficiency; the hover fundamental drops about 17%, so the notch moves with them"
+10,any,2,Propellers,Gemfan 10x5x2,"10 inch, TWO blade, glass-nylon, props-out",2 pair,7.00,14.00,40,Two blades spin faster for the same thrust
+10,any,3,Propellers,Gemfan 10x5x3,"10 inch, THREE blade, glass-nylon, props-out",2 pair,8.50,17.00,48,"Three blades buy thrust per unit diameter and cost efficiency; the hover fundamental drops about 17%, so the notch moves with them"
+7,any,any,Main Battery,6S LiPo pack,"22.2 V nominal, 3000 mAh, 50C minimum",1,88.00,88.00,470,"Smaller pack, higher C. A 7-inch peaks at 99 A on 3-blade, which needs 33C from 3000 mAh -- 50C is the sane margin"
+9,any,any,Main Battery,6S LiPo pack,"22.2 V nominal, 4500 mAh, 20C minimum",1,110.00,110.00,640,"REFERENCE BUILD. Peak draw is 15C, so 20C is ample"
+10,any,any,Main Battery,6S LiPo pack,"22.2 V nominal, 4500 mAh, 30C minimum",1,115.00,115.00,640,"Same capacity as the 9-inch but a higher C rating: the 10-inch 3-blade peaks at 95 A, which is 21C"
+7,2807,2,Drive,4-in-1 ESC (BLHeli_32 / AM32),"40 A cont. / 50 A burst per ch, 6S, DShot300",1,38.00,38.00,25,"18.8 A/motor peak, 2.1x margin"
+7,2807,3,Drive,4-in-1 ESC (BLHeli_32 / AM32),"60 A cont. / 70 A burst per ch, 6S, DShot300",1,52.00,52.00,34,"24.8 A/motor peak. A 40 A ESC gives only 1.6x, below the 2x this profile needs"
+9,2810,2,Drive,4-in-1 ESC (BLHeli_32 / AM32),"40 A cont. / 50 A burst per ch, 6S, DShot300",1,38.00,38.00,25,"REFERENCE BUILD. 12.8 A/motor peak, 3.1x margin"
+9,2810,3,Drive,4-in-1 ESC (BLHeli_32 / AM32),"40 A cont. / 50 A burst per ch, 6S, DShot300",1,38.00,38.00,25,"16.9 A/motor peak, 2.4x margin -- the figure section 4.3 sizes on"
+9,3110,2,Drive,4-in-1 ESC (BLHeli_32 / AM32),"40 A cont. / 50 A burst per ch, 6S, DShot300",1,38.00,38.00,25,"13.2 A/motor peak, 3.0x margin"
+9,3110,3,Drive,4-in-1 ESC (BLHeli_32 / AM32),"40 A cont. / 50 A burst per ch, 6S, DShot300",1,38.00,38.00,25,"17.3 A/motor peak, 2.3x margin"
+10,3110,2,Drive,4-in-1 ESC (BLHeli_32 / AM32),"40 A cont. / 50 A burst per ch, 6S, DShot300",1,38.00,38.00,25,"16.8 A/motor peak, 2.4x margin"
+10,3110,3,Drive,4-in-1 ESC (BLHeli_32 / AM32),"60 A cont. / 70 A burst per ch, 6S, DShot300",1,52.00,52.00,34,"23.0 A/motor peak. A 40 A ESC gives 1.7x, below the 2x this profile needs"
+10,3115,2,Drive,4-in-1 ESC (BLHeli_32 / AM32),"40 A cont. / 50 A burst per ch, 6S, DShot300",1,38.00,38.00,25,"17.4 A/motor peak, 2.3x margin"
+10,3115,3,Drive,4-in-1 ESC (BLHeli_32 / AM32),"60 A cont. / 70 A burst per ch, 6S, DShot300",1,52.00,52.00,34,"23.8 A/motor peak. A 40 A ESC gives 1.7x, below the 2x this profile needs"
+7,2807,3,Wiring/Passives,AS150 anti-spark connector,150 A continuous / 7 mm bullet,1,7.00,7.00,14,"REPLACES the XT90-S. This build peaks at 99 A, above the XT90-S 90 A rating. Build stops without -DACCEPT_CONNECTOR_OVER_RATING=1 or this part"
+10,3110,3,Wiring/Passives,AS150 anti-spark connector,150 A continuous / 7 mm bullet,1,7.00,7.00,14,"REPLACES the XT90-S. This build peaks at 92 A, above the XT90-S 90 A rating. Build stops without -DACCEPT_CONNECTOR_OVER_RATING=1 or this part"
+10,3115,3,Wiring/Passives,AS150 anti-spark connector,150 A continuous / 7 mm bullet,1,7.00,7.00,14,"REPLACES the XT90-S. This build peaks at 95 A, above the XT90-S 90 A rating. Build stops without -DACCEPT_CONNECTOR_OVER_RATING=1 or this part"

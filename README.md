@@ -2,7 +2,7 @@
 
 [![host-tests](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml/badge.svg?branch=main)](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml)
 [![assertions](https://img.shields.io/badge/host_assertions-387-blue)](tools/host_tests/)
-[![consistency](https://img.shields.io/badge/consistency_checks-21-blue)](tools/check_consistency.py)
+[![consistency](https://img.shields.io/badge/consistency_checks-22-blue)](tools/check_consistency.py)
 [![decoder](https://img.shields.io/badge/RID_decoder_tests-80-blue)](android/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-ESP32--P4%20%7C%20C3%20%7C%20C6-lightgrey)](firmware/)
@@ -10,10 +10,13 @@
 Autonomous long-range 9-inch quadcopter. ESP32-P4 dual-core RISC-V avionics, integrated
 perception, kinetic recovery and safety stack.
 
-**Status:** revision 3.8 — DShot wired in; the notch prefers measured RPM to a spectrum search. All
-eighteen defects found in the revision 1.0 review are fixed. See
+**Status:** revision 3.9 — all ten builds have a parts list, reconciled against the firmware's mass model. All eighteen defects found in the
+revision 1.0 review are fixed — and eighteen was not the end of it. Reworking them
+surfaced more, and the work since has surfaced more again, several worse than
+anything in the original list. See
 [`docs/review-findings-resolution.md`](docs/review-findings-resolution.md) for the
-finding-by-finding index, or section 13 of the specification.
+original eighteen, or sections 13.1 and 13.2 of the specification for everything
+found afterwards.
 
 > The badge reflects `tools/check_consistency.py` plus the host test suite, which compile
 > the real firmware headers on a PC. It does **not** mean the aircraft has flown. Nothing
@@ -39,6 +42,7 @@ finding-by-finding index, or section 13 of the specification.
 | `tools/blackbox_decode.py` | Decodes flight logs to CSV, prints a flight summary |
 | `tools/md2docx.py` | Regenerates the Word document from the Markdown |
 | `tools/test_blackbox_decode.py` | Verifies the BlackBox decoder scales and flags every field correctly |
+| `hardware/bom-variants.csv` | Parts that differ across the ten build combinations |
 | `tools/patchfile.py` | In-place source edits that preserve line endings, refuse ambiguous anchors and reject shell-mangled content |
 | `tools/test_patchfile.py` | Tests for the above, including the whole-file anchor bug that motivated it |
 | `tools/host_tests/` | Compiles the real firmware headers on a PC and verifies the safety-critical algorithms |
@@ -201,7 +205,7 @@ python tools/check_consistency.py --fix
 > needed a restore from git. `tools/patchfile.py` now refuses control characters, and
 > the `line-endings` check scans every tracked file for them.
 
-21 checks. `--fix` repairs whitespace, BOM totals and any specification constant that has
+22 checks. `--fix` repairs whitespace, BOM totals and any specification constant that has
 drifted from `config.h` — the code is the source of truth, and the fixer rewrites the
 documentation to match, never the reverse. It runs in the pre-push hook on every push,
 including documentation-only ones.
