@@ -751,17 +751,31 @@
 #define PIN_SD_SCK                35
 #define PIN_SD_MISO               36
 
+#ifndef PIN_PARACHUTE_SRV
 #define PIN_PARACHUTE_SRV         26
+#endif
+#ifndef PIN_GNSS_RX
 #define PIN_GNSS_RX               17
+#endif
+#ifndef PIN_GNSS_TX
 #define PIN_GNSS_TX               18
+#endif
+#ifndef PIN_VTX_TX
 #define PIN_VTX_TX                19
+#endif
 #define PIN_VTX_RX                20
 #define PIN_LIDAR_RX              22
 #define PIN_LIDAR_TX              23
+#ifndef PIN_CRSF_RX
 #define PIN_CRSF_RX               27       // ExpressLRS -> FC
+#endif
 #define PIN_CRSF_TX               28       // FC -> ExpressLRS (telemetry to handset)
+#ifndef PIN_AUX_BUS_TX
 #define PIN_AUX_BUS_TX            24       // broadcast to beacon + Remote ID modules
+#endif
+#ifndef PIN_REMOTEID_HEALTH
 #define PIN_REMOTEID_HEALTH       25       // driven HIGH by the Remote ID module
+#endif
                                            // while it is broadcasting; INPUT_PULLDOWN
                                            // here, so a dead module blocks arming
 
@@ -775,7 +789,9 @@
 #define MOTOR1_PIN                4        // rear-right,  CCW
 #define MOTOR2_PIN                5        // front-right, CW
 #define MOTOR3_PIN                6        // rear-left,   CW
+#ifndef MOTOR4_PIN
 #define MOTOR4_PIN                15       // front-left,  CCW
+#endif
 
 // I2C device addresses
 #define I2C_ADDR_MPU6050          0x68

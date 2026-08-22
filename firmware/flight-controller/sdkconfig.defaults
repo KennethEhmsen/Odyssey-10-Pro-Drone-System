@@ -18,6 +18,22 @@ CONFIG_FREERTOS_HZ=1000
 #  setup() and loop() are called for us, as they are under Arduino.
 CONFIG_AUTOSTART_ARDUINO=y
 
+#  THE CONSOLE GOES OVER USB, NOT UART0.
+#
+#  ESP-IDF defaults the primary console to UART0 on physical pins, with USB
+#  Serial/JTAG only as a SECONDARY console. Arduino's Serial object follows the
+#  primary, so with the default every printf in this firmware goes to a header
+#  nothing is connected to.
+#
+#  The symptom is not an error. It is a port that opens, stays open, and returns
+#  zero bytes -- which reads exactly like a board that has crashed, and cost an
+#  hour of hunting a fault that was not there. The board had been running the
+#  whole time.
+#
+#  The ESP32-P4-Function-EV-Board's USB Serial/JTAG port is the one the bring-up
+#  in section 4.3.2 uses, so the console belongs on it.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
 #  The P4 has no radio of its own; the EV board's C6 provides Wi-Fi over SDIO. The
 #  flight controller does not use it -- see section 1 -- so nothing here enables it.
 
