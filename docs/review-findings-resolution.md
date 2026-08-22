@@ -7,8 +7,10 @@ Nine were flight-critical. Two could not be fixed in software and required hardw
 additions. One (finding 17) described a capability that was not merely unimplemented but
 impossible with the specified parts.
 
-**Summary:** 18 findings, 18 resolved. Two hardware additions ($26.50), BOM total moved
-from $512.50 to $540.50.
+**Summary:** 18 findings, 18 resolved. Two hardware additions ($26.50), which moved
+the BOM total up from $512.50. The current total lives in §2 of the specification
+and is computed from `hardware/bom.csv`; it has moved again since, as parts were
+right-sized.
 
 > **This document covers the original review only, and eighteen was not the end of it.**
 > Reworking these findings surfaced further defects, and the work that followed —
@@ -536,9 +538,12 @@ grounded a perfectly legal aircraft.
 Line items summed to $512.50 against a stated total of $514.50.
 
 **Now:** `hardware/bom.csv` is the authoritative source and the totals in the
-specification are computed from it. Per-line `qty × unit = total` is checked. The new
-total is **$540.50**, including the ExpressLRS receiver ($20.00), the Remote ID module
-($6.50) and $1.50 of additional passives for the beacon diode-OR and power-sense divider.
+specification are computed from it. Per-line `qty × unit = total` is checked, and so
+is the master total quoted in §2. This fix added the ExpressLRS receiver ($20.00),
+the Remote ID module ($6.50) and $1.50 of passives for the beacon diode-OR and
+power-sense divider. **No figure is repeated here**, because a total copied into a
+second document is a total that will disagree with the first one eventually — which
+is what finding 18 was about.
 
 ---
 

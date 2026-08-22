@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 4.1 — the bench procedure gains an order list for starting from nothing
+**Document revision:** 4.3 — a real price for the P4 board, and the mass question it exposes
 
 ---
 
@@ -192,7 +192,11 @@ $514.50 did not match its own line items, which summed to $512.50.
 | Beacon battery | 1S LiPo cell | 3.7 V 800 mAh with PCM | 1 | $6.00 | $6.00 | 16 g |
 | Power latch | SI2301DS P-FET + 2N3904 | Latching solid-state switch | 1 | $2.50 | $2.50 | 2 g |
 | Wiring/passives | XT90-S, caps, TVS, Schottky | 1000 µF 35 V, SMBJ28A, BAT54C | 1 lot | $16.00 | $16.00 | 88 g |
-| **Master total** | | | | | **$533.50** | |
+| **Master total** | | | | | **$560.50** | |
+
+> **Every price here is an estimate.** None of this has been purchased. The figures are researched typical prices, not invoices, and they will move with supplier, region and time — the ESP32-P4 in particular is a recent part whose board-level pricing is still settling. Treat the master total as an order of magnitude for budgeting, not as a quotation.
+>
+> **The masses are a different matter.** They are estimates too, but they are not merely informational: they sum into `FRAME_BASE_DRY_G` and `AIRFRAME_AUW_G`, which size thrust-to-weight, hover power and the return-to-home reserve. A price that is 50% out costs money; a mass that is 50% out costs endurance and margin. **Weigh the parts as they arrive** and correct §2 — the `bom-mass` check will then reconcile `config.h` against what you actually have.
 
 **Rows added in this revision** are shown in bold. The wiring lot increased by $1.50 to
 cover the Schottky diode-OR and the main-power-sense divider that the beacon redesign in
@@ -203,6 +207,37 @@ does not fly). See section 3.1.
 
 ---
 
+
+
+### 2.2 The flight controller board is not decided
+
+The BOM's `Main MCU` line now carries a **real price** — 285 DKK, about $41, quoted for
+an **ESP32-P4-Function-EV-Board v3.2**. It still carries a **modelled mass** of 9 g, and
+those two figures describe different objects.
+
+The Function-EV-Board is Espressif's full-size evaluation board. It is the right thing to
+run §4.3.2's bench procedure on: every GPIO broken out, USB debug, and a known-good
+reference design to blame the firmware against rather than the wiring. It is the wrong
+thing to fly. A full-size evaluation board weighs many times 9 g, and on a 1584 g
+airframe that is not a rounding error — it comes straight off the payload reserve and out
+of the endurance the energy budget in §5 is written around.
+
+The 9 g assumes an **ESP32-P4 module on a compact carrier**, which in this project means
+the PCB at build-order step 11. Until that exists, or until an off-the-shelf compact P4
+board is chosen and weighed, the flight-controller mass is the least-supported number in
+§2 — and unlike a price, it propagates:
+
+```
+board mass  ->  FRAME_BASE_DRY_G  ->  AIRFRAME_AUW_G  ->  thrust-to-weight
+                                                      ->  hover power
+                                                      ->  CRUISE_CURRENT_A
+                                                      ->  the return-to-home reserve
+```
+
+**So: bench on the EV board, and weigh whatever eventually flies.** §11.1 now asks for
+that explicitly. The `bom-mass` check reconciles `config.h` against §2 for all ten
+builds, so correcting the mass there is the only edit needed — everything downstream is
+computed.
 
 ### 2.1 The other nine builds
 
@@ -837,7 +872,7 @@ fails there, nothing below the first group matters yet.
 
 | For | Item | What to look for |
 | --- | --- | --- |
-| **Step 0** | ESP32-P4 development board | Must break out **GPIO 4, 5, 6 and 15** on headers. Check the pinout before ordering — P4 boards differ, and some route those pins to on-board peripherals |
+| **Step 0** | ESP32-P4 development board | **ESP32-P4-Function-EV-Board v3.2** is confirmed available at 285 DKK (~$41) and is the right choice here: every GPIO broken out, USB debug, and a reference design to blame the firmware against rather than the wiring. It is a bench board, **not** a flight board — see §2.2 |
 | **Step 0** | USB-C data cable | A charge-only cable is the classic wasted evening |
 | **Step 1** | USB logic analyser, 8 channels, 24 MSa/s | The commodity "Saleae-compatible" type. 24 MSa/s is 41 ns against a 3.3 µs bit; more is not useful here. Works with PulseView, which is free |
 | **Step 1** | Female-to-female jumper leads | Usually bundled with the analyser |
@@ -2078,7 +2113,7 @@ Odyssey-10-Pro-Drone-System/
 |   +-- bom.csv                     9-inch reference build
 |   +-- bom-variants.csv            what differs in the other nine
 +-- tools/
-|   +-- check_consistency.py        The specification-vs-code gate     [23 checks]
+|   +-- check_consistency.py        The specification-vs-code gate     [24 checks]
 |   +-- blackbox_decode.py          Flight log decoder, formats v2-v4
 |   +-- test_blackbox_decode.py     ...and its tests
 |   +-- patchfile.py                Line-ending-safe in-place edits
@@ -2221,6 +2256,7 @@ rebuilds all four.
 
 ### 11.2 Propulsion
 
+- [ ] **Weigh the flight-controller board and correct §2.** The BOM carries 9 g, which assumes a module on a compact carrier rather than a development board. This is the least-supported mass in the BOM and it propagates into `AIRFRAME_AUW_G`, the hover point and the return-to-home reserve — see §2.2.
 - [ ] **ESC endpoint calibration** for 400 Hz PWM input (1000–2000 µs).
 - [ ] **Motor direction (props-out), propellers removed.** Against section 4.2:
       - Motor 1 (rear-right) rotates **counter-clockwise**
@@ -2546,7 +2582,7 @@ ones live here.
 | 15 | LiDAR reading never expired — stale value latched the pitch clamp; step-over climb never implemented | High | `TimedValue<T>` on every sensor with per-sensor max age; stale sensor disables avoidance and is flagged; step-over climb implemented | §6, `types.h` |
 | 16 | GNSS baud contradiction: pinout said 115200, firmware opened 9600 | Medium | Firmware negotiates the rate, reconfigures the module to 115200 / 10 Hz and verifies; documentation matches | §9.1, `sensors.cpp` |
 | 17 | Remote ID claimed in §1 but never implemented — and impossible, since the ESP32-P4 has no radio | High | ESP32-C6 module added; ASTM F3411 broadcast over BLE 5 Long Range and Wi-Fi; Remote ID health blocks arming | §12.1, remote-id firmware |
-| 18 | BOM summed to $512.50 against a stated $514.50 | Low | Totals computed from `hardware/bom.csv`; new total $540.50 including the two added modules | §2 |
+| 18 | BOM summed to $512.50 against a stated $514.50 | Low | Totals are now computed from `hardware/bom.csv` and checked against §2 on every run, so the two cannot drift apart again. The figure quoted here in revision 2.0 was $540.50; it has moved since as parts were right-sized, which is the point — §2 carries the live total | §2 |
 
 ### 13.1 Issues found while fixing these, and also corrected
 

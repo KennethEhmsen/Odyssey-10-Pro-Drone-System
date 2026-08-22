@@ -2142,6 +2142,52 @@ def check_docx_current(rep, fix):
                         f"byte for byte")
 
 
+def check_quoted_totals(rep, fix):
+    """
+    Any dollar figure a document CALLS a total must equal the computed one.
+
+    Finding 18 was the BOM summing to one number while the specification stated
+    another. The fix computed §2's master total from bom.csv and checked it -- and then
+    the resolution record describing that fix went on quoting a frozen $540.50 in two
+    places, which drifted the moment a part was right-sized. The check covered exactly
+    one sentence in one file.
+
+    This scans every document for a figure described as a total and compares it. Prices
+    of individual parts are not described that way, so the pattern is narrow enough to
+    stay quiet.
+    """
+    rep.checks_run += 1
+    if not BOM.exists():
+        return
+    _, total = bom_total()
+
+    pattern = re.compile(
+        r"(?i)\btotal\b[^.\n$]{0,60}?\*{0,2}\$([\d,]+\.\d\d)\*{0,2}")
+
+    checked = 0
+    for md in sorted((ROOT / "docs").glob("*.md")):
+        if md.name.endswith(".ORIGINAL.md"):
+            continue          # a historical artefact, deliberately frozen
+        text = read(md)
+        for m in pattern.finditer(text):
+            stated = float(m.group(1).replace(",", ""))
+            # Historical figures are fine when the prose says they are historical.
+            window = text[max(0, m.start() - 120):m.end() + 60].lower()
+            if any(w in window for w in ("was ", "moved up from", "previously",
+                                         "revision 2.0", "up from", "against a stated")):
+                continue
+            checked += 1
+            if abs(stated - total) > 0.005:
+                line = text[:m.start()].count("\n") + 1
+                rep.problem("quoted-totals",
+                            f"{md.name} line {line} states a total of ${stated:.2f}, but "
+                            f"hardware/bom.csv sums to ${total:.2f}")
+
+    rep.note = getattr(rep, "note", [])
+    rep.note.append(f"quoted-totals: {checked} stated total(s) across the documents "
+                    f"agree with bom.csv")
+
+
 # =====================================================================================
 #  Registry
 # =====================================================================================
@@ -2153,6 +2199,9 @@ CHECKS = [
     ("bom", "BOM per-line arithmetic and the total quoted in the specification", check_bom),
     ("spec-constants", "battery thresholds, AUW and TWR agree with config.h",
      check_spec_constants),
+    ("quoted-totals",
+     "every figure the documents call a total matches bom.csv",
+     check_quoted_totals),
     ("bom-mass",
      "the parts list and config.h agree on mass, ESC margin and connector, for every build",
      check_bom_mass),
