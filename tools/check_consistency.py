@@ -1758,6 +1758,105 @@ def check_build_switches(rep, fix):
                         f"are genuinely overridable")
 
 
+def check_repo_layout(rep, fix):
+    """
+    Section 10.1's repository layout must name every source file that exists.
+
+    It had drifted badly: dynamic_notch.h, all three DShot files, the entire android/
+    tree, six of the eight tools and the CI workflow were all missing, and it still
+    quoted 98 host assertions against 387. A reader using it to find their way around
+    would have concluded half the system did not exist.
+
+    Nothing compares a prose file listing against the filesystem unless something is
+    written to do it, which is the same reason every other check here exists.
+
+    Directories are accepted in place of the files beneath them -- the listing is meant
+    to orient a reader, not to mirror `git ls-files`. What it may NOT do is omit a
+    subsystem entirely.
+    """
+    rep.checks_run += 1
+    import subprocess
+
+    spec = read(SPEC)
+    if "Odyssey-10-Pro-Drone-System/" not in spec:
+        rep.problem("repo-layout", "section 10.1's layout block is missing")
+        return
+    block = spec.split("Odyssey-10-Pro-Drone-System/", 1)[1].split("```", 1)[0]
+
+    try:
+        out = subprocess.run(["git", "ls-files"], cwd=str(ROOT),
+                             capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        rep.problem("repo-layout", "git is not available", severity="warn")
+        return
+    if out.returncode != 0:
+        rep.problem("repo-layout", "git ls-files failed", severity="warn")
+        return
+
+    SOURCE_SUFFIXES = (".h", ".cpp", ".py", ".sh", ".yml")
+
+    #  Subsystems the listing deliberately summarises rather than enumerating. The
+    #  PREFIX itself must still appear, so a whole subsystem cannot vanish -- but the
+    #  files beneath it need not be named one by one.
+    #
+    #  This list is short and explicit on purpose. The first version of this check
+    #  excused any file whose parent directory appeared anywhere in the listing, which
+    #  meant "include/" being present excused every header inside it -- and the check
+    #  passed while dynamic_notch.h and patchfile.py were both missing.
+    SUMMARISED = ("android/", "firmware/beacon-node/", "firmware/ground-station/",
+                  "firmware/remote-id/")
+
+    tracked = [r.strip() for r in out.stdout.split() if r.strip()]
+
+    #  Summarised subsystems are tested HERE, against every tracked file rather than
+    #  only those with a source suffix. android/ holds Java, which this check does not
+    #  scan -- so folding the subsystem test into the suffix-filtered loop below meant
+    #  the whole android/ tree could vanish from the listing and nothing would notice.
+    for prefix in SUMMARISED:
+        if not any(r.startswith(prefix) for r in tracked):
+            continue
+        leaf = prefix.rstrip("/").rsplit("/", 1)[-1]
+        if not re.search(r"\+--\s+" + re.escape(leaf) + r"/", block):
+            rep.problem("repo-layout",
+                        f"the {prefix} subsystem exists but is missing from section "
+                        f"10.1's layout entirely")
+
+    missing = []
+    for rel in tracked:
+        if not rel.endswith(SOURCE_SUFFIXES):
+            continue
+        if any(rel.startswith(p) for p in SUMMARISED):
+            continue        # covered by the subsystem test above
+
+        # Bounded, not substring. "patchfile.py" is a substring of "test_patchfile.py",
+        # so a plain `in` check reported the listing as complete while patchfile.py was
+        # missing from it -- the exact failure this check exists to catch.
+        name = rel.rsplit("/", 1)[-1]
+        if not re.search(rf"(?<![\w.]){re.escape(name)}(?![\w])", block):
+            missing.append(rel)
+
+    for rel in sorted(missing):
+        rep.problem("repo-layout",
+                    f"{rel} exists but section 10.1's layout does not mention it or any "
+                    f"directory containing it")
+
+    # The counts quoted inside the listing drift exactly as readily as the files do.
+    m = re.search(r"check_consistency\.py[^\n]*?\[(\d+) checks\]", block)
+    if m and int(m.group(1)) != len(CHECKS):
+        if fix:
+            spec = spec.replace(f"[{m.group(1)} checks]", f"[{len(CHECKS)} checks]", 1)
+            write(SPEC, spec)
+            rep.fix("repo-layout", f"layout check count {m.group(1)} -> {len(CHECKS)}")
+        else:
+            rep.problem("repo-layout",
+                        f"section 10.1 says {m.group(1)} consistency checks, there are "
+                        f"{len(CHECKS)}", fixable=True)
+
+    if not missing:
+        rep.note = getattr(rep, "note", [])
+        rep.note.append("repo-layout: section 10.1 accounts for every source file")
+
+
 # =====================================================================================
 #  Registry
 # =====================================================================================
@@ -1769,6 +1868,9 @@ CHECKS = [
     ("bom", "BOM per-line arithmetic and the total quoted in the specification", check_bom),
     ("spec-constants", "battery thresholds, AUW and TWR agree with config.h",
      check_spec_constants),
+    ("repo-layout",
+     "section 10.1 lists every source file that exists",
+     check_repo_layout),
     ("build-switches",
      "every documented build switch is actually overridable",
      check_build_switches),

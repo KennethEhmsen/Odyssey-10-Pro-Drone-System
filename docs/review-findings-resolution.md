@@ -10,6 +10,24 @@ impossible with the specified parts.
 **Summary:** 18 findings, 18 resolved. Two hardware additions ($26.50), BOM total moved
 from $512.50 to $540.50.
 
+> **This document covers the original review only, and eighteen was not the end of it.**
+> Reworking these findings surfaced further defects, and the work that followed —
+> build-configuration switches, the dynamic gyro notch, DShot — surfaced more again.
+> Several were more serious than anything in the original eighteen:
+>
+> | | |
+> | --- | --- |
+> | The IMU anti-alias filter was left at 94 Hz while the gyro notch moved from 80 to 120 Hz across four revisions, so the low-pass sat *below* the notch — attenuating the peak the notch existed to remove, while keeping its phase lag in the control band | §8.3 |
+> | Every revision told the reader to find the motor peak in a BlackBox gyro trace. That was impossible twice over: the logged gyro is post-notch, and the 100 Hz log rate puts Nyquist at 50 Hz while the peak is 88–180 Hz | §8.3 |
+> | The flight loop's period is `pdMS_TO_TICKS(1000 / FLIGHT_LOOP_HZ)`, which at the ESP-IDF default 100 Hz tick rounds to **zero ticks**. The 1000 Hz 7-inch build had depended on Arduino-ESP32's tick rate since revision 2.8 with nothing declaring it | §8.3.4 |
+> | The bidirectional-DShot GCR decode read its 5-bit groups from the wrong offsets. Every group still decoded to a *legal* nibble, so a corrupted RPM would have passed its own checksum and reached the notch as a measurement | §4.3 |
+> | Constants presented as build switches — `NOTCH_CENTER_HZ`, `DSHOT_BITRATE_KHZ`, `REQUIRE_REMOTE_ID_TO_ARM` — were defined without `#ifndef` guards, so overriding them was silently discarded or broke the build | §3.2 |
+>
+> The full list is in §13.1 and §13.2 of the specification. The pattern in nearly all of
+> them is the same as in the original eighteen: two numbers that had to agree, and
+> nothing comparing them. That is what `tools/check_consistency.py` exists to do, and it
+> has grown from 4 checks to 20 as each new class of drift was found.
+
 ---
 
 ## Severity breakdown

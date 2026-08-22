@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 3.7 — DShot is wired into the flight loop, and the notch prefers a measurement to a search
+**Document revision:** 3.8 — documentation brought back into line with the repository, and a check so it stays there
 
 ---
 
@@ -1863,6 +1863,9 @@ Odyssey-10-Pro-Drone-System/
 |   |   |   +-- config.h            Every tunable + compile-time assertions
 |   |   |   +-- types.h             TimedValue<T>, snapshot, BlackBox record
 |   |   |   +-- filters.h           Bi-quad notch, low-pass, debounce
+|   |   |   +-- dynamic_notch.h     Sliding DFT + bounded peak tracker  [8.3.1]
+|   |   |   +-- dshot.h             DShot frames, GCR telemetry, eRPM   [4.3]
+|   |   |   +-- dshot_rmt.h         RMT bit timing and symbol encoding  [4.3.1]
 |   |   |   +-- pid.h               PID with derivative-on-measurement
 |   |   |   +-- mixer.h             Desaturating Quad-X mixer      [finding 13]
 |   |   |   +-- state_machine.h     Atomic escalate-only states    [finding 6]
@@ -1872,21 +1875,37 @@ Odyssey-10-Pro-Drone-System/
 |   |   |   +-- blackbox.h          Ring-buffered SD recorder
 |   |   +-- src/
 |   |       +-- main.cpp            Tasks, control, arming         [findings 5, 11, 12]
-|   |       +-- sensors.cpp
+|   |       +-- sensors.cpp         Split IMU read: gyro at loop rate, accel slower
 |   |       +-- navigation.cpp
 |   |       +-- radio_link.cpp
 |   |       +-- blackbox.cpp
+|   |       +-- dshot_rmt.cpp       ESP-IDF RMT driver -- NEVER COMPILED, see 4.3.1
 |   +-- beacon-node/                ESP32-C3                       [findings 7, 8]
 |   +-- remote-id/                  ESP32-C6                       [finding 17]
+|   |   +-- src/                    identity.*, odid_transport.*, main.cpp
 |   +-- ground-station/             ESP32 + SX1278                 [findings 3, 9, 10]
+|       +-- src/                    main.cpp, mavlink_min.h
++-- android/                        Remote ID receiver, for verifying the broadcast
+|   +-- app/src/main/java/dk/odyssey/ridtest/
+|   |   +-- odid/                   Decoder with NO Android imports, so it host-tests
+|   |   +-- scan/                   BLE and Wi-Fi scanners
+|   +-- app/src/test/java/...       OdidParserTest
 +-- hardware/bom.csv
 +-- tools/
-|   +-- blackbox_decode.py
-|   +-- md2docx.py
-|   +-- host_tests/               Compiles the real headers on a PC   [98 assertions]
+|   +-- check_consistency.py        The specification-vs-code gate     [21 checks]
+|   +-- blackbox_decode.py          Flight log decoder, formats v2-v4
+|   +-- test_blackbox_decode.py     ...and its tests
+|   +-- patchfile.py                Line-ending-safe in-place edits
+|   +-- test_patchfile.py           ...and its tests
+|   +-- md2docx.py                  Regenerates the Word documents
+|   +-- run_android_parser_tests.sh Decoder tests with plain javac
+|   +-- git-hooks/pre-push          Runs the whole gate before every push
+|   +-- host_tests/                 Compiles the real headers on a PC
 |       +-- test_all.cpp
 |       +-- arduino_shim.h
+|       +-- Arduino.h
 |       +-- run_tests.sh
++-- .github/workflows/host-tests.yml
 +-- docs/
 ```
 
@@ -1894,9 +1913,14 @@ Odyssey-10-Pro-Drone-System/
 
 | Core | Task | Rate | Priority | Responsibility |
 | --- | --- | --- | --- | --- |
-| 1 | `TaskFlightLoop` | 500 Hz | MAX−1 | IMU, attitude, free-fall, rate control, mixing, ESC output |
+| 1 | `TaskFlightLoop` | 500 Hz¹ | MAX−1 | IMU, attitude, free-fall, rate control, mixing, ESC output |
 | 0 | `TaskTelemetry` | 50 Hz | 3 | Sensors, GNSS, arming, energy, state, radios, console |
 | 0 | `TaskStorage` | 20 Hz | 1 | Drains the BlackBox ring to the card |
+
+¹ The flight-loop rate follows `FRAME_SIZE_IN` and can be overridden: the 7-inch runs at
+1000 Hz by default, the 9- and 10-inch at 500 Hz, and `-DFLIGHT_LOOP_HZ=1000` is
+characterised on both. `IMU_DLPF_HZ` and `DYN_NOTCH_BINS` move with it automatically —
+see §8.3.4.
 
 Storage is isolated on its own task specifically so an SD write stall — which can exceed
 100 ms on a cheap card — cannot delay a control deadline or a radio poll. Revision 1.0
@@ -2306,7 +2330,16 @@ aircraft, with a broadcast module being the standard route.
 
 ## 13. Review Findings Resolution Index
 
-All eighteen findings from the revision 1.0 review, with the change that resolves each.
+The original eighteen findings from the revision 1.0 review, with the change that
+resolves each. **Eighteen is not the total.** Reworking these surfaced more, and later
+work surfaced more again — §13.1 and §13.2 carry those, and several of them were worse
+than anything in the original list. The DLPF corner left behind by a moving notch, a
+measurement procedure that could never have been carried out, and a flight loop whose
+period silently depended on an undeclared FreeRTOS tick rate were all found *after* this
+table was complete.
+
+`docs/review-findings-resolution.md` records the original eighteen in detail. The later
+ones live here.
 
 | # | Finding | Severity | Resolution | Where |
 | --- | --- | --- | --- | --- |
