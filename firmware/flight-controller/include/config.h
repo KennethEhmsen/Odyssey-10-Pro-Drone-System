@@ -532,8 +532,12 @@
 #ifndef DSHOT_BIDIRECTIONAL
 #define DSHOT_BIDIRECTIONAL       1        // no point without the telemetry
 #endif
+#ifndef DSHOT_BITRATE_KHZ
 #define DSHOT_BITRATE_KHZ         300      // DShot300: 3.33 us per bit
+#endif
+#ifndef DSHOT_TELEM_TIMEOUT_US
 #define DSHOT_TELEM_TIMEOUT_US    200      // give up on a reply after this
+#endif
 
 // Pole pairs, for turning electrical RPM into shaft RPM. Every motor offered here is a
 // 12N14P outrunner: 14 magnets, 7 pole pairs. Getting this wrong scales every derived
@@ -700,7 +704,9 @@
 //  in the restrictive direction grounds a legal aircraft. Neither default is safe for
 //  everyone, so the choice is explicit. See docs section 12.1.
 // -------------------------------------------------------------------------------
+#ifndef REQUIRE_REMOTE_ID_TO_ARM
 #define REQUIRE_REMOTE_ID_TO_ARM  0
+#endif
 
 #define ARM_THROTTLE_MAX_US       1050     // stick must be at the bottom
 #define ARM_MAX_TILT_DEG          8.0f     // aircraft must be roughly level

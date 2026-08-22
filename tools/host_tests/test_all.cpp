@@ -23,6 +23,7 @@ uint32_t g_millis = 0;
 #include "identity.h"
 #include "dynamic_notch.h"
 #include "dshot.h"
+#include "dshot_rmt.h"
 
 #include <cstdio>
 #include <vector>
@@ -988,6 +989,211 @@ static void testDshotTelemetryAggregation() {
         "methods agree about where to look");
 }
 
+static void testDshotRmtTiming() {
+  section("DShot/RMT: clock resolution and bit timing");
+
+  const uint32_t res = DSHOT_RMT_RESOLUTION_HZ;
+  const uint32_t bitTicks = dshotBitTicks(res, DSHOT_BITRATE_KHZ);
+
+  const uint32_t one = dshotOneHighTicks(bitTicks);
+  const uint32_t zero = dshotZeroHighTicks(bitTicks);
+
+  // ---- what the DEFAULT configuration resolves to ---------------------------------
+  // Pinned exactly, so a change to the resolution or bitrate has to be deliberate.
+  // Guarded, because both are build switches and the numbers move when they do.
+#if DSHOT_BITRATE_KHZ == 300 && DSHOT_RMT_RESOLUTION_HZ == 10000000u
+  check(bitTicks == 33, "a DShot300 bit is 33 ticks at 10 MHz");
+  check(one == 25, "a 1 bit holds high for 25 of 33 ticks (75%)");
+  check(zero == 12, "a 0 bit holds high for 12 of 33 ticks (37.5%)");
+#endif
+
+  // ---- what must hold at EVERY setting ---------------------------------------------
+  check(dshotBitErrorPpm(res, DSHOT_BITRATE_KHZ) < 50000,
+        "the configured bitrate lands within 5% of nominal at this resolution");
+  check(bitTicks >= 8,
+        "there are enough ticks per bit to shape one at this resolution");
+  check(one > zero * 2 - 4 && one < zero * 2 + 4,
+        "a 1 is about twice the high time of a 0, which is the whole discrimination");
+  check(one < bitTicks && zero < bitTicks && zero > 0,
+        "both high times fit inside the bit period and neither is degenerate");
+
+  // Other bitrates must also land somewhere usable, or the switch is a trap.
+  for (uint32_t khz : { 150u, 300u, 600u }) {
+    const uint32_t t = dshotBitTicks(res < 10000000u ? 10000000u : res, khz);
+    check(t >= 8, "DShot" + std::to_string(khz) + " has enough ticks per bit to shape");
+    check(dshotBitErrorPpm(res, khz) < 50000,
+          "DShot" + std::to_string(khz) + " is within 5% of nominal at this resolution");
+    check(dshotOneHighTicks(t) > dshotZeroHighTicks(t),
+          "DShot" + std::to_string(khz) + " still separates a 1 from a 0");
+  }
+
+  // Why the resolution is not a free choice, stated against a FIXED 10 MHz rather
+  // than the configured one -- this is an illustration of the trade, not a property
+  // of whatever happens to be configured.
+  const uint32_t t1200at10 = dshotBitTicks(10000000u, 1200);
+  check(dshotOneHighTicks(t1200at10) - dshotZeroHighTicks(t1200at10) < 4,
+        "DShot1200 at 10 MHz leaves too little margin between a 1 and a 0 -- the "
+        "resolution has to rise with the bitrate");
+  const uint32_t t1200at40 = dshotBitTicks(40000000u, 1200);
+  check(dshotOneHighTicks(t1200at40) - dshotZeroHighTicks(t1200at40) >= 8,
+        "...and at 40 MHz it has margin again, which is the fix");
+}
+
+static void testDshotRmtSymbols() {
+  section("DShot/RMT: frame to symbols");
+
+  const uint32_t bitTicks = dshotBitTicks(DSHOT_RMT_RESOLUTION_HZ, DSHOT_BITRATE_KHZ);
+  DShotRmtSymbol sym[DSHOT_FRAME_BITS];
+
+  // 0xAAAA alternates, so every bit position is exercised in both states.
+  dshotBuildSymbols(0xAAAA, bitTicks, false, sym);
+
+  int badPeriod = 0, badLevel = 0;
+  for (int i = 0; i < DSHOT_FRAME_BITS; ++i) {
+    if (sym[i].firstTicks + sym[i].secondTicks != bitTicks) ++badPeriod;
+    if (sym[i].firstLevel == sym[i].secondLevel) ++badLevel;
+  }
+  check(badPeriod == 0, "every symbol's two halves sum to exactly one bit period");
+  check(badLevel == 0, "every symbol changes level between its halves");
+
+  // MSB first. 0xAAAA is 1010..., so symbol 0 must be a 1 bit.
+  check(sym[0].firstTicks == dshotOneHighTicks(bitTicks),
+        "the first symbol carries the MOST significant bit");
+  check(sym[1].firstTicks == dshotZeroHighTicks(bitTicks),
+        "and the second carries the next one down");
+  check(sym[15].firstTicks == dshotZeroHighTicks(bitTicks),
+        "the last symbol carries the least significant bit");
+
+  // Non-inverted: pulses go high from a low idle.
+  check(sym[0].firstLevel == 1 && sym[0].secondLevel == 0,
+        "ordinary DShot pulses high and returns low");
+
+  // Bidirectional inverts BOTH halves. Getting this wrong yields a signal the ESC
+  // ignores entirely -- no motion, no error, nothing obviously wrong on a scope.
+  DShotRmtSymbol inv[DSHOT_FRAME_BITS];
+  dshotBuildSymbols(0xAAAA, bitTicks, true, inv);
+  check(inv[0].firstLevel == 0 && inv[0].secondLevel == 1,
+        "bidirectional DShot pulses LOW from a high idle");
+
+  int durationsDiffer = 0;
+  for (int i = 0; i < DSHOT_FRAME_BITS; ++i)
+    if (inv[i].firstTicks != sym[i].firstTicks ||
+        inv[i].secondTicks != sym[i].secondTicks) ++durationsDiffer;
+  check(durationsDiffer == 0,
+        "inversion changes only the levels, never the durations");
+
+  // A real frame, end to end: the symbols must reconstruct the frame they came from.
+  const uint16_t frame = dshotFrame(1046, true, true);
+  dshotBuildSymbols(frame, bitTicks, true, sym);
+  uint16_t rebuilt = 0;
+  for (int i = 0; i < DSHOT_FRAME_BITS; ++i) {
+    const bool isOne = sym[i].firstTicks == dshotOneHighTicks(bitTicks);
+    rebuilt = (uint16_t)((rebuilt << 1) | (isOne ? 1u : 0u));
+  }
+  check(rebuilt == frame, "the symbol list reconstructs the exact frame it encodes");
+  check(dshotFrameValid(rebuilt, true), "and that frame still passes its checksum");
+}
+
+static void testDshotRmtReplyDecode() {
+  section("DShot/RMT: captured runs back to eRPM");
+
+  const uint32_t bitTicks = dshotBitTicks(DSHOT_RMT_RESOLUTION_HZ, DSHOT_BITRATE_KHZ);
+  const uint32_t telemTicks = dshotTelemBitTicks(bitTicks);
+
+  // The reply runs at 5/4 the outgoing rate, so its bit is 4/5 as long.
+  check(telemTicks == (bitTicks * 4 + 2) / 5,
+        "the reply bit period is 4/5 of the outgoing one");
+  check(telemTicks < bitTicks, "which is shorter, because the reply is faster");
+
+  // Build a capture the way RMT would hand it back: run lengths at alternating levels.
+  auto runsFromBits = [&](uint32_t bits21, uint32_t* ticks, uint8_t* levels) -> int {
+    int n = 0;
+    int i = DSHOT_TELEM_BITS - 1;
+    while (i >= 0) {
+      const uint8_t level = (uint8_t)((bits21 >> i) & 1u);
+      int run = 0;
+      while (i >= 0 && (uint8_t)((bits21 >> i) & 1u) == level) { ++run; --i; }
+      ticks[n] = (uint32_t)run * telemTicks;
+      levels[n] = level;
+      ++n;
+    }
+    return n;
+  };
+
+  // Encode a known shaft frequency all the way down to the wire, then bring it back.
+  auto gcrEncode = [](uint16_t word) -> uint32_t {
+    static const uint8_t kEnc[16] = { 0x19, 0x1B, 0x12, 0x13, 0x1D, 0x15, 0x16, 0x17,
+                                      0x1A, 0x09, 0x0A, 0x0B, 0x1E, 0x0D, 0x0E, 0x0F };
+    uint32_t v = 0;
+    for (int i = 3; i >= 0; --i) v = (v << 5) | kEnc[(word >> (i * 4)) & 0x0F];
+    uint32_t out = 0, running = 0;
+    for (int i = 20; i >= 0; --i) {
+      running ^= (v >> i) & 1u;
+      out |= (running & 1u) << i;
+    }
+    return out & 0x1FFFFF;
+  };
+  auto wordForHz = [](float hz) -> uint16_t {
+    const uint32_t erpm = (uint32_t)(hz * 60.0f * MOTOR_POLE_PAIRS);
+    uint32_t p = 60000000u / erpm;
+    uint32_t e = 0;
+    while ((p >> e) > 0x1FF && e < 7) ++e;
+    const uint16_t p12 = (uint16_t)(((e & 0x7) << 9) | ((p >> e) & 0x1FF));
+    const uint8_t crc = (uint8_t)((~(p12 ^ (p12 >> 4) ^ (p12 >> 8))) & 0x0F);
+    return (uint16_t)((p12 << 4) | crc);
+  };
+
+  uint32_t ticks[DSHOT_TELEM_BITS];
+  uint8_t levels[DSHOT_TELEM_BITS];
+
+  const uint16_t word = wordForHz(120.0f);
+  const uint32_t wire = gcrEncode(word);
+  int n = runsFromBits(wire, ticks, levels);
+  check(dshotDecodeRuns(ticks, levels, n, telemTicks) == wire,
+        "a clean capture decodes back to the exact wire value");
+  checkNear(dshotShaftHz(dshotErpmFromRuns(ticks, levels, n, telemTicks)), 120.0f, 1.0f,
+            "and the whole path -- runs, GCR, eRPM -- returns 120 Hz");
+
+  // The ESC's clock is not ours. A few percent of drift must still decode.
+  for (int pct = -4; pct <= 4; pct += 2) {
+    uint32_t skewed[DSHOT_TELEM_BITS];
+    for (int i = 0; i < n; ++i)
+      skewed[i] = (uint32_t)((int)ticks[i] + (int)ticks[i] * pct / 100);
+    check(dshotDecodeRuns(skewed, levels, n, telemTicks) == wire,
+          "a capture " + std::to_string(pct) + "% off nominal still decodes exactly");
+  }
+
+  // ---- what must be REJECTED rather than guessed at --------------------------------
+  // A padded or truncated reply decodes to a plausible RPM, which is worse than none.
+  uint32_t glitch[DSHOT_TELEM_BITS];
+  for (int i = 0; i < n; ++i) glitch[i] = ticks[i];
+  glitch[1] = 1;                                    // far too short to be a bit
+  check(dshotDecodeRuns(glitch, levels, n, telemTicks) == 0,
+        "a run too short to be a bit is rejected, not rounded away");
+
+  uint32_t overrun[DSHOT_TELEM_BITS];
+  for (int i = 0; i < n; ++i) overrun[i] = ticks[i];
+  overrun[0] = telemTicks * 30;                     // more bits than the reply holds
+  check(dshotDecodeRuns(overrun, levels, n, telemTicks) == 0,
+        "a capture claiming more than 21 bits is rejected");
+
+  check(dshotDecodeRuns(ticks, levels, 0, telemTicks) == 0,
+        "an empty capture is rejected");
+  check(dshotDecodeRuns(ticks, levels, n, 0) == 0,
+        "a zero bit period is rejected rather than dividing by zero");
+
+  // Badly truncated: more than the trailing idle is missing.
+  check(dshotDecodeRuns(ticks, levels, 1, telemTicks) == 0,
+        "a capture cut off after one run is rejected");
+
+  // And a capture that decodes but fails GCR must not become an RPM.
+  uint32_t noise[4] = { telemTicks, telemTicks, telemTicks, telemTicks * 18 };
+  uint8_t nlev[4] = { 1, 0, 1, 0 };
+  const uint32_t bad = dshotErpmFromRuns(noise, nlev, 4, telemTicks);
+  check(bad == DSHOT_ERPM_INVALID || bad == 0,
+        "noise that survives run-decoding is still caught by GCR or the checksum");
+}
+
 static void testImuReadSplit() {
   section("Primary IMU: gyro at loop rate, accelerometer slower");
 
@@ -1465,6 +1671,9 @@ int main() {
   testDshotTelemetryDecode();
   testDshotGcr();
   testDshotTelemetryAggregation();
+  testDshotRmtTiming();
+  testDshotRmtSymbols();
+  testDshotRmtReplyDecode();
   testImuReadSplit();
   testLoopRateIsSchedulable();
   testNotchIsNotObservableInTheLog();

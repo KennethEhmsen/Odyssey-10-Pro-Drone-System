@@ -1639,6 +1639,125 @@ def check_hook_coverage(rep, fix):
         rep.note.append(f"hook-coverage: all {len(run)} gated suites are in WATCHED")
 
 
+def check_unverified_defaults(rep, fix):
+    """
+    Anything that has never run on hardware must be OFF by default.
+
+    dshot_rmt.cpp drives motors and has not been compiled, let alone flown. A frame that
+    misses a bit boundary does not fail politely -- it is a throttle value the ESC acts
+    on. The difference between that being opt-in and being the default is the difference
+    between a considered experiment and an accident, and the default is exactly the kind
+    of thing that gets flipped during debugging and never flipped back.
+
+    This check exists so flipping it is a deliberate, reviewable change rather than a
+    line nobody notices.
+    """
+    rep.checks_run += 1
+    d = resolved_defines()
+    if not d:
+        rep.problem("unverified-defaults", "no C preprocessor available", severity="warn")
+        return
+
+    UNVERIFIED = {
+        "DSHOT_ENABLE": (
+            "drives the motors through an RMT path that has never been compiled or "
+            "scoped. Section 4.3.1 has the bring-up procedure; until it has been "
+            "followed this must stay opt-in."),
+    }
+
+    for name, why in UNVERIFIED.items():
+        value = d.get(name)
+        if value is None:
+            rep.problem("unverified-defaults",
+                        f"{name} is no longer defined -- if the feature was removed, "
+                        f"remove it from this check too")
+        elif value != 0:
+            rep.problem("unverified-defaults",
+                        f"{name} defaults to {value:g}, but it {why}")
+
+    # The safety argument only holds if the guarded code really is inert when off.
+    src = ROOT / "firmware" / "flight-controller" / "src" / "dshot_rmt.cpp"
+    if src.exists():
+        text = read(src)
+        # Match the DIRECTIVE at the start of a line, not the string. The file's own
+        # header comment quotes "#if DSHOT_ENABLE" while explaining the guard, and
+        # splitting on the bare string cut the search region off above every include --
+        # so this check passed while an unguarded include sat right there.
+        m = re.search(r"^#if DSHOT_ENABLE\s*$", text, re.M)
+        if not m:
+            rep.problem("unverified-defaults",
+                        "dshot_rmt.cpp is not guarded by #if DSHOT_ENABLE, so disabling "
+                        "the feature no longer removes the code")
+        else:
+            before = text[:m.start()]
+            for line in before.splitlines():
+                s = line.split("//")[0].strip()
+                if s.startswith("#include") and "config.h" not in s:
+                    rep.problem("unverified-defaults",
+                                f"dshot_rmt.cpp includes {s} OUTSIDE its guard, so a "
+                                f"build with DSHOT_ENABLE=0 still needs the ESP-IDF RMT "
+                                f"headers")
+
+    rep.note = getattr(rep, "note", [])
+    rep.note.append(f"unverified-defaults: {len(UNVERIFIED)} unproven feature(s) "
+                    f"confirmed off by default")
+
+
+#  Constants the documentation, the comments or an assertion present as build switches.
+#  Each must be #ifndef-guarded, or a -D override is silently discarded -- or, with
+#  -Werror, breaks the build outright.
+BUILD_SWITCHES = [
+    "FRAME_SIZE_IN", "MOTOR_CLASS", "PROP_BLADES", "FLIGHT_LOOP_HZ",
+    "NOTCH_CENTER_HZ", "AIRFRAME_AUW_G", "CRUISE_CURRENT_A",
+    "IMU_DLPF_HZ", "IMU_ACCEL_READ_HZ",
+    "DYN_NOTCH_ENABLE", "DYN_NOTCH_BINS", "DYN_NOTCH_HARMONIC",
+    "DSHOT_ENABLE", "DSHOT_BIDIRECTIONAL", "DSHOT_BITRATE_KHZ",
+    "DSHOT_TELEM_TIMEOUT_US", "DSHOT_RMT_RESOLUTION_HZ",
+    "MOTOR_POLE_PAIRS", "REQUIRE_REMOTE_ID_TO_ARM",
+]
+
+
+def check_build_switches(rep, fix):
+    """
+    A constant that is documented as a build switch must actually be one.
+
+    An unguarded `#define X 300` looks configurable and is not: a -D override is either
+    silently discarded, or -- because CI builds with -Werror -- fails the build with a
+    redefinition error that reads like a toolchain problem rather than a missing #ifndef.
+
+    This is the third time this project has hit it. NOTCH_CENTER_HZ was unguarded while
+    section 8.3 told the reader to measure and override it, and DSHOT_BITRATE_KHZ was
+    unguarded while an assertion right beneath it enumerated the four legal alternatives.
+    Both read as configurable. Neither was.
+    """
+    rep.checks_run += 1
+    text = read(CONFIG_H)
+    rmt = ROOT / "firmware" / "flight-controller" / "include" / "dshot_rmt.h"
+    if rmt.exists():
+        text += "\n" + read(rmt)
+
+    missing = []
+    for name in BUILD_SWITCHES:
+        if not re.search(rf"^\s*#\s*define\s+{name}\b", text, re.M):
+            rep.problem("build-switches",
+                        f"{name} is listed as a build switch but is not defined anywhere",
+                        severity="warn")
+            continue
+        if not re.search(rf"^\s*#\s*ifndef\s+{name}\s*$", text, re.M):
+            missing.append(name)
+
+    for name in missing:
+        rep.problem("build-switches",
+                    f"{name} is presented as a build switch but is defined without an "
+                    f"#ifndef guard, so -D{name}=... is discarded or -- under CI's "
+                    f"-Werror -- breaks the build with a redefinition error")
+
+    if not missing:
+        rep.note = getattr(rep, "note", [])
+        rep.note.append(f"build-switches: all {len(BUILD_SWITCHES)} documented switches "
+                        f"are genuinely overridable")
+
+
 # =====================================================================================
 #  Registry
 # =====================================================================================
@@ -1650,6 +1769,12 @@ CHECKS = [
     ("bom", "BOM per-line arithmetic and the total quoted in the specification", check_bom),
     ("spec-constants", "battery thresholds, AUW and TWR agree with config.h",
      check_spec_constants),
+    ("build-switches",
+     "every documented build switch is actually overridable",
+     check_build_switches),
+    ("unverified-defaults",
+     "features that have never run on hardware are off by default",
+     check_unverified_defaults),
     ("hook-coverage",
      "every suite the pre-push hook runs behind its gate is also watched by it",
      check_hook_coverage),

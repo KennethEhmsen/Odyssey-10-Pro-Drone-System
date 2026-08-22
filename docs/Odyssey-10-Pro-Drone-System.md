@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 3.5 — the loop rate is a build switch, and at 1000 Hz the second harmonic finally appears
+**Document revision:** 3.6 — the RMT driver is written, and the half of it that can be tested is
 
 ---
 
@@ -598,20 +598,55 @@ What it needs is spelled out in §4.3.1.
 
 `DSHOT_ENABLE` defaults to **0**, and analog PWM remains the default output.
 
-#### 4.3.1 What the DShot driver still needs
+#### 4.3.1 The RMT driver
 
-Everything below the frame arithmetic, in the order it would have to be built:
+Written in revision 3.6, and split along the line that actually matters — what can be
+tested here, and what cannot.
 
-| Step | Requirement |
+**Tested (`dshot_rmt.h`, 41 assertions).** All of it integer arithmetic, and all of it
+the kind of code where the bugs in this subsystem have actually been:
+
+| | |
 | --- | --- |
-| Bit timing | DShot300 is 3.33 µs per bit; a `1` holds high for 74.9% of it and a `0` for 37.4%. Tolerance is roughly ±5%, so the RMT clock divider has to be chosen against the actual APB frequency, not assumed |
-| Frame cadence | 16 bits is 53 µs at DShot300. That plus the telemetry window must fit inside the loop period — `config.h` asserts it |
-| Line turnaround | Bidirectional DShot has the ESC reply **on the same wire**, roughly 30 µs after the frame ends. The pin has to change direction and start capturing within that gap |
-| Reply capture | The reply is 21 bits at a nominal ¾ of the outgoing bitrate, and the ESC's clock is not ours — the edges have to be timed, not counted |
-| Verification | A scope on the signal line first. Then a thrust stand **with the propellers off**, confirming commanded throttle against measured RPM across the range, before anything spins with a blade attached |
+| Clock resolution | 10 MHz, giving 33 ticks per DShot300 bit — within 1% of nominal. 80 MHz divides by 8 exactly, so the divider is integral on any P4 clock source |
+| Bit shaping | a `1` holds 25 of 33 ticks, a `0` holds 12. Asserted, along with the fact that a `1` is about twice a `0` — which is the entire discrimination an ESC performs |
+| Bitrate range | 150/300/600 all land within 5% at this resolution. **DShot1200 does not** — it leaves under 4 ticks between a `1` and a `0`, so the resolution has to rise with the bitrate. Asserted, so it cannot be selected by accident |
+| Symbols | every symbol's halves sum to exactly one bit period, MSB goes first, and a symbol list reconstructs the frame it came from with its checksum intact |
+| Inversion | flips levels and nothing else — durations are identical |
+| Reply decode | captured run-lengths back to eRPM, tolerant of ±4% ESC clock skew, and rejecting glitches, overruns, truncation and a zero bit period rather than padding them into a plausible RPM |
 
-Until that exists, `dshot.h` is a tested library with no caller, which is a more honest
-state than an untested driver with one.
+**Not tested (`dshot_rmt.cpp`).** ESP-IDF API usage and peripheral behaviour. It has not
+been compiled — there is no IDF in the environment it was written in. It carries four
+numbered assumptions in its own comments, and this is the order to check them:
+
+| # | Assumption | How it fails |
+| --- | --- | --- |
+| 1 | A TX and an RX channel can share one GPIO | `rmt_new_rx_channel()` returns an error. **This one means the approach is wrong rather than mis-tuned** — bidirectional telemetry would need a different capture mechanism, not different settings |
+| 2 | The RX callback signature and its ISR-context restriction are as documented | a crash inside the ISR |
+| 3 | The copy encoder emits symbols back to back with no gap | motors do not arm; a gap inside a frame is a missed bit boundary and the ESC rejects the checksum |
+| 4 | RX can be armed while TX is driving the same pin, and the ESC's reply is separable from our own echo | telemetry never validates, while throttle works fine |
+
+##### Bring-up, in order
+
+1. **Scope the line with the propellers off and the motors unplugged.** Confirm the bit
+   period is 3.3 µs ±5%, that a `1` is visibly about twice the high time of a `0`, and —
+   for bidirectional — that the line **idles high**. An inverted-wrong signal is not a
+   glitchy one; it is one an ESC ignores completely, which looks identical to a dead pin.
+2. **Plug in one ESC, still no propeller.** Confirm it arms and beeps. Step throttle
+   from idle to 20% and back.
+3. **Check telemetry validates before trusting any number in it.** A reply that fails
+   GCR or its checksum is rejected by design, so the symptom of assumption 4 failing is
+   silence, not wrong data.
+4. **Thrust stand, propellers off**, comparing commanded throttle against reported RPM
+   across the range. This is also where `MOTOR_POLE_PAIRS` is confirmed: a wrong pole
+   count scales every derived frequency by a constant and presents as a mis-tuned notch
+   rather than as the units error it is.
+5. **Only then** anything that could spin a blade.
+
+`DSHOT_ENABLE` defaults to **0**, and the `unverified-defaults` consistency check keeps
+it there — flipping it has to be a deliberate, reviewable change rather than a line left
+over from debugging. With it off, `dshot_rmt.cpp` compiles to an empty translation unit
+and the aircraft flies on analog PWM exactly as before.
 
 **Revision 2.9 took the other route to the same goal.** Rather than measuring shaft speed
 at the ESC, the flight controller now finds the motor peak in the gyro spectrum directly
