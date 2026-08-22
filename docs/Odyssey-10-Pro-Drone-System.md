@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 4.0 — the DShot bench procedure, with the parts and the numbers to measure against
+**Document revision:** 4.1 — the bench procedure gains an order list for starting from nothing
 
 ---
 
@@ -828,6 +828,33 @@ Then:
    capture needs restructuring.
 4. Check the console. A reply that fails GCR or its checksum is rejected by design, so
    the symptom of a marginal capture is *silence*, not wrong numbers.
+
+##### Starting from nothing: the order list
+
+Grouped by which step each item unlocks, because **step 0 needs only the first two
+lines** and it is the step that can invalidate the design. If `rmt_new_rx_channel()`
+fails there, nothing below the first group matters yet.
+
+| For | Item | What to look for |
+| --- | --- | --- |
+| **Step 0** | ESP32-P4 development board | Must break out **GPIO 4, 5, 6 and 15** on headers. Check the pinout before ordering — P4 boards differ, and some route those pins to on-board peripherals |
+| **Step 0** | USB-C data cable | A charge-only cable is the classic wasted evening |
+| **Step 1** | USB logic analyser, 8 channels, 24 MSa/s | The commodity "Saleae-compatible" type. 24 MSa/s is 41 ns against a 3.3 µs bit; more is not useful here. Works with PulseView, which is free |
+| **Step 1** | Female-to-female jumper leads | Usually bundled with the analyser |
+| **Step 2** | 4-in-1 ESC, 40 A/channel, 6S, BLHeli\_32 or AM32 | The BOM part. Use channel 1 only on the bench. A single 40 A ESC is cheaper if you want bench-only |
+| **Step 2** | One motor | 2810 900 KV for the 9-inch. You need four eventually; one is enough here |
+| **Step 2** | Bench PSU, 24 V, 3–5 A, adjustable current limit | Set the limit to 1 A. This is the item that turns a wiring mistake into a shutdown rather than a fire, and it stays useful long after this |
+| **Step 2** | XT60 pigtails, silicone wire | |
+
+**Not yet:** the flight pack. A 6S LiPo also needs a balance charger and somewhere safe
+to store it, and none of that helps on a bench where a current-limited supply is both
+safer and more informative.
+
+**Not needed:** a level shifter. The ESP32-P4 drives 3.3 V logic and ESC signal inputs
+accept it directly.
+
+**Also required, and free:** a toolchain with ESP32-P4 support — PlatformIO, or ESP-IDF
+5.x directly. `dshot_rmt.cpp` is written against the IDF 5 RMT API.
 
 ##### Step 3 — thrust stand, still no propeller
 
