@@ -2213,6 +2213,18 @@ EV_BOARD_RESERVED = {
     18: "SDIO CLK", 19: "SDIO CMD", 54: "C6 reset",
 }
 
+#  Pins the ESP32-P4 SILICON reserves, on any board. Unlike the SDIO list above these
+#  are not a development-board constraint: using them costs the finished aircraft its
+#  USB flashing port and its console.
+#
+#  Finding 41. Revisions up to 4.6 assigned all four USB data lines, and a single
+#  pinMode() on GPIO 25 boot-looped the aircraft with CHIP_USB_UART_RESET.
+CHIP_RESERVED = {
+    24: "USB Serial/JTAG D-", 25: "USB Serial/JTAG D+",
+    26: "USB Serial/JTAG D-", 27: "USB Serial/JTAG D+",
+    37: "UART0 TX (ROM console)", 38: "UART0 RX (ROM console)",
+}
+
 
 def check_devboard_pins(rep, fix):
     """
@@ -2234,6 +2246,15 @@ def check_devboard_pins(rep, fix):
     for m in re.finditer(r"^\s*#define\s+(PIN_[A-Z0-9_]+|MOTOR[0-9]_PIN)\s+(\d+)\b",
                          text, re.M):
         assigned.setdefault(int(m.group(2)), []).append(m.group(1))
+
+    #  The silicon's own reservations are an ERROR, not a warning: they break the real
+    #  aircraft, not just the bench.
+    for gpio, why in sorted(CHIP_RESERVED.items()):
+        for name in assigned.get(gpio, []):
+            rep.problem("devboard-pins",
+                        f"{name} is on GPIO {gpio}, which the ESP32-P4 uses for "
+                        f"{why}. This is silicon, not a board choice -- it costs the "
+                        f"aircraft its USB console and flashing port. See finding 41.")
 
     clashes = []
     for gpio, why in sorted(EV_BOARD_RESERVED.items()):

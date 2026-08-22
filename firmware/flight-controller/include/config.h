@@ -752,7 +752,7 @@
 #define PIN_SD_MISO               36
 
 #ifndef PIN_PARACHUTE_SRV
-#define PIN_PARACHUTE_SRV         26
+#define PIN_PARACHUTE_SRV         41
 #endif
 #ifndef PIN_GNSS_RX
 #define PIN_GNSS_RX               17
@@ -767,14 +767,14 @@
 #define PIN_LIDAR_RX              22
 #define PIN_LIDAR_TX              23
 #ifndef PIN_CRSF_RX
-#define PIN_CRSF_RX               27       // ExpressLRS -> FC
+#define PIN_CRSF_RX               42       // ExpressLRS -> FC
 #endif
 #define PIN_CRSF_TX               28       // FC -> ExpressLRS (telemetry to handset)
 #ifndef PIN_AUX_BUS_TX
-#define PIN_AUX_BUS_TX            24       // broadcast to beacon + Remote ID modules
+#define PIN_AUX_BUS_TX            39       // broadcast to beacon + Remote ID modules
 #endif
 #ifndef PIN_REMOTEID_HEALTH
-#define PIN_REMOTEID_HEALTH       25       // driven HIGH by the Remote ID module
+#define PIN_REMOTEID_HEALTH       40       // driven HIGH by the Remote ID module
 #endif
                                            // while it is broadcasting; INPUT_PULLDOWN
                                            // here, so a dead module blocks arming
@@ -786,6 +786,20 @@
 #define PIN_ARM_BUTTON            2
 #define PIN_BEACON_LATCH          21
 
+//  GPIO 24-27 ARE THE USB SERIAL/JTAG DATA LINES AND MUST STAY FREE.
+//
+//  The ESP32-P4 routes USB Serial/JTAG to GPIO 24/26 (D-) and 25/27 (D+). Revisions up
+//  to 4.6 assigned all four -- the AUX bus, the Remote ID health line, the parachute
+//  servo and CRSF RX -- and a single pinMode() on GPIO 25 was enough to drop the USB
+//  device, take a CHIP_USB_UART_RESET and boot-loop the aircraft forever.
+//
+//  Espressif documents the behaviour: reconfiguring these pins makes the device
+//  disappear from the host, recoverable only by forcing download mode by hand. That
+//  costs a flashing port and a console on the finished aircraft, not just on a
+//  development board. See finding 41.
+//
+//  The four moved to 39-42. Nothing else may take 24-27, and the devboard-pins check
+//  refuses the build if anything does.
 #define MOTOR1_PIN                4        // rear-right,  CCW
 #define MOTOR2_PIN                5        // front-right, CW
 #define MOTOR3_PIN                6        // rear-left,   CW

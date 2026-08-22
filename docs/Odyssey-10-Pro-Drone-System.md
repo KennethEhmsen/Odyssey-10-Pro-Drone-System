@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 4.6 — eight of nine source files had never been compiled
+**Document revision:** 4.7 — the pinout no longer sits on the P4's USB data lines
 
 ---
 
@@ -1958,6 +1958,30 @@ Doing it in the other order buys a harmonic notch on two more airframes, at the 
 59% bus utilisation, a doubled SDFT, a PID re-validation and zero scheduling slack —
 to filter a peak that RPM telemetry would have located exactly.
 
+> **FINDING 41. GPIO 24-27 are the USB Serial/JTAG data lines, and the pinout used
+> all four.** The ESP32-P4 routes USB Serial/JTAG to GPIO 24/26 (D−) and 25/27 (D+).
+> Revisions up to 4.6 assigned the AUX broadcast bus, the Remote ID health line, the
+> parachute servo and CRSF RX to exactly those pins.
+>
+> One line was enough to make the aircraft unbootable:
+>
+> ```
+> pinMode(PIN_REMOTEID_HEALTH, INPUT_PULLDOWN);   // GPIO 25 = USB D+
+> ```
+>
+> The host loses the USB device, the chip takes `rst:0x17 CHIP_USB_UART_RESET`, and it
+> boot-loops forever. Espressif documents this: reconfiguring these pins makes the device
+> disappear from the system, recoverable only by forcing download mode by hand.
+>
+> **This is not a development-board constraint.** It costs the finished aircraft its
+> flashing port and its console. Found on hardware day, and only after a long detour —
+> a port that opens and returns nothing looks identical to a crashed board, a mis-routed
+> console or a bad reader, and all three were investigated first. What settled it was a
+> flushed trace marker before each call in `setup()`, which named the offender in one run.
+>
+> Corrected: the four moved to GPIO 39–42, and the `devboard-pins` check now refuses any
+> build that puts a function back on 24–27.
+
 ### 8.4 Radio frequency plan
 
 This aircraft carries four transmitters. Two interactions matter.
@@ -2084,12 +2108,14 @@ GPIO 20  --> VTX MSP OSD RX2  (ESP32 RX <- VTX TX @ 115200)
 GPIO 21  --> Emergency beacon solid-state latch trigger (active HIGH, 100 ms pulse)
 GPIO 22  --> TFmini-S LiDAR RX3 (ESP32 RX <- LiDAR TX @ 115200)
 GPIO 23  --> TFmini-S LiDAR TX3 (ESP32 TX -> LiDAR RX @ 115200)
-GPIO 24  --> AUX broadcast bus TX  [NEW] -> beacon node RX and Remote ID module RX
-GPIO 25  --> Remote ID health line [NEW] (INPUT_PULLDOWN; module drives HIGH while
-             broadcasting -- a dead or unconfigured module blocks arming)
-GPIO 26  --> Ballistic parachute servo (LEDC 50 Hz, 16-bit)
-GPIO 27  --> ExpressLRS CRSF RX     [NEW] (ESP32 RX <- receiver TX @ 420000)
 GPIO 28  --> ExpressLRS CRSF TX     [NEW] (ESP32 TX -> receiver RX, handset telemetry)
+GPIO 39  --> AUX broadcast bus TX  -> beacon node RX and Remote ID module RX
+GPIO 40  --> Remote ID health line (INPUT_PULLDOWN; module drives HIGH while
+             broadcasting -- a dead or unconfigured module blocks arming)
+GPIO 41  --> Ballistic parachute servo (LEDC 50 Hz, 16-bit)
+GPIO 42  --> ExpressLRS CRSF RX     (ESP32 RX <- receiver TX @ 420000)
+
+GPIO 24-27  RESERVED -- USB Serial/JTAG D-/D+. Do not use. See below.
 GPIO 33  --> MicroSD BlackBox CS   (SPI1)
 GPIO 34  --> MicroSD BlackBox MOSI (SPI1)
 GPIO 35  --> MicroSD BlackBox SCK  (SPI1)

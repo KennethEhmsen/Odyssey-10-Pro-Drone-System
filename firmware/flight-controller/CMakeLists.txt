@@ -64,28 +64,10 @@ idf_build_set_property(COMPILE_DEFINITIONS "PIN_GNSS_RX=29" APPEND)   # was 17, 
 idf_build_set_property(COMPILE_DEFINITIONS "PIN_GNSS_TX=30" APPEND)   # was 18, SDIO CLK
 idf_build_set_property(COMPILE_DEFINITIONS "PIN_VTX_TX=31" APPEND)    # was 19, SDIO CMD
 
-idf_build_set_property(COMPILE_DEFINITIONS "BRINGUP_TRACE=1" APPEND)
-
-#  THE ESP32-P4's USB SERIAL/JTAG LINES ARE GPIO 24/26 (D-) AND 25/27 (D+).
-#
-#  Section 9's pinout assigns all four. Touching any of them while the USB console is
-#  live makes the device vanish from the host -- Espressif documents exactly this -- and
-#  on this board the chip then resets, so it boot-loops forever:
-#
-#      [TRACE] before pinMode(REMOTEID_HEALTH gpio25)
-#      rst:0x17 (CHIP_USB_UART_RESET),boot:0x20f
-#
-#  That single pinMode is the cause of every symptom during bring-up: the port that
-#  disappeared, the captures that returned nothing, and the "crash" that had no
-#  backtrace because the console died with it.
-#
-#  This is NOT only a development-board problem. It would equally prevent USB
-#  programming and console on the finished aircraft, so section 9 needs correcting --
-#  see finding 41. These overrides keep the bench moving in the meantime.
-idf_build_set_property(COMPILE_DEFINITIONS "PIN_AUX_BUS_TX=39" APPEND)       # was 24, USB D-
-idf_build_set_property(COMPILE_DEFINITIONS "PIN_REMOTEID_HEALTH=40" APPEND)  # was 25, USB D+
-idf_build_set_property(COMPILE_DEFINITIONS "PIN_PARACHUTE_SRV=41" APPEND)    # was 26, USB D-
-idf_build_set_property(COMPILE_DEFINITIONS "PIN_CRSF_RX=42" APPEND)          # was 27, USB D+
+#  Enable for bring-up: -DBRINGUP_TRACE=1 prints a flushed marker before each
+#  call in setup(), so a fault that takes the console down names itself. This is
+#  what found finding 41 in one run after a long detour of guessing.
+# idf_build_set_property(COMPILE_DEFINITIONS "BRINGUP_TRACE=1" APPEND)
 
 project(odyssey-fc)
 
