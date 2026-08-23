@@ -2406,6 +2406,7 @@ Odyssey-10-Pro-Drone-System/
 |       +-- run_tests.sh
 +-- .github/workflows/host-tests.yml
 +-- docs/
+|   +-- odyssey-schematic.html      Interconnect and power tree, generated from config.h
 ```
 
 ### 10.2 Task structure

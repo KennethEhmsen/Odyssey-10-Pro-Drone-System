@@ -11,6 +11,7 @@
 *.ini    text
 *.json   text
 *.txt    text
+*.html   text
 
 # Shell scripts must keep LF even when checked out on Windows, or /bin/sh
 # rejects them with a "bad interpreter" error.

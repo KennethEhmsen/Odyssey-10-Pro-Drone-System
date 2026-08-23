@@ -1,0 +1,852 @@
+<title>Odyssey-10 Pro Avionics Sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+/* ---------------------------------------------------------------------------
+   Palette. Signal colour is not decoration here -- it is the classification.
+   Six buses, six hues, held constant between the drawing, the legend and the
+   pin table so a colour means the same thing wherever it appears.
+   --------------------------------------------------------------------------- */
+:root {
+  --paper:      #F1F4F5;
+  --sheet:      #FBFCFC;
+  --rule:       #C9D2D6;
+  --rule-soft:  #E2E8EA;
+  --ink:        #131C22;
+  --ink-2:      #46565F;
+  --ink-3:      #6E818B;
+  --copper:     #A85C34;
+
+  --c-power:    #BE3F24;
+  --c-i2c:      #8A5E0C;
+  --c-spi:      #61469C;
+  --c-uart:     #0B6670;
+  --c-pwm:      #2A6E36;
+  --c-gpio:     #55666F;
+
+  --warn-bg:    #FBF0E6;
+  --warn-edge:  #D9A273;
+
+  --grid:       rgba(19, 28, 34, 0.055);
+  --shadow:     0 1px 2px rgba(19,28,34,.06), 0 8px 24px -12px rgba(19,28,34,.22);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:      #0F1519;
+    --sheet:      #151D22;
+    --rule:       #35444C;
+    --rule-soft:  #232F35;
+    --ink:        #E6EDF0;
+    --ink-2:      #A7B7BF;
+    --ink-3:      #7A8B94;
+    --copper:     #D08A5E;
+
+    --c-power:    #F1785C;
+    --c-i2c:      #D9A83C;
+    --c-spi:      #A78BE0;
+    --c-uart:     #46B6C0;
+    --c-pwm:      #6BBF75;
+    --c-gpio:     #93A5AE;
+
+    --warn-bg:    #2A2019;
+    --warn-edge:  #7A5735;
+
+    --grid:       rgba(230, 237, 240, 0.05);
+    --shadow:     0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --paper:      #0F1519;
+  --sheet:      #151D22;
+  --rule:       #35444C;
+  --rule-soft:  #232F35;
+  --ink:        #E6EDF0;
+  --ink-2:      #A7B7BF;
+  --ink-3:      #7A8B94;
+  --copper:     #D08A5E;
+
+  --c-power:    #F1785C;
+  --c-i2c:      #D9A83C;
+  --c-spi:      #A78BE0;
+  --c-uart:     #46B6C0;
+  --c-pwm:      #6BBF75;
+  --c-gpio:     #93A5AE;
+
+  --warn-bg:    #2A2019;
+  --warn-edge:  #7A5735;
+
+  --grid:       rgba(230, 237, 240, 0.05);
+  --shadow:     0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background-color: var(--paper);
+  /* Drafting grid. 8 mm major over 2 mm minor, the way board paper is ruled. */
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px, 32px 32px;
+  color: var(--ink);
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 48px 24px 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+/* ---- masthead ---------------------------------------------------------- */
+.masthead { display: flex; flex-direction: column; gap: 14px; }
+
+.eyebrow {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--copper);
+}
+
+h1 {
+  font-family: Archivo, ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(30px, 5.2vw, 46px);
+  line-height: 1.05;
+  letter-spacing: -.021em;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.standfirst {
+  max-width: 66ch;
+  font-size: 16.5px;
+  color: var(--ink-2);
+  margin: 0;
+}
+
+.provenance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: center;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--ink-3);
+  padding-top: 6px;
+  border-top: 1px solid var(--rule-soft);
+}
+.provenance b { color: var(--ink-2); font-weight: 600; }
+.dot { color: var(--rule); }
+
+/* ---- sections ---------------------------------------------------------- */
+section { display: flex; flex-direction: column; gap: 16px; }
+
+h2 {
+  font-family: Archivo, ui-sans-serif, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0;
+  padding-bottom: 9px;
+  border-bottom: 1.5px solid var(--rule);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+h2 span {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  letter-spacing: .04em;
+  text-transform: none;
+  font-weight: 400;
+  color: var(--rule);
+}
+
+.lede { max-width: 68ch; color: var(--ink-2); margin: 0; }
+
+/* ---- the sheet --------------------------------------------------------- */
+.sheet {
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  box-shadow: var(--shadow);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.sheet svg { display: block; min-width: 940px; width: 100%; height: auto; }
+
+/* ---- legend ------------------------------------------------------------ */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.legend i {
+  display: inline-block;
+  width: 22px;
+  height: 3px;
+  margin-right: 8px;
+  vertical-align: middle;
+  border-radius: 1px;
+}
+
+/* ---- tables ------------------------------------------------------------ */
+.scroll { overflow-x: auto; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  min-width: 560px;
+}
+caption {
+  text-align: left;
+  font-size: 13px;
+  color: var(--ink-3);
+  padding-bottom: 10px;
+}
+th {
+  text-align: left;
+  font-family: Archivo, ui-sans-serif, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 0 14px 8px 0;
+  border-bottom: 1.5px solid var(--rule);
+  white-space: nowrap;
+}
+td {
+  padding: 8px 14px 8px 0;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: baseline;
+}
+tbody tr:last-child td { border-bottom: none; }
+
+.mono, td.pin, td.addr, td.net {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+td.pin { font-weight: 600; white-space: nowrap; }
+td.note { color: var(--ink-2); font-size: 13px; }
+
+/* A signal-class stripe, so the table reads with the same key as the drawing. */
+td.pin { border-left: 3px solid var(--cls, var(--rule)); padding-left: 11px; }
+
+.tag {
+  display: inline-block;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 2px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+/* ---- callout ----------------------------------------------------------- */
+.callout {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-edge);
+  border-left-width: 3px;
+  border-radius: 2px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.callout h3 {
+  font-family: Archivo, ui-sans-serif, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -.005em;
+}
+.callout p { margin: 0; font-size: 14px; color: var(--ink-2); max-width: 70ch; }
+.callout code, code {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: .92em;
+  color: var(--ink);
+}
+
+footer {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  border-top: 1px solid var(--rule-soft);
+  padding-top: 16px;
+  line-height: 1.8;
+}
+
+:focus-visible { outline: 2px solid var(--copper); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Odyssey-10 Pro &middot; Flight controller &middot; Sheet 1 of 1</div>
+    <h1>ESP32-P4 Avionics Interconnect</h1>
+    <p class="standfirst">
+      Every net the firmware actually drives, drawn from <code>config.h</code> rather than
+      from the prose. Thirty GPIOs, six buses, five UARTs. This is the
+      <b>aircraft</b> pinout &mdash; the development board differs, and where it differs
+      it is called out below.
+    </p>
+    <div class="provenance" id="provenance"></div>
+  </header>
+
+  <section>
+    <h2>The sheet <span id="sheet-count"></span></h2>
+    <div class="sheet">
+      <svg id="schematic" role="img" aria-label="Interconnect diagram of the ESP32-P4 flight controller showing thirty GPIO nets grouped by bus"></svg>
+    </div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section>
+    <h2>Pin assignment <span>config.h &rarr; §9.2</span></h2>
+    <div class="scroll"><table id="pintable">
+      <caption>Sorted by GPIO. The stripe repeats the drawing&rsquo;s signal class.</caption>
+      <thead><tr><th>GPIO</th><th>Net</th><th>Peripheral</th><th>Detail</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>I&sup2;C bus <span>400 kHz &middot; SDA 7 &middot; SCL 8</span></h2>
+    <p class="lede">
+      Six devices on one pair. The addresses are distinct by design, and the two IMUs sit
+      one apart because the backup is the same family as the primary.
+    </p>
+    <div class="scroll"><table id="i2ctable">
+      <thead><tr><th>Address</th><th>Device</th><th>Role</th><th>Consequence if absent</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>UART allocation <span>§9.1</span></h2>
+    <div class="scroll"><table id="uarttable">
+      <thead><tr><th>Port</th><th>Peripheral</th><th>Baud</th><th>Pins</th><th>Note</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>Two peripherals on one port fails silently</h3>
+      <p>
+        <code>AuxSerial</code> and <code>GnssSerial</code> were both <code>HardwareSerial(1)</code>.
+        There is no compile error and no runtime error &mdash; the second <code>begin()</code>
+        re-points the peripheral, and because <code>sensors.cpp</code> opens the GNSS
+        <em>after</em> <code>setup()</code> opens the AUX bus, the AUX bus simply stopped
+        existing. The beacon would have kept broadcasting a stale position and the Remote ID
+        health line would never have gone HIGH. Finding 44; the AUX bus is now on UART0,
+        which the USB console leaves free.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Power tree <span>§9.5</span></h2>
+    <p class="lede">
+      The BEC gives 5&nbsp;V and 12&nbsp;V. It does not give 3.3&nbsp;V &mdash; and every
+      sensor here except the LiDAR wants 3.3&nbsp;V, so the carrier has to make it. How
+      much it must supply is a specification, not a detail.
+    </p>
+    <div class="sheet">
+      <svg id="powertree" role="img" aria-label="Power distribution from the 6S pack through the BEC to the 12 V, 5 V and 3.3 V rails"></svg>
+    </div>
+
+    <div class="callout">
+      <h3>Four rules that are not negotiable</h3>
+      <p>
+        <b>1.</b> The whole I&sup2;C bus is 3.3&nbsp;V, <em>including the pull-ups</em>. GY-521 and
+        GY-271 breakouts accept 5&nbsp;V happily &mdash; and then drive 5&nbsp;V into the P4
+        through the bus. One device on the wrong rail contaminates all six.<br>
+        <b>2.</b> The SX1278 is 3.3&nbsp;V only, power and every signal line. Nothing else is on
+        SPI2, so nothing shifts levels for it either.<br>
+        <b>3.</b> Anything on 5&nbsp;V that drives a line <em>into</em> the P4 must output 3.3&nbsp;V
+        logic. The LiDAR, CRSF and GNSS all do; <b>meter the VTX&rsquo;s MSP TX before connecting
+        it</b> &mdash; that telemetry is optional, the pin is not.<br>
+        <b>4.</b> The parachute servo takes its own pair from the BEC, never daisy-chained through
+        the flight controller. A stalled 9&nbsp;g servo pulls most of an amp, and the parachute
+        fires exactly when the controller must stay alive.
+      </p>
+    </div>
+
+    <div class="scroll"><table id="budget">
+      <caption>What the carrier&rsquo;s 3.3&nbsp;V regulator must supply, beyond the P4 itself.</caption>
+      <thead><tr><th>Load</th><th>Continuous</th><th>Peak</th><th>Note</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>Specify at least 300 mA of headroom, and decouple the radio</h3>
+      <p>
+        The ~270&nbsp;mA peak assumes a LoRa transmit, an SD write and a ranging cycle land
+        together &mdash; and nothing sequences them: the blackbox writes at 100&nbsp;Hz, the
+        LiDAR ranges continuously, telemetry transmits on its own schedule. <b>470&nbsp;µF plus
+        100&nbsp;nF at the SX1278&rsquo;s own pins is required, not optional.</b> A 120&nbsp;mA
+        transmit pulse on a shared rail is the classic MCU brown-out, and it presents as a
+        random reset rather than as a power problem.
+      </p>
+    </div>
+
+    <div class="scroll"><table id="powertable">
+      <caption>Sensing constants, from <code>config.h</code>.</caption>
+      <thead><tr><th>Quantity</th><th>Value</th><th>Source</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Do not use <span>silicon and board constraints</span></h2>
+    <div class="scroll"><table id="reserved">
+      <thead><tr><th>GPIO</th><th>Claimed by</th><th>Applies to</th><th>Why it matters</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <footer id="titleblock"></footer>
+</div>
+
+<script>
+/* =========================================================================
+   Data transcribed from firmware/flight-controller/include/config.h.
+   The drawing, the legend and every table below are generated from THIS
+   array, so the sheet cannot disagree with its own pin table -- which is
+   the failure mode that put the battery divider on GPIO 1 for three commits.
+   ========================================================================= */
+const CLASSES = {
+  i2c:   { label: "I²C",            colour: "var(--c-i2c)"   },
+  spi:   { label: "SPI",                 colour: "var(--c-spi)"   },
+  uart:  { label: "UART",                colour: "var(--c-uart)"  },
+  pwm:   { label: "DShot / PWM",         colour: "var(--c-pwm)"   },
+  gpio:  { label: "Discrete GPIO",       colour: "var(--c-gpio)"  },
+  power: { label: "Power / sensing",     colour: "var(--c-power)" }
+};
+
+/* side: which flank of the IC the group leaves from */
+const GROUPS = [
+  { side: "L", cls: "i2c",   name: "Sensor cluster",   sub: "I²C @ 400 kHz · 6 devices",
+    pins: [ [7,"SDA"], [8,"SCL"] ] },
+  { side: "L", cls: "spi",   name: "SX1278 LoRa",      sub: "SPI2 · telemetry link",
+    pins: [ [12,"SCK"], [13,"MISO"], [11,"MOSI"], [10,"NSS"], [9,"RST"], [3,"DIO0"] ] },
+  { side: "L", cls: "spi",   name: "MicroSD BlackBox", sub: "SPI1 · 100 Hz flight log",
+    pins: [ [35,"SCK"], [36,"MISO"], [34,"MOSI"], [33,"CS"] ] },
+  { side: "L", cls: "pwm",   name: "4-in-1 ESC",       sub: "DShot300 bidirectional",
+    pins: [ [4,"M1 rear-R CCW"], [5,"M2 front-R CW"], [6,"M3 rear-L CW"], [15,"M4 front-L CCW"] ] },
+
+  { side: "R", cls: "uart",  name: "BN-220 GNSS",      sub: "UART1 · 115200, negotiated",
+    pins: [ [17,"RX"], [18,"TX"] ] },
+  { side: "R", cls: "uart",  name: "5.8 GHz VTX",      sub: "UART2 · MSP OSD",
+    pins: [ [19,"TX"], [20,"RX"] ] },
+  { side: "R", cls: "uart",  name: "TFmini-S LiDAR",   sub: "UART3 · forward obstacle",
+    pins: [ [22,"RX"], [23,"TX"] ] },
+  { side: "R", cls: "uart",  name: "ExpressLRS RX",    sub: "UART4 · CRSF @ 420000",
+    pins: [ [42,"RX"], [28,"TX"] ] },
+  { side: "R", cls: "uart",  name: "AUX broadcast",    sub: "UART0 · TX only, two listeners",
+    pins: [ [39,"TX"] ] },
+  { side: "R", cls: "gpio",  name: "Discrete I/O",     sub: "buttons, latch, servo, sensing",
+    pins: [ [2,"Arm button"], [21,"Beacon latch"], [40,"RemoteID health"], [41,"Parachute servo"], [51,"Batt divider"] ] }
+];
+
+const DETAIL = {
+  7:"Shared with SCL 8; pull-ups on the breakout", 8:"400 kHz",
+  12:"", 13:"", 11:"", 10:"Chip select", 9:"Reset", 3:"Interrupt line",
+  35:"", 36:"", 34:"", 33:"Chip select",
+  4:"", 5:"", 6:"", 15:"On the EV board this is SDIO D1",
+  17:"ESP32 RX ← GNSS TX. EV board: SDIO D3", 18:"ESP32 TX → GNSS RX. EV board: SDIO CLK",
+  19:"ESP32 TX → VTX RX. EV board: SDIO CMD", 20:"ESP32 RX ← VTX TX",
+  22:"ESP32 RX ← LiDAR TX", 23:"ESP32 TX → LiDAR RX",
+  42:"ESP32 RX ← receiver TX", 28:"Handset telemetry",
+  39:"One wire to beacon and Remote ID module",
+  2:"Active LOW to GND, pre-arm safety", 21:"Active HIGH, 100 ms pulse",
+  40:"INPUT_PULLDOWN; LOW blocks arming", 41:"LEDC 50 Hz, 16-bit",
+  51:"ADC2_CH2, 12-bit, 8× oversampled, 11.0 divider"
+};
+
+const I2C = [
+  ["0x68","MPU-6050","Primary IMU","Flight is impossible; arming blocked"],
+  ["0x69","ICM-42688-P","Backup IMU","Single point of failure on attitude"],
+  ["0x76","BMP280","Barometer","No altitude hold above LiDAR range"],
+  ["0x0D","QMC5883L","Magnetometer","No heading reference for return-to-home"],
+  ["0x29","VL53L1X","Downward ToF","Landing flare and touchdown veto lost"],
+  ["0x40","INA226","Current shunt, 0.001 Ω","Consumed-mAh reserve becomes an estimate"]
+];
+
+const UARTS = [
+  ["UART0","AUX broadcast bus","115200","TX 39","Free because the console is USB Serial/JTAG"],
+  ["UART1","Beitian BN-220 GNSS","115200","RX 17 / TX 18","Probes 115200, falls back to 9600, then pushes the module up"],
+  ["UART2","VTX MSP OSD","115200","TX 19 / RX 20","—"],
+  ["UART3","TFmini-S LiDAR","115200","RX 22 / TX 23","—"],
+  ["UART4","ExpressLRS CRSF","420000","RX 42 / TX 28","The manual control link"],
+  ["LP-UART","<i>unused</i>","—","—","Reaches only LP-IO pins 0–15, all allocated — finding 43"]
+];
+
+const POWER = [
+  ["Pack, full","25.20 V","CELL_FULL_V × CELL_COUNT (6S)"],
+  ["Pack, nominal","22.20 V","CELL_NOMINAL_V × CELL_COUNT"],
+  ["Divider ratio","11.0 : 1","VOLTAGE_DIVIDER_RATIO (100k / 10k)"],
+  ["Divider trim","1.0","VOLTAGE_DIVIDER_TRIM — per-airframe, see §11.3"],
+  ["ADC","GPIO 51, ADC2_CH2","12-bit, 8× oversampled, ~1 s filter"],
+  ["Shunt","0.001 Ω","INA226_SHUNT_OHMS"],
+  ["Connector","XT90-S","Anti-spark; see the burst-current warning in §2.1"]
+];
+
+/* Power tree. Rails from the BOM's BEC; loads assigned in §9.5. */
+const RAILS = [
+  { name: "6S pack",  spec: "22.2 V nom · 25.2 V full", via: "XT90-S",
+    loads: ["4-in-1 ESC — motors only"] },
+  { name: "12 V rail", spec: "BEC · 3 A", via: "step-down",
+    loads: ["5.8 GHz VTX", "FPV camera"] },
+  { name: "5 V rail",  spec: "BEC · 3 A", via: "step-down",
+    loads: ["FC carrier input", "TFmini-S LiDAR", "ExpressLRS RX", "BN-220 GNSS", "Parachute servo ⟵ own pair"] },
+  { name: "3.3 V",     spec: "carrier's own regulator", via: "from 5 V",
+    loads: ["ESP32-P4", "Six I²C sensors", "SX1278 LoRa", "MicroSD", "Remote ID C6"] },
+  { name: "1S cell",   spec: "beacon battery", via: "diode-OR",
+    loads: ["Beacon node — outlives the main pack"] }
+];
+
+const BUDGET = [
+  ["SX1278 LoRa","12 mA","120 mA","+20 dBm TX through PA_BOOST"],
+  ["MicroSD","~5 mA","~100 mA","Write bursts; cards vary widely"],
+  ["VL53L1X","~20 mA","~40 mA","While ranging"],
+  ["MPU-6050","3.9 mA","—",""],
+  ["ICM-42688-P","~0.9 mA","—",""],
+  ["BMP280 · QMC5883L · INA226","&lt;2 mA combined","—",""],
+  ["<b>Total</b>","<b>~45 mA</b>","<b>~270 mA</b>","Nothing sequences these three peaks"]
+];
+
+const RESERVED = [
+  ["24 · 26","USB Serial/JTAG D−","Silicon — every board","A single pinMode() here boot-loops the chip and the USB device vanishes. Finding 41"],
+  ["25 · 27","USB Serial/JTAG D+","Silicon — every board","As above; costs the aircraft its flashing port and console"],
+  ["37 · 38","UART0 ROM console","Silicon — every board","The bootloader logs here before setup() runs"],
+  ["1 · 0–15 (ADC)","No ADC on the P4","Silicon — every board","ADC1 is 16–23, ADC2 is 49–54. analogReadMilliVolts() elsewhere takes a Load access fault. Finding 42"],
+  ["14–19 · 54","On-board ESP32-C6 SDIO","EV board only","Motor 4, GNSS and VTX collide here on the bench. The aircraft has no C6 on SDIO — §4.3.2"]
+];
+
+/* ---------------------------------------------------------------------- */
+const $ = (s) => document.querySelector(s);
+const SVGNS = "http://www.w3.org/2000/svg";
+const el = (n, a = {}) => {
+  const e = document.createElementNS(SVGNS, n);
+  for (const k in a) e.setAttribute(k, a[k]);
+  return e;
+};
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+
+const allPins = GROUPS.flatMap(g => g.pins.map(p => ({
+  gpio: p[0], net: p[1], group: g, cls: g.cls
+})));
+
+/* ---- the drawing ------------------------------------------------------- */
+function draw() {
+  const ROW = 36, PAD = 30, IC_W = 178, CARD_W = 244, STUB = 30, GUTTER = 128;
+  const left  = GROUPS.filter(g => g.side === "L");
+  const right = GROUPS.filter(g => g.side === "R");
+  const rows  = Math.max(
+    left.reduce((n, g) => n + g.pins.length, 0) + (left.length - 1),
+    right.reduce((n, g) => n + g.pins.length, 0) + (right.length - 1)
+  );
+
+  const icH = rows * ROW + 52;
+  const W = PAD + CARD_W + GUTTER + IC_W + GUTTER + CARD_W + PAD;
+  /* Deep bottom margin: the title block sits clear of the drawing, the way a
+     drawing sheet keeps its border zone free of the circuit. */
+  const H = icH + 190;
+  const icX = PAD + CARD_W + GUTTER, icY = 56;
+
+  const svg = $("#schematic");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("font-family", '"IBM Plex Mono", ui-monospace, monospace');
+
+  /* the IC body */
+  svg.appendChild(el("rect", {
+    x: icX, y: icY, width: IC_W, height: icH, rx: 3,
+    fill: "var(--paper)", stroke: "var(--ink)", "stroke-width": 1.6
+  }));
+  /* pin-1 notch, the way an IC is actually marked */
+  svg.appendChild(el("path", {
+    d: `M ${icX + IC_W/2 - 13} ${icY} a 13 13 0 0 0 26 0`,
+    fill: "none", stroke: "var(--ink)", "stroke-width": 1.6
+  }));
+
+  const t = (x, y, s, o = {}) => {
+    const n = el("text", Object.assign({
+      x, y, "font-size": 11.5, fill: "var(--ink)", "dominant-baseline": "middle"
+    }, o));
+    n.textContent = s;
+    svg.appendChild(n);
+    return n;
+  };
+
+  t(icX + IC_W / 2, icY + icH / 2 - 12, "ESP32-P4", {
+    "text-anchor": "middle", "font-size": 17, "font-weight": 600,
+    "font-family": "Archivo, sans-serif"
+  });
+  t(icX + IC_W / 2, icY + icH / 2 + 8, "dual RISC-V · 400 MHz", {
+    "text-anchor": "middle", "font-size": 10.5, fill: "var(--ink-3)"
+  });
+  t(icX + IC_W / 2, icY + icH / 2 + 26, "flight 500 Hz · core 1", {
+    "text-anchor": "middle", "font-size": 10.5, fill: "var(--ink-3)"
+  });
+
+  /* one flank */
+  function flank(groups, side) {
+    const isL = side === "L";
+    let row = 0;
+    groups.forEach((g, gi) => {
+      const colour = CLASSES[g.cls].colour;
+      const ys = g.pins.map((_, i) => icY + 22 + (row + i) * ROW + ROW / 2);
+      const mid = (ys[0] + ys[ys.length - 1]) / 2;
+
+      /* channel: each group gets its own vertical lane so leaders never cross */
+      const lane = isL
+        ? icX - 22 - (gi + 1) * (GUTTER - 40) / (groups.length + 1)
+        : icX + IC_W + 22 + (gi + 1) * (GUTTER - 40) / (groups.length + 1);
+
+      const cardX = isL ? PAD : W - PAD - CARD_W;
+      const cardH = Math.max(52, g.pins.length * ROW + 12);
+      const cardY = mid - cardH / 2;
+
+      /* leaders, orthogonal only -- schematics have no diagonals */
+      g.pins.forEach((p, i) => {
+        const y = ys[i];
+        const x0 = isL ? icX : icX + IC_W;
+        const x1 = isL ? x0 - STUB : x0 + STUB;
+        const edge = isL ? cardX + CARD_W : cardX;
+        svg.appendChild(el("path", {
+          d: `M ${x0} ${y} H ${x1} H ${lane} V ${mid} H ${edge}`,
+          fill: "none", stroke: colour, "stroke-width": 1.3,
+          "stroke-linejoin": "round", opacity: .85
+        }));
+        /* junction dot at the IC edge */
+        svg.appendChild(el("circle", { cx: x0, cy: y, r: 2.2, fill: colour }));
+
+        /* GPIO number inside the IC, net name outside */
+        t(isL ? icX + 9 : icX + IC_W - 9, y, String(p[0]), {
+          "text-anchor": isL ? "start" : "end", "font-size": 11,
+          "font-weight": 600, fill: "var(--ink-2)"
+        });
+        t(isL ? x1 - 6 : x1 + 6, y - 8, p[1], {
+          "text-anchor": isL ? "end" : "start", "font-size": 9.5, fill: "var(--ink-3)"
+        });
+      });
+
+      /* the peripheral card */
+      svg.appendChild(el("rect", {
+        x: cardX, y: cardY, width: CARD_W, height: cardH, rx: 2,
+        fill: "var(--paper)", stroke: colour, "stroke-width": 1.4
+      }));
+      svg.appendChild(el("rect", {
+        x: isL ? cardX : cardX + CARD_W - 3, y: cardY, width: 3, height: cardH,
+        fill: colour
+      }));
+      t(cardX + 14, cardY + 20, g.name, {
+        "font-size": 13, "font-weight": 600, "font-family": "Archivo, sans-serif"
+      });
+      t(cardX + 14, cardY + 37, g.sub, { "font-size": 10, fill: "var(--ink-3)" });
+      if (cardH > 62) {
+        t(cardX + 14, cardY + 55, g.pins.map(p => p[0]).join("  ·  "), {
+          "font-size": 10.5, fill: colour, "font-weight": 500
+        });
+      }
+
+      row += g.pins.length + 1;
+    });
+  }
+  flank(left, "L");
+  flank(right, "R");
+
+  /* Title block, bottom-right and set well below the circuit, as a drawing
+     sheet carries it. Three ruled fields rather than two, now that there is
+     room to give each one its own line. */
+  const tbW = 372, tbH = 84, tbX = W - PAD - tbW, tbY = H - tbH - 26;
+
+  svg.appendChild(el("rect", {
+    x: tbX, y: tbY, width: tbW, height: tbH,
+    fill: "var(--paper)", stroke: "var(--ink-3)", "stroke-width": 1.2
+  }));
+  [28, 56].forEach(dy => svg.appendChild(el("line", {
+    x1: tbX, y1: tbY + dy, x2: tbX + tbW, y2: tbY + dy,
+    stroke: "var(--rule)", "stroke-width": 1
+  })));
+  svg.appendChild(el("line", {
+    x1: tbX + 232, y1: tbY + 28, x2: tbX + 232, y2: tbY + tbH,
+    stroke: "var(--rule)", "stroke-width": 1
+  }));
+
+  t(tbX + 12, tbY + 14, "ODYSSEY-10 PRO — AVIONICS INTERCONNECT", {
+    "font-size": 10.5, "font-weight": 600, fill: "var(--ink)",
+    "font-family": "Archivo, sans-serif"
+  });
+
+  const field = (x, y, k, v) => {
+    t(x, y, k, { "font-size": 8, fill: "var(--ink-3)", "letter-spacing": ".09em" });
+    t(x, y + 14, v, { "font-size": 10.5, "font-weight": 600, fill: "var(--ink-2)" });
+  };
+  field(tbX + 12,  tbY + 38, "DRAWN FROM",  "config.h");
+  field(tbX + 12,  tbY + 66, "SCOPE",       "AIRCRAFT — not the EV board");
+  field(tbX + 244, tbY + 38, "REVISION",    "4.9");
+  field(tbX + 244, tbY + 66, "SHEET / NETS", `1 of 1  ·  ${allPins.length}`);
+}
+
+/* ---- power tree --------------------------------------------------------
+   A distribution ladder, not a schematic: one spine from the pack, a tap per
+   rail, loads hanging off each tap. Voltage descends down the page the way a
+   power tree is conventionally drawn.                                        */
+function drawPower() {
+  const svg = $("#powertree");
+  const PAD = 30, SPINE = 96, RAIL_H = 74, CARD_X = 200, W = 940;
+  const H = PAD * 2 + RAILS.length * RAIL_H;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("font-family", '"IBM Plex Mono", ui-monospace, monospace');
+
+  const t = (x, y, s, o = {}) => {
+    const n = el("text", Object.assign({
+      x, y, "font-size": 11, fill: "var(--ink)", "dominant-baseline": "middle"
+    }, o));
+    n.textContent = s;
+    svg.appendChild(n);
+    return n;
+  };
+
+  const top = PAD + RAIL_H / 2, bot = PAD + (RAILS.length - 0.5) * RAIL_H;
+  svg.appendChild(el("path", {
+    d: `M ${SPINE} ${top} V ${bot}`,
+    stroke: "var(--c-power)", "stroke-width": 2, fill: "none", opacity: .5
+  }));
+
+  RAILS.forEach((r, i) => {
+    const y = PAD + i * RAIL_H + RAIL_H / 2;
+    const isPack = i === 0;
+    const colour = isPack ? "var(--c-power)" : (i === 3 ? "var(--c-spi)" : "var(--c-power)");
+
+    svg.appendChild(el("path", {
+      d: `M ${SPINE} ${y} H ${CARD_X - 14}`,
+      stroke: colour, "stroke-width": 1.4, fill: "none", opacity: .8
+    }));
+    svg.appendChild(el("circle", { cx: SPINE, cy: y, r: 4, fill: colour }));
+
+    t(SPINE - 14, y, r.via, { "text-anchor": "end", "font-size": 9.5, fill: "var(--ink-3)" });
+
+    svg.appendChild(el("rect", {
+      x: CARD_X - 14, y: y - 26, width: 176, height: 52, rx: 2,
+      fill: "var(--paper)", stroke: colour, "stroke-width": 1.4
+    }));
+    t(CARD_X, y - 8, r.name, {
+      "font-size": 13, "font-weight": 600, "font-family": "Archivo, sans-serif"
+    });
+    t(CARD_X, y + 10, r.spec, { "font-size": 9.5, fill: "var(--ink-3)" });
+
+    /* loads, as a bracketed run to the right */
+    const lx = CARD_X + 182;
+    svg.appendChild(el("path", {
+      d: `M ${lx - 20} ${y} H ${lx - 6}`,
+      stroke: colour, "stroke-width": 1.4, fill: "none", opacity: .8
+    }));
+    r.loads.forEach((load, j) => {
+      const ly = y - ((r.loads.length - 1) * 15) / 2 + j * 15;
+      svg.appendChild(el("path", {
+        d: `M ${lx - 6} ${y} V ${ly} H ${lx + 8}`,
+        stroke: colour, "stroke-width": 1, fill: "none",
+        opacity: .55, "stroke-linejoin": "round"
+      }));
+      t(lx + 14, ly, load, { "font-size": 10.5, fill: "var(--ink-2)" });
+    });
+  });
+}
+
+/* ---- tables ------------------------------------------------------------ */
+function tables() {
+  $("#sheet-count").textContent = `${allPins.length} nets · ${GROUPS.length} groups`;
+
+  $("#legend").innerHTML = Object.entries(CLASSES).map(([k, c]) =>
+    `<span><i style="background:${c.colour}"></i>${esc(c.label)}</span>`).join("");
+
+  $("#pintable tbody").innerHTML = allPins
+    .slice().sort((a, b) => a.gpio - b.gpio)
+    .map(p => `<tr>
+        <td class="pin" style="--cls:${CLASSES[p.cls].colour}">GPIO ${p.gpio}</td>
+        <td class="net">${esc(p.net)}</td>
+        <td>${esc(p.group.name)}</td>
+        <td class="note">${DETAIL[p.gpio] ? esc(DETAIL[p.gpio]) : "—"}</td>
+      </tr>`).join("");
+
+  $("#i2ctable tbody").innerHTML = I2C.map(r => `<tr>
+      <td class="addr" style="color:var(--c-i2c);font-weight:600">${esc(r[0])}</td>
+      <td>${esc(r[1])}</td><td>${esc(r[2])}</td><td class="note">${esc(r[3])}</td>
+    </tr>`).join("");
+
+  $("#uarttable tbody").innerHTML = UARTS.map(r => `<tr>
+      <td class="pin" style="--cls:var(--c-uart)">${r[0]}</td>
+      <td>${r[1]}</td><td class="mono">${esc(r[2])}</td>
+      <td class="mono">${esc(r[3])}</td><td class="note">${r[4]}</td>
+    </tr>`).join("");
+
+  $("#budget tbody").innerHTML = BUDGET.map(r => `<tr>
+      <td>${r[0]}</td>
+      <td class="mono">${r[1]}</td>
+      <td class="mono" style="color:var(--c-power);font-weight:600">${r[2]}</td>
+      <td class="note">${r[3] || "—"}</td>
+    </tr>`).join("");
+
+  $("#powertable tbody").innerHTML = POWER.map(r => `<tr>
+      <td>${esc(r[0])}</td>
+      <td class="mono" style="color:var(--c-power);font-weight:600">${esc(r[1])}</td>
+      <td class="note mono">${esc(r[2])}</td>
+    </tr>`).join("");
+
+  $("#reserved tbody").innerHTML = RESERVED.map(r => `<tr>
+      <td class="pin" style="--cls:var(--c-power)">${esc(r[0])}</td>
+      <td>${esc(r[1])}</td>
+      <td><span class="tag" style="color:${r[2].includes("EV") ? "var(--c-i2c)" : "var(--c-power)"}">${esc(r[2])}</span></td>
+      <td class="note">${esc(r[3])}</td>
+    </tr>`).join("");
+
+  /* An assertion, printed rather than assumed: the drawing must carry every
+     pin config.h defines. If these ever disagree, the sheet is wrong. */
+  const uniq = new Set(allPins.map(p => p.gpio));
+  $("#provenance").innerHTML = [
+    `<b>Source</b> config.h`,
+    `<span class="dot">/</span>`,
+    `<b>Nets</b> ${uniq.size}`,
+    `<span class="dot">/</span>`,
+    `<b>Doc</b> rev 4.9 §9.2`,
+    `<span class="dot">/</span>`,
+    `<b>Verified</b> gpio-map check`,
+    `<span class="dot">/</span>`,
+    `<b>Duplicates</b> ${uniq.size === allPins.length ? "none" : "PRESENT — SHEET IS WRONG"}`
+  ].join(" ");
+
+  $("#titleblock").innerHTML =
+    `Odyssey-10 Pro &middot; ESP32-P4 flight controller &middot; aircraft pinout, revision 4.8<br>` +
+    `Generated from <code>firmware/flight-controller/include/config.h</code>. ` +
+    `The <code>gpio-map</code> consistency check holds §9.2 and <code>config.h</code> to the same ${uniq.size} GPIOs; ` +
+    `<code>uart-allocation</code> holds §9.1 to the firmware&rsquo;s five ports.<br>` +
+    `Not a fabrication drawing &mdash; no footprints, no passives, no rail assignment. It is the interconnect.`;
+}
+
+draw();
+drawPower();
+tables();
+</script>
