@@ -2219,6 +2219,17 @@ EV_BOARD_RESERVED = {
 #
 #  Finding 41. Revisions up to 4.6 assigned all four USB data lines, and a single
 #  pinMode() on GPIO 25 boot-looped the aircraft with CHIP_USB_UART_RESET.
+#  Pins that can reach an ADC on the ESP32-P4: ADC1 on 16-23, ADC2 on 49-54.
+#
+#  analogReadMilliVolts() on anything else does not return a bad reading -- it takes a
+#  Load access fault inside the Arduino HAL. PIN_BATT_ADC sat on GPIO 1 until the first
+#  DShot-enabled run crashed in the telemetry task, and pack voltage is what drives the
+#  return-to-home and landing decisions.
+ADC_CAPABLE = set(range(16, 24)) | set(range(49, 55))
+
+#  Pins the LP-UART can attach to. SOC_RTCIO_PIN_COUNT is 16, so LP-IO is GPIO 0-15.
+LP_IO_CAPABLE = set(range(0, 16))
+
 CHIP_RESERVED = {
     24: "USB Serial/JTAG D-", 25: "USB Serial/JTAG D+",
     26: "USB Serial/JTAG D-", 27: "USB Serial/JTAG D+",
@@ -2271,6 +2282,31 @@ def check_devboard_pins(rep, fix):
     else:
         rep.note = getattr(rep, "note", [])
         rep.note.append("devboard-pins: no project pin collides with the EV board's C6")
+
+    #  A pin has to be capable of what it is asked to do. Neither of these fails
+    #  politely: the ADC one faults, and the LP-UART one refuses to start the driver.
+    for name, gpio in ((n, g) for g, names in assigned.items() for n in names):
+        if name == "PIN_BATT_ADC" and gpio not in ADC_CAPABLE:
+            rep.problem("devboard-pins",
+                        f"PIN_BATT_ADC is GPIO {gpio}, which has no ADC on the ESP32-P4. "
+                        f"ADC1 is 16-23 and ADC2 is 49-54; anything else takes a Load "
+                        f"access fault in analogReadMilliVolts(), in the task that reads "
+                        f"pack voltage. See finding 42.")
+
+    #  The LP-UART constraint only applies if something is actually on the LP-UART.
+    main_cpp = ROOT / "firmware" / "flight-controller" / "src" / "main.cpp"
+    if main_cpp.exists():
+        mtext = read(main_cpp)
+        m = re.search(r"HardwareSerial\s+AuxSerial\((\d+)\)", mtext)
+        if m and int(m.group(1)) == 5:
+            gpio = next((g for g, names in assigned.items()
+                         if "PIN_AUX_BUS_TX" in names), None)
+            if gpio is not None and gpio not in LP_IO_CAPABLE:
+                rep.problem("devboard-pins",
+                            f"AuxSerial is on the LP-UART (UART5) but PIN_AUX_BUS_TX is "
+                            f"GPIO {gpio}. The LP-UART can only attach to LP-IO pins, "
+                            f"which are GPIO 0-15 on the P4 -- the driver refuses to "
+                            f"start otherwise.")
 
     # A pin driven twice is a defect on ANY board, so that stays an error.
     for gpio, names in sorted(assigned.items()):

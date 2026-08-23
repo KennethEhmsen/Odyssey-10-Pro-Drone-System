@@ -45,7 +45,20 @@ HardwareSerial GnssSerial(1);
 HardwareSerial VtxSerial(2);
 HardwareSerial LidarSerial(3);
 HardwareSerial CrsfSerial(4);
-HardwareSerial AuxSerial(5);      // LP-UART on the ESP32-P4
+//  UART1, not the LP-UART.
+//
+//  This was HardwareSerial(5), the ESP32-P4's LP-UART. That peripheral can only
+//  attach to LP-IO pins -- GPIO 0-15 on this chip -- and every one of those is
+//  already spoken for by the ADC input, the arm button, the motors, I2C and the
+//  LoRa SPI bus. The hardware says so plainly:
+//
+//      RTCIO: rtc_gpio_init(49): RTCIO number error
+//      lp_uart_config_io(): Failed to initialize LP_IO 39
+//
+//  The AUX bus is a one-way broadcast to the beacon and the Remote ID module
+//  while the aircraft is powered, so it gains nothing from a low-power UART.
+//  UART1 was unused -- the console is on USB, which frees UART0 and UART1.
+HardwareSerial AuxSerial(1);
 
 // -------------------------------------------------------------------------------------
 //  Shared state

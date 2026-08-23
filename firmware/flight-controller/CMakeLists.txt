@@ -67,7 +67,12 @@ idf_build_set_property(COMPILE_DEFINITIONS "PIN_VTX_TX=31" APPEND)    # was 19, 
 #  Enable for bring-up: -DBRINGUP_TRACE=1 prints a flushed marker before each
 #  call in setup(), so a fault that takes the console down names itself. This is
 #  what found finding 41 in one run after a long detour of guessing.
-# idf_build_set_property(COMPILE_DEFINITIONS "BRINGUP_TRACE=1" APPEND)
+idf_build_set_property(COMPILE_DEFINITIONS "BRINGUP_TRACE=1" APPEND)
+
+#  STEP 0 OF SECTION 4.3.2: compile and run the DShot RMT driver for the first time.
+#  dshot_rmt.cpp has never been through a compiler. Not a default -- the
+#  unverified-defaults check keeps DSHOT_ENABLE at 0 in config.h.
+idf_build_set_property(COMPILE_DEFINITIONS "DSHOT_ENABLE=1" APPEND)
 
 project(odyssey-fc)
 

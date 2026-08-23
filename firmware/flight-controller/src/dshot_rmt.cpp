@@ -27,6 +27,7 @@
 #include "driver/rmt_rx.h"
 #include "driver/rmt_encoder.h"
 #include "esp_err.h"
+#include "soc/soc_caps.h"
 #include "esp_log.h"
 
 static const char* TAG = "dshot";
@@ -96,7 +97,19 @@ bool DShotRmt::begin(const uint8_t pins[4]) {
         txc.gpio_num          = (gpio_num_t)pins[i];
         txc.clk_src           = RMT_CLK_SRC_DEFAULT;
         txc.resolution_hz     = DSHOT_RMT_RESOLUTION_HZ;
-        txc.mem_block_symbols = 64;
+        //  ONE BLOCK PER CHANNEL, AND THE NUMBER IS NOT ARBITRARY.
+        //
+        //  The ESP32-P4 has SOC_RMT_TX_CANDIDATES_PER_GROUP = 4 and
+        //  SOC_RMT_MEM_WORDS_PER_CHANNEL = 48. Asking for 64 symbols spans TWO
+        //  blocks, which halves the usable channels to two -- and this driver
+        //  needs four, one per motor. The first hardware run failed exactly
+        //  there:
+        //
+        //      rmt_tx_register_to_group: no free tx channels
+        //      dshot: motor 2: TX channel on GPIO 6 failed
+        //
+        //  A DShot frame is 16 symbols. 48 is ample and costs one block.
+        txc.mem_block_symbols = SOC_RMT_MEM_WORDS_PER_CHANNEL;
         txc.trans_queue_depth = 2;
         // THE INVERSION LIVES HERE, AND ONLY HERE.
         //
@@ -123,7 +136,10 @@ bool DShotRmt::begin(const uint8_t pins[4]) {
         rxc.gpio_num          = (gpio_num_t)pins[i];
         rxc.clk_src           = RMT_CLK_SRC_DEFAULT;
         rxc.resolution_hz     = DSHOT_RMT_RESOLUTION_HZ;
-        rxc.mem_block_symbols = 64;
+        //  Same reasoning as the TX channel above. With four TX and four RX
+        //  channels this driver uses the entire RMT peripheral -- 8 of 8 -- so
+        //  nothing else in the firmware may claim an RMT channel.
+        rxc.mem_block_symbols = SOC_RMT_MEM_WORDS_PER_CHANNEL;
         rxc.flags.invert_in   = 1;     // the reply is low-going, like the outgoing frame
 
         if (rmt_new_rx_channel(&rxc, &g_ch[i].rx) != ESP_OK) {

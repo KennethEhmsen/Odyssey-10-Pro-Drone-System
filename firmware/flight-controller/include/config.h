@@ -771,6 +771,8 @@
 #endif
 #define PIN_CRSF_TX               28       // FC -> ExpressLRS (telemetry to handset)
 #ifndef PIN_AUX_BUS_TX
+//  AuxSerial moved off the LP-UART (see main.cpp): the LP-UART can only drive
+//  LP-IO pins, which on the P4 are GPIO 0-15, and that range is full.
 #define PIN_AUX_BUS_TX            39       // broadcast to beacon + Remote ID modules
 #endif
 #ifndef PIN_REMOTEID_HEALTH
@@ -782,7 +784,17 @@
 #define PIN_I2C_SDA               7
 #define PIN_I2C_SCL               8
 
-#define PIN_BATT_ADC              1
+//  THE ADC IS NOT ON EVERY PIN. On the ESP32-P4 only GPIO 16-23 (ADC1) and
+//  49-54 (ADC2) reach an ADC. GPIO 1 does not, and analogReadMilliVolts() on it
+//  takes a Load access fault inside the Arduino HAL -- in the telemetry task,
+//  which is where battery voltage is sampled. Since pack voltage drives the
+//  return-to-home and landing decisions, this crashed the aircraft's judgement
+//  rather than merely a reading. Found on the first DShot-enabled run.
+//
+//  ADC2 rather than ADC1 because every free ADC1 pin collides with something:
+//  17-19 are GNSS and VTX, 20-23 are VTX RX and the LiDAR, and 16 is the C6's
+//  SDIO D2 on the development board.
+#define PIN_BATT_ADC              51      // ADC2_CH2 -- must be an ADC pin
 #define PIN_ARM_BUTTON            2
 #define PIN_BEACON_LATCH          21
 
