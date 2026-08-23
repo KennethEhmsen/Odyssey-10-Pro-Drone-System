@@ -1033,7 +1033,10 @@ def check_prose_constants(rep, fix):
 #  therefore derived and compared, not trusted -- and --fix rewrites them.
 # =====================================================================================
 README = ROOT / "README.md"
-SCHEMATIC = ROOT / "docs" / "odyssey-schematic.html"
+#  Every drawing in docs/ that states a revision. Named by glob rather than one
+#  by one, so a new sheet is covered the moment it exists.
+def drawings():
+    return sorted((ROOT / "docs").glob("*.html"))
 
 
 def _run_suite_count():
@@ -2495,8 +2498,6 @@ def check_schematic_revision(rep, fix):
     still said 4.9 -- and its own three copies had already disagreed with each other
     (4.9, 4.9, 4.8) before that. There is one constant now, and this holds it to §1.
     """
-    if not SCHEMATIC.exists():
-        return
     spec = read(SPEC)
     m = re.search(r"\*\*Document revision:\*\*\s*([0-9]+\.[0-9]+)", spec)
     if not m:
@@ -2504,40 +2505,46 @@ def check_schematic_revision(rep, fix):
         return
     doc_rev = m.group(1)
 
-    html = read(SCHEMATIC)
-    d = re.search(r'const DOC_REV\s*=\s*"([0-9]+\.[0-9]+)"', html)
-    if not d:
-        rep.problem("schematic-rev",
-                    "docs/odyssey-schematic.html has no DOC_REV constant -- the drawing "
-                    "must state which revision of the specification it draws")
-        return
+    checked = 0
+    for path in drawings():
+        rel = path.relative_to(ROOT).as_posix()
+        html = read(path)
+        d = re.search(r'const DOC_REV\s*=\s*"([0-9]+\.[0-9]+)"', html)
+        if not d:
+            rep.problem("schematic-rev",
+                        f"{rel} has no DOC_REV constant -- a drawing must state which "
+                        f"revision of the specification it draws")
+            continue
 
-    if d.group(1) != doc_rev:
-        if fix:
-            write(SCHEMATIC, html.replace(f'const DOC_REV = "{d.group(1)}"',
-                                          f'const DOC_REV = "{doc_rev}"'))
-            rep.fix("schematic-rev",
-                    f"schematic revision {d.group(1)} -> {doc_rev}")
-            return
-        rep.problem("schematic-rev",
-                    f"the schematic says revision {d.group(1)}, the specification says "
-                    f"{doc_rev}. Somebody wiring from a printout cannot tell whether it "
-                    f"matches the document they were given",
-                    fixable=True)
-        return
+        if d.group(1) != doc_rev:
+            if fix:
+                write(path, html.replace(f'const DOC_REV = "{d.group(1)}"',
+                                         f'const DOC_REV = "{doc_rev}"'))
+                rep.fix("schematic-rev", f"{rel}: {d.group(1)} -> {doc_rev}")
+                continue
+            rep.problem("schematic-rev",
+                        f"{rel} says revision {d.group(1)}, the specification says "
+                        f"{doc_rev}. Somebody working from a printout cannot tell "
+                        f"whether it matches the document they were given",
+                        fixable=True)
+            continue
 
-    #  And no stray hardcoded revision may survive alongside the constant.
-    strays = [x for x in re.findall(r"revision ([0-9]+\.[0-9]+)", html)
-              if x != doc_rev]
-    strays += [x for x in re.findall(r"\brev ([0-9]+\.[0-9]+)", html) if x != doc_rev]
-    if strays:
-        rep.problem("schematic-rev",
-                    f"the schematic hardcodes revision {', '.join(sorted(set(strays)))} "
-                    f"somewhere alongside DOC_REV={doc_rev}. One constant, not several")
-        return
+        #  And no stray hardcoded revision may survive alongside the constant.
+        strays = [x for x in re.findall(r"revision ([0-9]+\.[0-9]+)", html)
+                  if x != doc_rev]
+        strays += [x for x in re.findall(r"\brev ([0-9]+\.[0-9]+)", html)
+                   if x != doc_rev]
+        if strays:
+            rep.problem("schematic-rev",
+                        f"{rel} hardcodes revision {', '.join(sorted(set(strays)))} "
+                        f"alongside DOC_REV={doc_rev}. One constant, not several")
+            continue
+        checked += 1
 
-    rep.note = getattr(rep, "note", [])
-    rep.note.append(f"schematic-rev: the drawing and the specification are both {doc_rev}")
+    if checked:
+        rep.note = getattr(rep, "note", [])
+        rep.note.append(f"schematic-rev: {checked} drawing(s) and the specification "
+                        f"are all revision {doc_rev}")
 
 
 CHECKS = [

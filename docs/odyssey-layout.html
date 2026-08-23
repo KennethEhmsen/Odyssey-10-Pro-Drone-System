@@ -1,0 +1,513 @@
+<title>Odyssey-10 Pro Airframe Layout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+/* Same visual system as the interconnect sheet -- these are two drawings of one
+   aircraft, and a reader moving between them should not have to relearn the key. */
+:root {
+  --paper:#F1F4F5; --sheet:#FBFCFC; --rule:#C9D2D6; --rule-soft:#E2E8EA;
+  --ink:#131C22; --ink-2:#46565F; --ink-3:#6E818B; --copper:#A85C34;
+  --c-power:#BE3F24; --c-i2c:#8A5E0C; --c-spi:#61469C;
+  --c-uart:#0B6670; --c-pwm:#2A6E36; --c-gpio:#55666F;
+  --warn-bg:#FBF0E6; --warn-edge:#D9A273;
+  --grid:rgba(19,28,34,.055);
+  --shadow:0 1px 2px rgba(19,28,34,.06),0 8px 24px -12px rgba(19,28,34,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0F1519; --sheet:#151D22; --rule:#35444C; --rule-soft:#232F35;
+  --ink:#E6EDF0; --ink-2:#A7B7BF; --ink-3:#7A8B94; --copper:#D08A5E;
+  --c-power:#F1785C; --c-i2c:#D9A83C; --c-spi:#A78BE0;
+  --c-uart:#46B6C0; --c-pwm:#6BBF75; --c-gpio:#93A5AE;
+  --warn-bg:#2A2019; --warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --paper:#0F1519; --sheet:#151D22; --rule:#35444C; --rule-soft:#232F35;
+  --ink:#E6EDF0; --ink-2:#A7B7BF; --ink-3:#7A8B94; --copper:#D08A5E;
+  --c-power:#F1785C; --c-i2c:#D9A83C; --c-spi:#A78BE0;
+  --c-uart:#46B6C0; --c-pwm:#6BBF75; --c-gpio:#93A5AE;
+  --warn-bg:#2A2019; --warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:32px 32px,32px 32px;
+  color:var(--ink); font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:48px 24px 96px;display:flex;flex-direction:column;gap:40px}
+.masthead{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--copper)}
+h1{font-family:Archivo,sans-serif;font-weight:700;font-size:clamp(30px,5.2vw,46px);
+  line-height:1.05;letter-spacing:-.021em;margin:0;text-wrap:balance}
+.standfirst{max-width:66ch;font-size:16.5px;color:var(--ink-2);margin:0}
+.provenance{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3);
+  padding-top:6px;border-top:1px solid var(--rule-soft)}
+.provenance b{color:var(--ink-2);font-weight:600}
+.dot{color:var(--rule)}
+section{display:flex;flex-direction:column;gap:16px}
+h2{font-family:Archivo,sans-serif;font-weight:600;font-size:12px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--ink-3);margin:0;padding-bottom:9px;
+  border-bottom:1.5px solid var(--rule);display:flex;justify-content:space-between;
+  align-items:baseline;gap:16px}
+h2 span{font-family:"IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:none;
+  font-weight:400;color:var(--ink-3)}
+.lede{max-width:68ch;color:var(--ink-2);margin:0}
+.sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:2px;
+  box-shadow:var(--shadow);overflow-x:auto;overflow-y:hidden}
+.sheet svg{display:block;min-width:720px;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:"IBM Plex Mono",monospace;
+  font-size:12px;color:var(--ink-2)}
+.legend i{display:inline-block;width:22px;height:3px;margin-right:8px;
+  vertical-align:middle;border-radius:1px}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:560px}
+caption{text-align:left;font-size:13px;color:var(--ink-3);padding-bottom:10px}
+th{text-align:left;font-family:Archivo,sans-serif;font-size:11px;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+  padding:0 14px 8px 0;border-bottom:1.5px solid var(--rule);white-space:nowrap}
+td{padding:8px 14px 8px 0;border-bottom:1px solid var(--rule-soft);vertical-align:baseline}
+tbody tr:last-child td{border-bottom:none}
+.mono,td.coord{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+td.coord{font-weight:600;white-space:nowrap;border-left:3px solid var(--cls,var(--rule));
+  padding-left:11px}
+td.note{color:var(--ink-2);font-size:13px}
+td.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;
+  text-align:right;white-space:nowrap}
+.callout{background:var(--warn-bg);border:1px solid var(--warn-edge);border-left-width:3px;
+  border-radius:2px;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.callout h3{font-family:Archivo,sans-serif;font-size:14px;font-weight:700;margin:0}
+.callout p{margin:0;font-size:14px;color:var(--ink-2);max-width:70ch}
+code{font-family:"IBM Plex Mono",monospace;font-size:.92em;color:var(--ink)}
+footer{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3);
+  border-top:1px solid var(--rule-soft);padding-top:16px;line-height:1.8}
+:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Odyssey-10 Pro &middot; Airframe &middot; Sheet 2 of 2</div>
+    <h1>Where Everything Sits</h1>
+    <p class="standfirst">
+      The physical companion to the interconnect sheet. That one says what is wired to
+      what; this one says where it is bolted, and why it is bolted there. Coordinates are
+      millimetres from the centre of gravity: <b>+Y forward</b>, <b>+X right</b>,
+      <b>+Z up</b>.
+    </p>
+    <div class="provenance" id="provenance"></div>
+  </header>
+
+  <section>
+    <h2>Plan view <span id="planspan"></span></h2>
+    <div class="sheet">
+      <svg id="plan" role="img" aria-label="Top view of the airframe showing motor positions, propeller discs and component placement"></svg>
+    </div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section>
+    <h2>Elevation <span>looking from the right, +Y to the left</span></h2>
+    <p class="lede">
+      The vertical story: a 120&nbsp;mm mast to get the magnetometer out of the motor
+      currents, and a 165&nbsp;mm whip hanging below the tail.
+    </p>
+    <div class="sheet">
+      <svg id="side" role="img" aria-label="Side elevation showing the GNSS mast, nose sensors, belly rangefinder and the LoRa whip"></svg>
+    </div>
+  </section>
+
+  <section>
+    <h2>Placement directory <span>§8.1</span></h2>
+    <div class="scroll"><table id="places">
+      <caption>Millimetres from the centre of gravity.</caption>
+      <thead><tr><th>Location</th><th>Coordinates</th><th>Contents</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>Three placements are load-bearing, not tidy-mindedness</h3>
+      <p>
+        <b>The 120&nbsp;mm mast is not decorative.</b> The compass is what the
+        return-to-home controller steers by, and it has to be far enough from the power
+        train that hover currents do not bend it. Calibrate it with the motors spinning at
+        hover throttle, not on a bench.<br>
+        <b>The IMU stack sits on polyurethane gel at exactly (0,&nbsp;0,&nbsp;0).</b> Off
+        the CG it reads translation as rotation; off the gel it reads the frame instead of
+        the aircraft.<br>
+        <b>The downward ToF looks through a cut-out in the carbon.</b> Anything hung under
+        the belly — a gimbal, a bigger battery strap, a payload — blocks it, and a
+        rangefinder reading an obstruction does not fail loudly. It reports a confident
+        wrong altitude just as the aircraft decides whether it has landed.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>RF separation <span>§8.4</span></h2>
+    <p class="lede">
+      Five transmitters on one airframe, three of them within a few centimetres of each
+      other. The placement is the isolation — there is no shielding here.
+    </p>
+    <div class="scroll"><table id="rf">
+      <thead><tr><th>Transmitter</th><th>Band</th><th>Power</th><th>Duty</th><th>Where, and why there</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Mass budget <span>§3.1 · AUW 1584 g</span></h2>
+    <div class="scroll"><table id="mass">
+      <caption>Every gram here comes off the payload reserve or the endurance.</caption>
+      <thead><tr><th>Group</th><th>Mass</th><th>Share</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>What is drawn from what <span>provenance</span></h2>
+    <div class="callout">
+      <h3>Derived, and reasoned, are not the same thing</h3>
+      <p>
+        <b>Derived from <code>config.h</code>:</b> the 387&nbsp;mm wheelbase, the 9-inch
+        propeller discs, and which corner each motor is in with which rotation — the plan
+        view is drawn from those numbers, so it changes when the build switch changes.<br>
+        <b>Derived from the specification:</b> every coordinate in the directory, from
+        §8.1, and the mass groups from §3.1.<br>
+        <b>Not measured:</b> none of this has been built. The masses are researched
+        estimates that feed <code>AIRFRAME_AUW_G</code>, and §2 says plainly to weigh the
+        parts as they arrive and correct them. A mass 50% out costs endurance and margin,
+        not just money.
+      </p>
+    </div>
+  </section>
+
+  <footer id="titleblock"></footer>
+</div>
+
+<script>
+/* =========================================================================
+   Geometry from config.h (9-inch default build); placement from §8.1.
+   ========================================================================= */
+const DOC_REV = "5.1";
+
+const WHEELBASE_MM = 387;      // FRAME_WHEELBASE_MM, FRAME_SIZE_IN == 9
+const PROP_IN      = 9;        // PROP_DIAMETER_IN
+const PROP_MM      = PROP_IN * 25.4;
+
+const CLASSES = {
+  pwm:  { label:"Propulsion",      colour:"var(--c-pwm)"   },
+  gpio: { label:"Avionics core",   colour:"var(--c-gpio)"  },
+  i2c:  { label:"Navigation",      colour:"var(--c-i2c)"   },
+  uart: { label:"RF and video",    colour:"var(--c-uart)"  },
+  spi:  { label:"Recovery",        colour:"var(--c-spi)"   },
+  power:{ label:"Power",           colour:"var(--c-power)" }
+};
+
+/* Motors: X configuration, so each sits at wheelbase/2 on a 45° diagonal.
+   Corner and rotation are from config.h's MOTORn_PIN comments. */
+const R = WHEELBASE_MM / 2;
+const D = R * Math.SQRT1_2;
+const MOTORS = [
+  { n:"M1", x:+D, y:-D, spin:"CCW", corner:"rear-right",  gpio:4  },
+  { n:"M2", x:+D, y:+D, spin:"CW",  corner:"front-right", gpio:5  },
+  { n:"M3", x:-D, y:-D, spin:"CW",  corner:"rear-left",   gpio:6  },
+  { n:"M4", x:-D, y:+D, spin:"CCW", corner:"front-left",  gpio:15 }
+];
+
+/* Every entry is a row of §8.1. z is used by the elevation only. */
+const PLACES = [
+  { name:"Centre of gravity", x:0, y:0, z:0, cls:"gpio",
+    what:"ESP32-P4 on M3 rubber standoffs; MPU-6050, ICM-42688-P and BMP280 directly on the CoG, damped with polyurethane gel",
+    tag:"FC + IMU stack", t:1, lx:0 },
+  { name:"Nose", x:0, y:+145, z:+34, cls:"uart",
+    what:"TFmini-S forward LiDAR and 1200 TVL FPV camera",
+    tag:"LiDAR + camera", t:1, lx:0 },
+  { name:"Elevated tail mast", x:0, y:-105, z:+120, cls:"i2c",
+    what:"BN-220 GNSS and QMC5883L compass, 120 mm above the power train to keep motor currents out of the magnetometer",
+    tag:"GNSS + compass", t:1, lx:-104 },
+  { name:"Tail RF", x:+20, y:-130, z:0, cls:"uart",
+    what:"5.8 GHz pagoda pointing up (+Z); 433 MHz LoRa whip dropping down (−Z, 165 mm)",
+    tag:"VTX + LoRa", t:3, lx:66 },
+  { name:"Tail, offset", x:+35, y:-150, z:+20, cls:"uart",
+    what:"ExpressLRS receiver, dipoles orthogonal",
+    tag:"ELRS RX", t:4, lx:-104 },
+  { name:"Undercarriage belly", x:0, y:-35, z:-4, cls:"i2c",
+    what:"VL53L1X downward ToF through a carbon plate cut-out",
+    tag:"downward ToF", t:1, lx:104 },
+  { name:"Underside, aft", x:0, y:-80, z:-10, cls:"spi",
+    what:"Beacon node, 1S cell and P-FET latch",
+    tag:"beacon + latch", t:3, lx:-104 }
+];
+
+const RF = [
+  ["Telemetry (SX1278)","433 MHz","+20 dBm","5.6%","Tail, whip hanging <b>down</b> 165 mm — vertical polarisation, and as far below the 2.4 GHz pair as the airframe allows"],
+  ["Recovery beacon (SX1278)","433 MHz","+20 dBm","6.1% → 1.5%","Underside aft, on its own 1S cell so it outlives the main pack"],
+  ["ExpressLRS RX","2.4 GHz","+20 dBm","FHSS","Tail, <b>offset ±35 mm</b> and dipoles orthogonal — the offset is what keeps it off the Remote ID module"],
+  ["Video (VTX)","5.8 GHz","800 mW – 1.6 W","continuous","Tail, pagoda pointing <b>up</b>. The highest power and the only continuous emitter, so it gets its own axis"],
+  ["Remote ID (C6)","2.4 GHz","+9 dBm","BLE + beacon","Central stack, antenna forward — deliberately away from the ELRS receiver sharing its band"]
+];
+
+const MASS = [
+  ["Frame, standoffs, gel dampers, hardware",230],
+  ["4× 2810 motors (52 g each installed)",208],
+  ["4× 9x5x2 propellers",28],
+  ["4-in-1 ESC",25],
+  ["6S 4500 mAh LiPo pack",640],
+  ["Avionics stack (P4, IMUs, baro, SD)",18],
+  ["Navigation sensors (GNSS + mast, compass, LiDAR, ToF, INA226)",26],
+  ["Radios (LoRa air unit, ExpressLRS RX, Remote ID)",13],
+  ["Video subsystem (VTX, camera, antennas)",45],
+  ["Power regulation (BEC)",14],
+  ["Parachute subsystem",55],
+  ["Beacon subsystem (node, 1S cell, latch)",24],
+  ["Wiring, connectors, capacitors, hardware",88],
+  ["Payload reserve",170]
+];
+const AUW = 1584;
+
+/* ---------------------------------------------------------------------- */
+const $ = (s)=>document.querySelector(s);
+const SVGNS="http://www.w3.org/2000/svg";
+const el=(n,a={})=>{const e=document.createElementNS(SVGNS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const esc=(s)=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+/* ---- plan view --------------------------------------------------------
+   Millimetres in, pixels out. +Y is forward and SVG y grows downward, so
+   the y axis is negated once, here, and nowhere else.                     */
+function drawPlan(){
+  const svg=$("#plan");
+  const EXTENT=300, S=1.42, PAD=54;
+  const W=EXTENT*2*S+PAD*2, H=EXTENT*2*S+PAD*2;
+  const cx=W/2, cy=H/2;
+  const px=(mm)=>cx+mm*S, py=(mm)=>cy-mm*S;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.setAttribute("font-family",'"IBM Plex Mono",ui-monospace,monospace');
+
+  const t=(x,y,s,o={})=>{const n=el("text",Object.assign({x,y,"font-size":11,
+    fill:"var(--ink)","dominant-baseline":"middle"},o));n.textContent=s;svg.appendChild(n);return n;};
+
+  /* centre cross */
+  [[cx-16,cy,cx+16,cy],[cx,cy-16,cx,cy+16]].forEach(([a,b,c,d])=>
+    svg.appendChild(el("line",{x1:a,y1:b,x2:c,y2:d,stroke:"var(--ink-3)","stroke-width":1})));
+
+  /* arms and props */
+  MOTORS.forEach(m=>{
+    svg.appendChild(el("line",{x1:cx,y1:cy,x2:px(m.x),y2:py(m.y),
+      stroke:"var(--ink-3)","stroke-width":7,"stroke-linecap":"round",opacity:.30}));
+    svg.appendChild(el("circle",{cx:px(m.x),cy:py(m.y),r:(PROP_MM/2)*S,
+      fill:"var(--c-pwm)","fill-opacity":.05,stroke:"var(--c-pwm)","stroke-width":1,
+      "stroke-dasharray":"4 4",opacity:.65}));
+    svg.appendChild(el("circle",{cx:px(m.x),cy:py(m.y),r:11,
+      fill:"var(--paper)",stroke:"var(--c-pwm)","stroke-width":2}));
+
+    /* rotation: an arc with a head, drawn the way the shaft turns */
+    const rr=20, ccw=m.spin==="CCW";
+    svg.appendChild(el("path",{
+      d:`M ${px(m.x)-rr} ${py(m.y)} A ${rr} ${rr} 0 1 ${ccw?0:1} ${px(m.x)+rr} ${py(m.y)}`,
+      fill:"none",stroke:"var(--c-pwm)","stroke-width":1.4,opacity:.8}));
+    svg.appendChild(el("path",{
+      d:`M ${px(m.x)+(ccw?rr:-rr)} ${py(m.y)} l ${ccw?-5:5} -5 l 0 10 z`,
+      fill:"var(--c-pwm)",opacity:.8}));
+
+    t(px(m.x),py(m.y),m.n,{"text-anchor":"middle","font-size":11,"font-weight":600,
+      fill:"var(--c-pwm)"});
+    const out=m.y>0?-1:1;
+    t(px(m.x),py(m.y)+out*38,`${m.spin} · GPIO ${m.gpio}`,
+      {"text-anchor":"middle","font-size":9.5,fill:"var(--ink-3)"});
+    t(px(m.x),py(m.y)+out*51,m.corner,
+      {"text-anchor":"middle","font-size":9,fill:"var(--ink-3)",opacity:.8});
+  });
+
+  /* components */
+  PLACES.forEach(p=>{
+    const colour=CLASSES[p.cls].colour;
+    const X=px(p.x), Y=py(p.y);
+    const isCG=p.x===0&&p.y===0;
+    if(isCG){
+      svg.appendChild(el("rect",{x:X-34,y:Y-26,width:68,height:52,rx:2,
+        fill:"var(--paper)",stroke:colour,"stroke-width":1.6}));
+    }else{
+      svg.appendChild(el("circle",{cx:X,cy:Y,r:6,fill:colour}));
+      svg.appendChild(el("circle",{cx:X,cy:Y,r:11,fill:"none",stroke:colour,
+        "stroke-width":1,opacity:.45}));
+    }
+    /* Labels either sit under their marker, or fan out to one side with a leader.
+       The tail cluster needs the second: five parts inside 115 mm cannot each carry a
+       name stacked under the next one. */
+    const above=p.y>=0, lx=p.lx||0;
+    if(isCG){
+      t(X, Y, p.tag, {"text-anchor":"middle","font-size":10,"font-weight":600,fill:colour});
+      t(X, Y+16, "(0, 0, 0)", {"text-anchor":"middle","font-size":9,fill:"var(--ink-3)"});
+    }else if(lx===0){
+      t(X, Y+(above?-22:22), p.tag,
+        {"text-anchor":"middle","font-size":10,"font-weight":600,fill:colour});
+      t(X, Y+(above?-34:34), `(${p.x}, ${p.y})`,
+        {"text-anchor":"middle","font-size":9,fill:"var(--ink-3)"});
+    }else{
+      const anchor = lx<0 ? "end" : "start";
+      const gap = lx<0 ? -14 : 14;
+      svg.appendChild(el("line",{x1:X+(lx<0?-12:12),y1:Y,x2:X+lx-gap,y2:Y,
+        stroke:colour,"stroke-width":1,opacity:.45,"stroke-dasharray":"2 3"}));
+      t(X+lx, Y-6, p.tag,
+        {"text-anchor":anchor,"font-size":10,"font-weight":600,fill:colour});
+      t(X+lx, Y+7, `(${p.x}, ${p.y})`,
+        {"text-anchor":anchor,"font-size":9,fill:"var(--ink-3)"});
+    }
+  });
+
+  /* nose marker */
+  svg.appendChild(el("path",{d:`M ${cx} ${py(268)} l -9 16 l 18 0 z`,
+    fill:"var(--copper)",opacity:.85}));
+  t(cx,py(285),"NOSE  +Y",{"text-anchor":"middle","font-size":9.5,
+    fill:"var(--copper)","letter-spacing":".12em"});
+
+  /* wheelbase dimension, motor to motor across the diagonal */
+  const m4=MOTORS.find(m=>m.n==="M4"), m1=MOTORS.find(m=>m.n==="M1");
+  svg.appendChild(el("line",{x1:px(m4.x),y1:py(m4.y),x2:px(m1.x),y2:py(m1.y),
+    stroke:"var(--copper)","stroke-width":1,"stroke-dasharray":"5 4",opacity:.7}));
+  t(px(-70),py(30),`${WHEELBASE_MM} mm wheelbase`,
+    {"text-anchor":"middle","font-size":9.5,fill:"var(--copper)"});
+  t(px(155),py(-205),`${PROP_IN}" discs — ${PROP_MM.toFixed(0)} mm`,
+    {"text-anchor":"middle","font-size":9.5,fill:"var(--c-pwm)",opacity:.9});
+}
+
+/* ---- elevation -------------------------------------------------------- */
+function drawSide(){
+  const svg=$("#side");
+  const S=1.42, PAD=52;
+  const yMin=-210, yMax=210, zMin=-200, zMax=160;
+  const W=(yMax-yMin)*S+PAD*2, H=(zMax-zMin)*S+PAD*2;
+  /* +Y forward is drawn to the LEFT, so the nose leads the way you fly */
+  const px=(y)=>PAD+(yMax-y)*S, pz=(z)=>PAD+(zMax-z)*S;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.setAttribute("font-family",'"IBM Plex Mono",ui-monospace,monospace');
+
+  const t=(x,y,s,o={})=>{const n=el("text",Object.assign({x,y,"font-size":11,
+    fill:"var(--ink)","dominant-baseline":"middle"},o));n.textContent=s;svg.appendChild(n);return n;};
+
+  /* datum */
+  svg.appendChild(el("line",{x1:PAD,y1:pz(0),x2:W-PAD,y2:pz(0),
+    stroke:"var(--ink-3)","stroke-width":1,"stroke-dasharray":"6 5",opacity:.6}));
+  t(W-PAD+6,pz(0),"Z = 0",{"font-size":9,fill:"var(--ink-3)"});
+
+  /* frame plate */
+  svg.appendChild(el("rect",{x:px(160),y:pz(2),width:(160+160)*S,height:5,
+    fill:"var(--ink-3)",opacity:.42}));
+
+  PLACES.forEach(p=>{
+    const colour=CLASSES[p.cls].colour;
+    const X=px(p.y), Z=pz(p.z);
+    if(p.z!==0){
+      svg.appendChild(el("line",{x1:X,y1:pz(0),x2:X,y2:Z,
+        stroke:colour,"stroke-width":1.4,opacity:.75}));
+    }
+    svg.appendChild(el("circle",{cx:X,cy:Z,r:6,fill:colour}));
+
+    /* Tiered labels. Several of these sit within a few millimetres of each other in
+       Z -- the belly rangefinder and the beacon are 6 mm apart -- so a fixed offset
+       puts their labels on top of one another. The tier is per-place and explicit. */
+    const up=p.z>=0, tier=p.t||1, step=13;
+    const off=(up?-1:1)*(4+tier*step);
+    /* A leader, when the label has been pushed well clear of its marker. */
+    if(tier>1){
+      svg.appendChild(el("line",{x1:X,y1:Z+(up?-8:8),x2:X,y2:Z+off-(up?-6:6),
+        stroke:colour,"stroke-width":1,opacity:.5,"stroke-dasharray":"2 2"}));
+    }
+    t(X,Z+off,p.tag,{"text-anchor":"middle","font-size":10,
+      "font-weight":600,fill:colour});
+    t(X,Z+off+(up?-12:12),`y ${p.y} · z ${p.z}`,{"text-anchor":"middle","font-size":9,
+      fill:"var(--ink-3)"});
+  });
+
+  /* the two things that stick out, and the reason each does */
+  const mast=PLACES.find(p=>p.z===120);
+  svg.appendChild(el("path",{d:`M ${px(mast.y)-13} ${pz(120)} h 26`,
+    stroke:"var(--c-i2c)","stroke-width":1.6}));
+  t(px(mast.y)-20,pz(60),"120 mm mast",{"text-anchor":"end","font-size":9.5,
+    fill:"var(--c-i2c)"});
+  t(px(mast.y)-20,pz(46),"motor currents",{"text-anchor":"end","font-size":8.5,
+    fill:"var(--ink-3)"});
+
+  const rf=PLACES.find(p=>p.name==="Tail RF");
+  svg.appendChild(el("line",{x1:px(rf.y),y1:pz(0),x2:px(rf.y),y2:pz(-165),
+    stroke:"var(--c-uart)","stroke-width":1.6}));
+  svg.appendChild(el("circle",{cx:px(rf.y),cy:pz(-165),r:4,fill:"var(--c-uart)"}));
+  t(px(rf.y)-8,pz(-150),"433 MHz whip",{"text-anchor":"end","font-size":9.5,
+    fill:"var(--c-uart)"});
+  t(px(rf.y)-8,pz(-164),"165 mm, vertical",{"text-anchor":"end","font-size":8.5,
+    fill:"var(--ink-3)"});
+  svg.appendChild(el("path",{d:`M ${px(rf.y)} ${pz(0)} V ${pz(52)}`,
+    stroke:"var(--c-uart)","stroke-width":1.6}));
+  svg.appendChild(el("path",{d:`M ${px(rf.y)} ${pz(52)} l -5 8 l 10 0 z`,
+    fill:"var(--c-uart)"}));
+  t(px(rf.y)+10,pz(88),"5.8 GHz pagoda, up",{"font-size":9.5,fill:"var(--c-uart)"});
+
+  t(PAD,pz(zMax)-14,"NOSE  +Y",{"font-size":9.5,fill:"var(--copper)",
+    "letter-spacing":".12em"});
+  t(W-PAD,pz(zMax)-14,"TAIL  −Y",{"text-anchor":"end","font-size":9.5,
+    fill:"var(--copper)","letter-spacing":".12em"});
+}
+
+/* ---- tables ----------------------------------------------------------- */
+function tables(){
+  $("#planspan").textContent=`${WHEELBASE_MM} mm wheelbase · ${PROP_IN}" props · X config`;
+
+  $("#legend").innerHTML=Object.entries(CLASSES).map(([k,c])=>
+    `<span><i style="background:${c.colour}"></i>${esc(c.label)}</span>`).join("");
+
+  $("#places tbody").innerHTML=PLACES.map(p=>`<tr>
+      <td class="coord" style="--cls:${CLASSES[p.cls].colour}">${esc(p.name)}</td>
+      <td class="mono">(${p.x}, ${p.y}, ${p.z}) mm</td>
+      <td class="note">${esc(p.what)}</td>
+    </tr>`).join("");
+
+  $("#rf tbody").innerHTML=RF.map(r=>`<tr>
+      <td class="coord" style="--cls:var(--c-uart)">${esc(r[0])}</td>
+      <td class="mono">${esc(r[1])}</td>
+      <td class="mono">${esc(r[2])}</td>
+      <td class="mono">${esc(r[3])}</td>
+      <td class="note">${r[4]}</td>
+    </tr>`).join("");
+
+  const sum=MASS.reduce((a,b)=>a+b[1],0);
+  $("#mass tbody").innerHTML=MASS.map(m=>`<tr>
+      <td>${esc(m[0])}</td>
+      <td class="num">${m[1]} g</td>
+      <td class="num" style="color:var(--ink-3)">${(m[1]/AUW*100).toFixed(1)}%</td>
+    </tr>`).join("")+`<tr>
+      <td><b>All-up weight</b></td>
+      <td class="num"><b>${sum} g</b></td>
+      <td class="num" style="color:var(--ink-3)">100%</td>
+    </tr>`;
+
+  $("#provenance").innerHTML=[
+    `<b>Geometry</b> config.h`,`<span class="dot">/</span>`,
+    `<b>Placement</b> §8.1`,`<span class="dot">/</span>`,
+    `<b>Build</b> 9-inch · 2810 · 2-blade`,`<span class="dot">/</span>`,
+    `<b>Doc</b> rev ${DOC_REV}`,`<span class="dot">/</span>`,
+    `<b>Built</b> no — nothing here has been weighed`
+  ].join(" ");
+
+  $("#titleblock").innerHTML=
+    `Odyssey-10 Pro &middot; airframe layout, revision ${DOC_REV} &middot; default build: 9-inch, 2810, 2-blade<br>`+
+    `Motor corners, rotations, wheelbase and propeller diameter are read from `+
+    `<code>config.h</code>; every coordinate is §8.1. Change <code>FRAME_SIZE_IN</code> `+
+    `and the plan view changes with it.<br>`+
+    `Not a build drawing &mdash; no fasteners, no standoff heights, no harness routing.`;
+}
+
+drawPlan();
+drawSide();
+tables();
+</script>

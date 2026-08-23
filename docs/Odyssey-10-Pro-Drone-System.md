@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 5.0 — the MSP OSD is exposed as unimplemented, and the camera and gimbal question is answered
+**Document revision:** 5.1 — the airframe layout is drawn, and §8's diagram no longer claims a 10-inch propeller
 
 ---
 
@@ -1544,7 +1544,7 @@ flight loop raises a flag and returns; it never calls `delay()`, `Serial` or the
                                            / | \
                                           /  |  \
           [M4: front-left CCW]           /   |   \          [M2: front-right CW]
-             (10 in prop)               /    |    \             (10 in prop)
+            (prop per build)             /    |    \           (prop per build)
                 \===\                  /  [top battery]           /===/
                  \   \                /  [6S 4500 mAh]           /   /
                   (O)----------------+---------------------------+---(O)
@@ -1561,10 +1561,17 @@ flight loop raises a flag and returns; it never calls `delay()`, `Serial` or the
                  /   /                 \ [downward ToF belly]   /   /
                 /===/                   \                      /===/
           [M3: rear-left CW]             \ [433 MHz LoRa dipole]
-             (10 in prop)                 (vertical, downward whip)
+           (prop per build)                (vertical, downward whip)
                                    [ExpressLRS 2.4 GHz RX, tail-mounted,
                                     dipoles at 90 deg to each other]
 ```
+
+> The diagram above is build-neutral on propeller size deliberately. It said "10 in
+> prop" on every arm until revision 5.1, which was true when the 10-inch was the default
+> and stopped being true when the 9-inch became it — `PROP_DIAMETER_IN` is 7, 9 or 10
+> depending on `FRAME_SIZE_IN`, and §3.1's mass budget has been costing 9x5x2 propellers
+> the whole time. `docs/odyssey-layout.html` draws the discs at the size the current
+> build actually uses.
 
 ### 8.1 Component placement directory
 
@@ -2506,6 +2513,7 @@ Odyssey-10-Pro-Drone-System/
 +-- .github/workflows/host-tests.yml
 +-- docs/
 |   +-- odyssey-schematic.html      Interconnect and power tree, generated from config.h
+|   +-- odyssey-layout.html         Airframe layout: where every part is bolted
 ```
 
 ### 10.2 Task structure

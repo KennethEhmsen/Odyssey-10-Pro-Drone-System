@@ -10,7 +10,7 @@
 Autonomous long-range 9-inch quadcopter. ESP32-P4 dual-core RISC-V avionics, integrated
 perception, kinetic recovery and safety stack.
 
-**Status:** revision 5.0 — DShot bench procedure ready; the driver awaits its first contact with hardware. All eighteen defects found in the
+**Status:** revision 5.1 — DShot bench procedure ready; the driver awaits its first contact with hardware. All eighteen defects found in the
 revision 1.0 review are fixed — and eighteen was not the end of it. Reworking them
 surfaced more, and the work since has surfaced more again, several worse than
 anything in the original list. See
