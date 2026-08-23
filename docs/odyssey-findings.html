@@ -1,0 +1,339 @@
+<title>Odyssey-10 Pro Findings Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+/* Eleventh sheet, same system as the others. */
+:root{
+  --paper:#F1F4F5;--sheet:#FBFCFC;--rule:#C9D2D6;--rule-soft:#E2E8EA;
+  --ink:#131C22;--ink-2:#46565F;--ink-3:#6E818B;--copper:#A85C34;
+  --c-power:#BE3F24;--c-i2c:#8A5E0C;--c-spi:#61469C;
+  --c-uart:#0B6670;--c-pwm:#2A6E36;--c-gpio:#55666F;
+  --warn-bg:#FBF0E6;--warn-edge:#D9A273;
+  --grid:rgba(19,28,34,.055);
+  --shadow:0 1px 2px rgba(19,28,34,.06),0 8px 24px -12px rgba(19,28,34,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{margin:0;background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:32px 32px,32px 32px;color:var(--ink);
+  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:48px 24px 96px;display:flex;flex-direction:column;gap:40px}
+.masthead{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--copper)}
+.eyebrow a{color:var(--copper);text-decoration:none;border-bottom:1px dotted currentColor;padding-bottom:1px}
+.eyebrow a:hover{border-bottom-style:solid}
+h1{font-family:Archivo,sans-serif;font-weight:700;font-size:clamp(30px,5.2vw,46px);
+  line-height:1.05;letter-spacing:-.021em;margin:0;text-wrap:balance}
+.standfirst{max-width:66ch;font-size:16.5px;color:var(--ink-2);margin:0}
+.provenance{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3);
+  padding-top:6px;border-top:1px solid var(--rule-soft)}
+.provenance b{color:var(--ink-2);font-weight:600}
+.dot{color:var(--rule)}
+section{display:flex;flex-direction:column;gap:16px}
+h2{font-family:Archivo,sans-serif;font-weight:600;font-size:12px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--ink-3);margin:0;padding-bottom:9px;
+  border-bottom:1.5px solid var(--rule);display:flex;justify-content:space-between;
+  align-items:baseline;gap:16px}
+h2 span{font-family:"IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:none;
+  font-weight:400;color:var(--ink-3)}
+.lede{max-width:68ch;color:var(--ink-2);margin:0}
+.sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:2px;
+  box-shadow:var(--shadow);overflow-x:auto;overflow-y:hidden}
+.sheet svg{display:block;min-width:760px;width:100%;height:auto}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:660px}
+caption{text-align:left;font-size:13px;color:var(--ink-3);padding-bottom:10px}
+th{text-align:left;font-family:Archivo,sans-serif;font-size:11px;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+  padding:0 14px 8px 0;border-bottom:1.5px solid var(--rule);white-space:nowrap}
+td{padding:8px 14px 8px 0;border-bottom:1px solid var(--rule-soft);vertical-align:baseline}
+tbody tr:last-child td{border-bottom:none}
+.mono,td.k{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+td.k{font-weight:600;white-space:nowrap;border-left:3px solid var(--cls,var(--rule));
+  padding-left:11px}
+td.note{color:var(--ink-2);font-size:13px}
+.pill{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10px;
+  letter-spacing:.06em;padding:1px 7px;border-radius:2px;border:1px solid currentColor;
+  white-space:nowrap}
+.callout{background:var(--warn-bg);border:1px solid var(--warn-edge);border-left-width:3px;
+  border-radius:2px;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.callout h3{font-family:Archivo,sans-serif;font-size:14px;font-weight:700;margin:0}
+.callout p{margin:0;font-size:14px;color:var(--ink-2);max-width:70ch}
+code{font-family:"IBM Plex Mono",monospace;font-size:.92em;color:var(--ink)}
+footer{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3);
+  border-top:1px solid var(--rule-soft);padding-top:16px;line-height:1.8}
+:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow"><a href="index.html">&larr; All sheets</a> &middot; Odyssey-10 Pro &middot; Findings &middot; Sheet 11 of 11</div>
+    <h1>Eighteen Found By Reading</h1>
+    <p class="standfirst">
+      A review of revision 1.0 found eighteen defects, seven of them critical. Fixing them
+      surfaced forty-six more — and several were worse than anything in the original list.
+      This is the account of how a specification that looked finished turned out not to be.
+    </p>
+    <div class="provenance" id="provenance"></div>
+  </header>
+
+  <section>
+    <h2>The shape of it <span>18 by review · 46 by doing</span></h2>
+    <div class="sheet">
+      <svg id="shape" role="img" aria-label="Findings by how they were discovered"></svg>
+    </div>
+    <div class="callout">
+      <h3>The review was the cheapest pass, and it found the smallest share</h3>
+      <p>
+        Eighteen defects came from reading the document carefully. <b>Forty-six came from
+        trying to build what it described</b> — compiling it, running it on a board, costing
+        its own procedures, and drawing its diagrams.
+        <br><br>
+        That ratio is the argument for every check in this repository. Reading finds what
+        contradicts itself on the page. Only doing finds what contradicts reality.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>The original eighteen <span>§13 · revision 1.0 review</span></h2>
+    <div class="scroll"><table id="orig">
+      <caption>Severity as recorded at the time. <code>docs/review-findings-resolution.md</code> carries the detail.</caption>
+      <thead><tr><th>Severity</th><th>Count</th><th>The worst of them</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>What actually found the later ones <span>the instrument, not the insight</span></h2>
+    <p class="lede">
+      These are the findings whose discovery is recorded precisely enough to attribute.
+      Every one was found by a tool doing its job, not by someone being clever.
+    </p>
+    <div class="scroll"><table id="how">
+      <caption>Earlier findings in §13.1 and §13.2 do not record how they were found; those are omitted rather than guessed at.</caption>
+      <thead><tr><th>#</th><th>What it was</th><th>Found by</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>Three of these were caused by fixing an earlier one</h3>
+      <p>
+        Finding 43 came from finding 41's fix: moving a pin off the USB data lines put it
+        on GPIO 39, which the low-power UART cannot reach. Finding 44 came from 43's fix:
+        the replacement port was already the GNSS's. And the blackbox gate ordering was
+        found while fixing the <code>volatile</code> defect one layer below it.
+        <br><br>
+        A fix is a change, and a change is a chance to be wrong. That is not an argument
+        against fixing things — it is the argument for a check per fix.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>What each defect left behind <span id="chkspan"></span></h2>
+    <p class="lede">
+      The useful output of a finding is not the fix. It is the check that makes the whole
+      class of defect unable to recur — and most of these exist because something got
+      through once.
+    </p>
+    <div class="scroll"><table id="checks">
+      <thead><tr><th>Check</th><th>Guards against</th><th>Because</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Still open <span>deliberately</span></h2>
+    <div class="scroll"><table id="open">
+      <thead><tr><th>#</th><th>What</th><th>Why it is not closed</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>An open finding with a warning on it beats a closed one that was guessed</h3>
+      <p>
+        Each of these has two defensible answers and no way to pick without a decision that
+        is not mine to make. They are recorded, they raise a warning on every run, and they
+        are visible on the sheet that covers them. That is the honest state — not a
+        resolution invented to make a table look complete.
+      </p>
+    </div>
+  </section>
+
+  <footer id="titleblock"></footer>
+</div>
+
+<script>
+const DOC_REV = "5.1";
+
+/* Counts parsed from §13 of the specification: 18 numbered rows with severities,
+   46 unnumbered rows across §13.1 and §13.2. */
+const ORIGINAL = 18;
+const LATER = 46;
+const SEVERITY = [["Critical",7],["High",9],["Medium",1],["Low",1]];
+
+const WORST = {
+  "Critical":"3S voltage thresholds on a 6S pack — every battery failsafe unreachable; a cross-core race that could restart the motors under a deployed canopy; no manual control link existed at all",
+  "High":"MAVLink checksums were hardcoded placeholders; the beacon's 48-hour endurance claim was out by roughly 5×",
+  "Medium":"The GNSS was documented at one baud and opened at another",
+  "Low":"Cosmetic and documentation-only"
+};
+
+/* Only findings whose discovery method is recorded precisely enough to state. */
+const HOW = [
+  [40,"Eight of the nine .cpp files had never been compiled by anything","The first real compile"],
+  ["—","<code>sensors.cpp</code> used <code>SlewLimitedEma</code> without including <code>filters.h</code>","The first real compile"],
+  ["—","The VL53L1X model-ID read truncated 0x010F to 0x0F — wrong register, and the landing flare depends on that sensor","<code>-Woverflow</code>: “changes value from 271 to 15”"],
+  ["—","The blackbox ring used <code>volatile</code> across two cores — no barrier, and a torn 54-byte record written silently into the crash log","<code>-Wvolatile</code> deprecation warnings"],
+  ["—","The bidirectional GCR decode read its groups from the wrong offsets; every corrupted RPM still passed its checksum","A full encode/decode round trip in the host tests"],
+  [41,"GPIO 24–27 are the USB data lines and the pinout used all four; one <code>pinMode()</code> boot-looped the aircraft","A flushed trace marker before each call in <code>setup()</code>"],
+  [42,"The battery ADC sat on a pin with no ADC — a Load access fault in the task that reads pack voltage","A Guru Meditation backtrace, decoded with addr2line"],
+  [43,"Finding 41's fix put the AUX bus on a pin the low-power UART cannot reach","The hardware refusing to start the driver"],
+  [44,"<code>AuxSerial</code> and <code>GnssSerial</code> both claimed UART1 — silently, with no error at all","Gathering pin data to draw the schematic"],
+  [45,"The MSP OSD is specified, wired, budgeted and bought — and implemented nowhere","Answering a question about the FPV camera"],
+  [34,"The gyro-notch measurement procedure could never have been carried out","Costing the procedure against the log rate"],
+  [36,"A moving notch left the IMU's anti-alias corner behind","Costing the 1000 Hz loop option"],
+  ["—","§9.2 still routed the battery divider to GPIO 1 three commits after finding 42 moved it","The <code>gpio-map</code> check, on the day it was written"]
+];
+
+/* Only mappings that are actually supportable. */
+const CHECKS = [
+  ["arm-gate","Every sensor the arm gate requires is actually reported","Finding 5 — the arming gate is the one that hurts people"],
+  ["gpio-map","§9.2's pinout and <code>config.h</code> name the same GPIOs","Finding 42's fix corrected the header and left the document behind"],
+  ["uart-allocation","No two peripherals share a UART","Finding 44, which fails silently and has no compile error"],
+  ["devboard-pins","Pins the silicon or the dev board has already claimed","Findings 41 and 42"],
+  ["dshot-sheet","The waveform sheet matches the DShot the firmware sends","A sheet drawn for the wrong bit rate makes a real fault look expected"],
+  ["blackbox","The record layout agrees between firmware and decoder","A stale offset decodes the next field's bytes, silently"],
+  ["blackbox-sheet","The byte map matches the struct, field for field","Same failure, one layer out"],
+  ["notch-observability","The documentation cannot promise a measurement the log rate will not deliver","Finding 34"],
+  ["unverified-defaults","Features that have never run on hardware stay off by default","An unproven feature must not become the default by being convenient"],
+  ["prose-constants","Numbers stated in prose match the constants they quote","Prose and headers drifting apart, repeatedly"],
+  ["line-endings","Every tracked text file matches <code>.gitattributes</code>","A CRLF split that destroyed a tool file in one edit"],
+  ["hook-coverage","Every gated suite is watched by the hook that gates it","A <code>git checkout</code> reverted unstaged hook edits and one suite stopped running"],
+  ["docx","Every Word document matches the Markdown it came from","The document people read was not the document that was written"],
+  ["schematic-rev","Every drawing states the specification's revision","A sheet said 4.9 while the specification said 5.0 — and its own three copies disagreed"],
+  ["doc-refs","Cross-references resolve to a section that exists","Two dangling §-references, both written this week"],
+  ["flow-transitions","The flow sheet lists every transition the firmware can make","An omitted arrow would be the one nobody knew about"],
+  ["arming-sheet","Every blocker bit appears on the arming sheet","A missing bit is the one that strands somebody on a field"],
+  ["build-matrix","The matrix holds the numbers the preprocessor produces","A stale notch centre is a build chosen on last month's arithmetic"],
+  ["bom-mass","Parts and <code>config.h</code> agree on mass, for every build","Mass sizes thrust, hover power and the return reserve"]
+];
+
+const OPEN = [
+  [45,"The MSP OSD is specified and unimplemented","Implement it, or drop the claim and reclaim UART2 and two pins. Both defensible; the choice is the builder's. Raises a warning on every run"],
+  ["—","<code>ODY_ARMBLOCK_CALIB</code> is defined and raised nowhere","Deleting a bit changes the wire format. That is a decision, not a typo"],
+  ["—","The downward ToF is not required to arm","It degrades to a barometric landing, which works. Nobody has written down that this was chosen rather than inherited"],
+  ["—","Three builds exceed the XT90-S continuous rating","Needs the override flag or a bigger connector. Raises a warning on every run"]
+];
+
+const $=(s)=>document.querySelector(s);
+const SVGNS="http://www.w3.org/2000/svg";
+const el=(n,a={})=>{const e=document.createElementNS(SVGNS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const esc=(s)=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+/* ---- the shape --------------------------------------------------------
+   Two bars, to scale. The point is the ratio, so nothing else competes.  */
+function drawShape(){
+  const svg=$("#shape"), PAD=40, W=920, H=230;
+  const total=ORIGINAL+LATER, px=(W-PAD*2-210)/total;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.setAttribute("font-family",'"IBM Plex Mono",ui-monospace,monospace');
+  const t=(x,y,s,o={})=>{const n=el("text",Object.assign({x,y,"font-size":11,
+    fill:"var(--ink)","dominant-baseline":"middle"},o));n.textContent=s;svg.appendChild(n);return n;};
+
+  const bars=[
+    {n:ORIGINAL, label:"Found by reading it", sub:"the revision 1.0 review",
+     colour:"var(--c-gpio)"},
+    {n:LATER, label:"Found by building it", sub:"compiling, running, costing, drawing",
+     colour:"var(--c-power)"}
+  ];
+  bars.forEach((b,i)=>{
+    const y=PAD+26+i*82, w=b.n*px;
+    svg.appendChild(el("rect",{x:PAD,y,width:w,height:44,rx:2,
+      fill:b.colour,"fill-opacity":.18,stroke:b.colour,"stroke-width":1.5}));
+    svg.appendChild(el("rect",{x:PAD,y,width:3,height:44,fill:b.colour}));
+    t(PAD+14,y+17,`${b.n}`,{"font-size":19,"font-weight":700,fill:b.colour,
+      "font-family":"Archivo, sans-serif"});
+    t(PAD+14,y+34,b.label,{"font-size":11,"font-weight":600});
+    t(PAD+w+16,y+17,b.sub,{"font-size":9.5,fill:"var(--ink-3)"});
+    t(PAD+w+16,y+32,`${(b.n/total*100).toFixed(0)}% of ${total} recorded`,
+      {"font-size":9,fill:"var(--ink-3)",opacity:.85});
+  });
+
+  t(PAD,H-24,"Reading finds what contradicts itself on the page. Only doing finds what contradicts reality.",
+    {"font-size":10,fill:"var(--copper)","font-style":"italic"});
+}
+
+function tables(){
+  $("#chkspan").textContent=`${CHECKS.length} of ${33} checks traced to a defect`;
+
+  $("#orig tbody").innerHTML=SEVERITY.map(([s,n])=>{
+    const colour = s==="Critical"?"var(--c-power)":s==="High"?"var(--c-i2c)":"var(--ink-3)";
+    return `<tr>
+      <td class="k" style="--cls:${colour}"><span class="pill" style="color:${colour}">${esc(s)}</span></td>
+      <td class="mono" style="font-size:15px;font-weight:600">${n}</td>
+      <td class="note">${WORST[s]}</td></tr>`;}).join("");
+
+  $("#how tbody").innerHTML=HOW.map(h=>`<tr>
+      <td class="k" style="--cls:var(--c-power);text-align:right">${h[0]}</td>
+      <td class="note">${h[1]}</td>
+      <td class="mono" style="font-size:12px;color:var(--copper)">${h[2]}</td></tr>`).join("");
+
+  $("#checks tbody").innerHTML=CHECKS.map(c=>`<tr>
+      <td class="k" style="--cls:var(--c-pwm)"><code>${esc(c[0])}</code></td>
+      <td class="note">${c[1]}</td>
+      <td class="note" style="color:var(--ink-3)">${c[2]}</td></tr>`).join("");
+
+  $("#open tbody").innerHTML=OPEN.map(o=>`<tr>
+      <td class="k" style="--cls:var(--c-i2c);text-align:right">${o[0]}</td>
+      <td class="note">${o[1]}</td>
+      <td class="note" style="color:var(--ink-3)">${o[2]}</td></tr>`).join("");
+
+  const crit=SEVERITY.find(s=>s[0]==="Critical")[1];
+  $("#provenance").innerHTML=[
+    `<b>Recorded</b> ${ORIGINAL+LATER}`,`<span class="dot">/</span>`,
+    `<b>By review</b> ${ORIGINAL}`,`<span class="dot">/</span>`,
+    `<b>By doing</b> ${LATER}`,`<span class="dot">/</span>`,
+    `<b>Critical</b> ${crit}`,`<span class="dot">/</span>`,
+    `<b>Still open</b> ${OPEN.length}`,`<span class="dot">/</span>`,
+    `<b>Doc</b> rev ${DOC_REV}`
+  ].join(" ");
+
+  $("#titleblock").innerHTML=
+    `Odyssey-10 Pro &middot; findings ledger, revision ${DOC_REV}<br>`+
+    `Counts parsed from §13 of the specification: ${ORIGINAL} numbered rows with `+
+    `severities, ${LATER} unnumbered across §13.1 and §13.2. Discovery methods are listed `+
+    `only where they are recorded precisely enough to state &mdash; the earlier findings `+
+    `do not record how they were found, and guessing would be the same failure this sheet `+
+    `is about.<br>`+
+    `Not a score. A defect found by a compiler is a defect that never reached a field.`;
+}
+
+drawShape();
+tables();
+</script>

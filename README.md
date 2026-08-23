@@ -2,7 +2,7 @@
 
 [![host-tests](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml/badge.svg?branch=main)](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml)
 [![assertions](https://img.shields.io/badge/host_assertions-413-blue)](tools/host_tests/)
-[![consistency](https://img.shields.io/badge/consistency_checks-33-blue)](tools/check_consistency.py)
+[![consistency](https://img.shields.io/badge/consistency_checks-34-blue)](tools/check_consistency.py)
 [![decoder](https://img.shields.io/badge/RID_decoder_tests-80-blue)](android/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-ESP32--P4%20%7C%20C3%20%7C%20C6-lightgrey)](firmware/)
@@ -220,7 +220,7 @@ python tools/check_consistency.py --fix
 > needed a restore from git. `tools/patchfile.py` now refuses control characters, and
 > the `line-endings` check scans every tracked file for them.
 
-33 checks. `--fix` repairs whitespace, BOM totals and any specification constant that has
+34 checks. `--fix` repairs whitespace, BOM totals and any specification constant that has
 drifted from `config.h` — the code is the source of truth, and the fixer rewrites the
 documentation to match, never the reverse. It runs in the pre-push hook on every push,
 including documentation-only ones.

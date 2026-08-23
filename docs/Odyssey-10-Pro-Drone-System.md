@@ -2494,7 +2494,7 @@ Odyssey-10-Pro-Drone-System/
 |   +-- bom.csv                     9-inch reference build
 |   +-- bom-variants.csv            what differs in the other nine
 +-- tools/
-|   +-- check_consistency.py        The specification-vs-code gate     [33 checks]
+|   +-- check_consistency.py        The specification-vs-code gate     [34 checks]
 |   +-- blackbox_decode.py          Flight log decoder, formats v2-v4
 |   +-- test_blackbox_decode.py     ...and its tests
 |   +-- patchfile.py                Line-ending-safe in-place edits
@@ -2524,6 +2524,7 @@ Odyssey-10-Pro-Drone-System/
 |   +-- odyssey-link.html           The LoRa/AUX frame format, field by field
 |   +-- odyssey-bringup.html        Bring-up status: four steps, four assumptions
 |   +-- odyssey-checklist.html      The §11 commissioning checklist, tickable
+|   +-- odyssey-findings.html       The findings ledger: 18 by review, 46 by doing
 |   +-- index.html                  The map for the nine sheets
 ```
 

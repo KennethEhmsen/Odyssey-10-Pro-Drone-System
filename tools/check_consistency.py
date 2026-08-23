@@ -2853,6 +2853,62 @@ def check_dshot_sheet(rep, fix):
                         f"at {res_hz/1e6:.0f} MHz, inverted={inverted}")
 
 
+def check_findings_ledger(rep, fix):
+    """docs/odyssey-findings.html must carry the counts §13 actually contains.
+
+    The sheet's entire argument is a ratio -- eighteen defects found by reading against
+    forty-six found by building -- so a stale count is not a cosmetic error, it is the
+    claim being wrong. Recount from §13 rather than trusting the number written down.
+    """
+    sheet_path = ROOT / "docs" / "odyssey-findings.html"
+    if not sheet_path.exists():
+        return
+    spec = read(SPEC)
+    if "## 13. Review Findings" not in spec:
+        rep.problem("findings-ledger", "section 13 is missing from the specification")
+        return
+    sec = spec[spec.index("## 13. Review Findings"):]
+
+    rows = [l for l in sec.splitlines()
+            if l.startswith("| ") and not re.match(r"^\| ?[-#]", l)
+            and "| # |" not in l and "Finding |" not in l]
+    numbered = [r for r in rows if re.match(r"^\| \d+ \|", r)]
+    later = [r for r in rows if not re.match(r"^\| \d+ \|", r)]
+
+    sev = {}
+    for m in re.finditer(r"^\| \d+ \| [^|]+\| (\w+)", sec, re.M):
+        sev[m.group(1)] = sev.get(m.group(1), 0) + 1
+
+    sheet = read(sheet_path)
+
+    def drawn(name):
+        m = re.search(rf"const {name} = (\d+)", sheet)
+        return int(m.group(1)) if m else None
+
+    for label, got, want in (("ORIGINAL", drawn("ORIGINAL"), len(numbered)),
+                             ("LATER", drawn("LATER"), len(later))):
+        if got is None:
+            rep.problem("findings-ledger",
+                        f"the ledger has no {label} constant to check against §13")
+        elif got != want:
+            rep.problem("findings-ledger",
+                        f"the ledger says {label}={got}, §13 contains {want}. The sheet's "
+                        f"whole argument is that ratio, so a stale count is the claim "
+                        f"being wrong")
+
+    drawn_sev = {m[0]: int(m[1]) for m in re.findall(r'\["(\w+)",(\d+)\]', sheet)}
+    drawn_sev = {k: v for k, v in drawn_sev.items() if k in sev or k in
+                 ("Critical", "High", "Medium", "Low")}
+    if drawn_sev != sev:
+        rep.problem("findings-ledger",
+                    f"the ledger draws severities {drawn_sev}; §13 records {sev}")
+        return
+
+    rep.note = getattr(rep, "note", [])
+    rep.note.append(f"findings-ledger: {len(numbered)} by review, {len(later)} by doing, "
+                    f"severities matching §13")
+
+
 CHECKS = [
     ("comment-continuation", "// comments ending in a backslash swallow the next line",
      check_comment_backslash),
@@ -2891,6 +2947,9 @@ CHECKS = [
     ("dshot-sheet",
      "the waveform sheet is drawn for the DShot the firmware sends",
      check_dshot_sheet),
+    ("findings-ledger",
+     "the ledger carries the counts section 13 actually contains",
+     check_findings_ledger),
     ("bom-mass",
      "the parts list and config.h agree on mass, ESC margin and connector, for every build",
      check_bom_mass),
