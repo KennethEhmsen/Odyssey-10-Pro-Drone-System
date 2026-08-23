@@ -1228,23 +1228,6 @@ void setup() {
   delay(200);
   Serial.println("\n=== " AIRFRAME_NAME " -- ESP32-P4 avionics ===");
 
-  // ---- BRING-UP BISECTION -----------------------------------------------------------
-  // Build with -DBRINGUP_STOP_AT=n to return from setup() early, so a fault that takes
-  // the USB console down with it can be located by halving instead of guessed at. On
-  // this board the console dies with the application, so a crash produces silence --
-  // and silence looks identical whatever the cause.
-  //
-  //   1  after the banner, before any hardware is touched
-  //   2  after the PWM outputs are attached
-  //   3  after I2C is brought up
-  //
-  // Remove once the firmware is known to boot on hardware.
-#if defined(BRINGUP_STOP_AT) && BRINGUP_STOP_AT <= 1
-  Serial.println("[BRINGUP] stage 1: banner only, no hardware touched");
-  Serial.flush();
-  return;
-#endif
-
   // Two builds are otherwise indistinguishable once flashed, and flying the wrong one
   // puts the gyro notch ~20 Hz off the actual motor peak and budgets the return-to-home
   // reserve from the wrong cruise current. Print the configuration so it can be checked
@@ -1315,123 +1298,26 @@ void setup() {
 #endif
   idleMotors();
 
-#if defined(BRINGUP_STOP_AT) && BRINGUP_STOP_AT <= 2
-  Serial.println("[BRINGUP] stage 2: PWM attached, motors idled");
-  Serial.flush();
-  return;
-#endif
-
-#if defined(BRINGUP_TRACE)
-  Serial.println("[TRACE] before pinMode(ARM_BUTTON)");
-  Serial.flush();
-  delay(60);
-#endif
   pinMode(PIN_ARM_BUTTON, INPUT_PULLUP);
-#if defined(BRINGUP_TRACE)
-  Serial.println("[TRACE] before pinMode(BEACON_LATCH)");
-  Serial.flush();
-  delay(60);
-#endif
   pinMode(PIN_BEACON_LATCH, OUTPUT);
   digitalWrite(PIN_BEACON_LATCH, LOW);
   // Driven HIGH by the Remote ID module while it is actually broadcasting.
   // Pulled down here so a missing or dead module reads as unhealthy and
   // blocks arming, rather than defaulting to "fine".
-#if defined(BRINGUP_TRACE)
-  Serial.println("[TRACE] before pinMode(REMOTEID_HEALTH gpio25)");
-  Serial.flush();
-  delay(60);
-#endif
   pinMode(PIN_REMOTEID_HEALTH, INPUT_PULLDOWN);
 
-#if defined(BRINGUP_STOP_AT) && BRINGUP_STOP_AT <= 21
-  Serial.println("[BRINGUP] stage 21: GPIO modes set");
-  Serial.flush();
-  return;
-#endif
-
-#if defined(BRINGUP_TRACE)
-  Serial.println("[TRACE] before analogReadResolution");
-  Serial.flush();
-  delay(60);
-#endif
   analogReadResolution(12);
 
-#if defined(BRINGUP_TRACE)
-  Serial.println("[TRACE] before flightState.begin");
-  Serial.flush();
-  delay(60);
-#endif
   flightState.begin();
 
-#if defined(BRINGUP_STOP_AT) && BRINGUP_STOP_AT <= 22
-  Serial.println("[BRINGUP] stage 22: state machine started");
-  Serial.flush();
-  return;
-#endif
-
   // ---- Peripherals ------------------------------------------------------------------
-#if defined(BRINGUP_TRACE)
-  Serial.println("[TRACE] before VtxSerial UART2");
-  Serial.flush();
-  delay(60);
-#endif
   VtxSerial.begin(115200, SERIAL_8N1, PIN_VTX_RX, PIN_VTX_TX);
 
-#if defined(BRINGUP_STOP_AT) && BRINGUP_STOP_AT <= 23
-  Serial.println("[BRINGUP] stage 23: VTX UART2 open");
-  Serial.flush();
-  return;
-#endif
-#if defined(BRINGUP_TRACE)
-  Serial.println("[TRACE] before LidarSerial UART3");
-  Serial.flush();
-  delay(60);
-#endif
   LidarSerial.begin(115200, SERIAL_8N1, PIN_LIDAR_RX, PIN_LIDAR_TX);
 
-#if defined(BRINGUP_STOP_AT) && BRINGUP_STOP_AT <= 24
-  Serial.println("[BRINGUP] stage 24: LiDAR UART3 open");
-  Serial.flush();
-  return;
-#endif
-#if defined(BRINGUP_TRACE)
-  Serial.println("[TRACE] before crsf.begin UART4");
-  Serial.flush();
-  delay(60);
-#endif
   crsf.begin(CrsfSerial);
 
-#if defined(BRINGUP_STOP_AT) && BRINGUP_STOP_AT <= 25
-  Serial.println("[BRINGUP] stage 25: CRSF UART4 open");
-  Serial.flush();
-  return;
-#endif
-#if defined(BRINGUP_TRACE)
-  Serial.println("[TRACE] before auxBus.begin LP-UART5");
-  Serial.flush();
-  delay(60);
-#endif
   auxBus.begin(AuxSerial);
-
-#if defined(BRINGUP_STOP_AT) && BRINGUP_STOP_AT <= 26
-  Serial.println("[BRINGUP] stage 26: AUX LP-UART5 open");
-  Serial.flush();
-  return;
-#endif
-
-
-#if defined(BRINGUP_STOP_AT) && BRINGUP_STOP_AT <= 3
-  Serial.println("[BRINGUP] stage 3: about to start I2C and the sensor hub");
-  Serial.flush();
-  return;
-#endif
-
-#if defined(BRINGUP_TRACE)
-  Serial.println("[TRACE] before sensors.begin (I2C)");
-  Serial.flush();
-  delay(60);
-#endif
 
   if (!sensors.begin()) {
     flightState.request(ODY_STATE_PREFLIGHT_FAIL, "sensor bring-up failed");
@@ -1494,18 +1380,5 @@ void setup() {
 // Everything runs in tasks; the Arduino loop task is left idle so it cannot compete
 // with the telemetry task for core 0.
 void loop() {
-#if defined(BRINGUP_STOP_AT)
-  // A heartbeat, so a capture can attach at any time rather than racing the banner.
-  // The firmware prints once at boot and is then silent until spoken to, which makes
-  // "connected too late" and "never booted" produce identical evidence.
-  {
-    static uint32_t beat = 0;
-    Serial.printf("[BRINGUP] stage %d alive %lu\n", BRINGUP_STOP_AT,
-                  (unsigned long)beat++);
-    Serial.flush();
-    delay(1000);
-    return;
-  }
-#endif
   vTaskDelay(pdMS_TO_TICKS(1000));
 }
