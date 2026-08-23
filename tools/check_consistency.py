@@ -2441,6 +2441,35 @@ def check_uart_allocation(rep, fix):
                     f"section 9.1 lists UART{port} as in use, but no HardwareSerial "
                     f"in the firmware claims it")
 
+    #  A port that is opened and never written to is a reservation for an intention,
+    #  not a peripheral. Finding 45: UART2 was allocated to the VTX's MSP OSD in the
+    #  specification, assigned two GPIOs, and paid for in the BOM -- and the firmware
+    #  only ever called begin() on it. Every other port has real uses.
+    sources = sorted((ROOT / "firmware" / "flight-controller" / "src").glob("*.cpp"))
+    sources += sorted((ROOT / "firmware" / "flight-controller" / "include").glob("*.h"))
+    corpus = "\n".join(read(p) for p in sources)
+
+    for name, port in sorted(objs.items()):
+        uses = 0
+        for m in re.finditer(re.escape(name), corpus):
+            line_start = corpus.rfind("\n", 0, m.start()) + 1
+            line_end = corpus.find("\n", m.end())
+            line = corpus[line_start:line_end if line_end != -1 else len(corpus)]
+            if re.search(rf"HardwareSerial\s+{re.escape(name)}\b", line):
+                continue
+            if re.search(rf"{re.escape(name)}\s*\.\s*begin\s*\(", line):
+                continue
+            if line.lstrip().startswith(("//", "*", "/*")):
+                continue
+            uses += 1
+        if uses == 0:
+            rep.problem("uart-allocation",
+                        f"{name} (UART{port}) is opened and then never used -- no read, "
+                        f"no write, and it is not handed to a driver. The port, its two "
+                        f"GPIOs and whatever the BOM bought for it are all reserved for "
+                        f"a feature that does not exist in code. See finding 45.",
+                        severity="warn")
+
     if not (used ^ documented) and all(len(v) == 1 for v in by_port.values()):
         rep.note = getattr(rep, "note", [])
         rep.note.append(f"uart-allocation: {len(objs)} ports, one peripheral each, "

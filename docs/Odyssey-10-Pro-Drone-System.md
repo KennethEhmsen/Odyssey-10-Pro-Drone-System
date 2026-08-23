@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 4.9 — the power rails are assigned, and the 3.3 V budget is stated
+**Document revision:** 5.0 — the MSP OSD is exposed as unimplemented, and the camera and gimbal question is answered
 
 ---
 
@@ -2089,6 +2089,36 @@ to filter a peak that RPM telemetry would have located exactly.
 > because both objects have their own pins. It is only visible when you draw the
 > peripheral behind them.
 
+> **FINDING 45. The MSP OSD is specified, wired, budgeted, bought — and not
+> implemented.** §1 lists "MSP telemetry stream to the 5.8 GHz VTX (UART2)" as a
+> feature. §9.1 allocates UART2 to it. §9.2 assigns GPIO 19 and 20. The BOM specifies a
+> VTX with MSP OSD support and pays $38 for it. The firmware:
+>
+> ```cpp
+> HardwareSerial VtxSerial(2);
+> VtxSerial.begin(115200, SERIAL_8N1, PIN_VTX_RX, PIN_VTX_TX);
+> ```
+>
+> That is the entire extent of it. **Nothing is ever written to that port**, and there is
+> no MSP encoder anywhere in the repository — no `MSP_` symbol, no frame builder, no
+> command table. The aircraft carries a peripheral, two pins, a UART and a more expensive
+> VTX for a feature that has never existed in code.
+>
+> Every other port earns its allocation: `GnssSerial` has eight uses beyond its `begin()`,
+> `LidarSerial` two, `CrsfSerial` and `AuxSerial` one each where they are handed to their
+> drivers. `VtxSerial` has none.
+>
+> This is the same shape as finding 40 — a thing that was written down and never run —
+> but caught from the other direction: not "this code was never compiled" but "this
+> feature was never coded". The `uart-allocation` check now requires that every port the
+> firmware opens is actually used, so a port cannot be reserved for an intention again.
+>
+> **Not corrected here, because there are two defensible answers and they are the
+> builder's to pick.** Either implement MSP and get the OSD that §1 promises, or drop the
+> claim, free UART2 and GPIO 19/20, and buy a cheaper VTX. What is not defensible is the
+> current state, where the specification and the parts list both describe an aircraft the
+> firmware is not.
+
 ### 8.4 Radio frequency plan
 
 This aircraft carries four transmitters. Two interactions matter.
@@ -2346,6 +2376,37 @@ of this aircraft. `CRUISE_CURRENT_A` — which sizes the return-to-home reserve 
 modelled rather than measured, and that remains the thrust stand's job in §4.3.2 step 3.
 The INA226 on the pack measures total draw, not per-rail, so the 5 V and 12 V budgets
 here cannot be confirmed in flight without instrumenting the BEC outputs separately.
+
+
+### 9.6 Camera, video, and what a gimbal would cost
+
+**The FPV camera is not controlled, and as specified does not need to be.** The RunCam
+Phoenix 2 Micro is an analogue camera: 12 V in, composite video out, straight to the VTX.
+There is no data wire between it and the flight controller and none is drawn in §9.5,
+because there is nothing to say to it. Its exposure and its own on-screen menu are set
+with the stick-driven menu on the camera itself, before flight.
+
+A camera the flight controller could talk to — changing exposure in the air, or driving
+its menu — needs RunCam Device Protocol on a UART. There is not one free (§9.1), so this
+is not a small addition.
+
+**There is no gimbal in this design.** Not in the parts list, not in the pinout, not in
+the firmware. If one is wanted, these are the four costs, and the fourth is the one that
+usually decides it:
+
+| | |
+| --- | --- |
+| **Serial gimbal** (SimpleBGC, STorM32) | **No UART is free.** All five are allocated and the LP-UART cannot reach a usable pin — finding 43. Unless UART2 is reclaimed from the unimplemented MSP OSD (finding 45), a serial gimbal has nowhere to attach |
+| **PWM gimbal**, 2 or 3 servos | Straightforward: 19 GPIOs are free on the aircraft (§9.7), and `PIN_PARACHUTE_SRV` already establishes the LEDC 50 Hz pattern to copy |
+| **Mass** | The payload reserve is **170 g** (§2.3). A 2-axis micro gimbal for an analogue camera is roughly 60–90 g and fits. A 3-axis is typically 120–180 g and consumes the entire reserve, which comes straight out of endurance |
+| **Where it physically goes** | **This is the real conflict.** "Underneath" is already occupied: the VL53L1X looks down for the landing flare and the touchdown veto, and the ballistic parachute needs a clear line. A gimbal hung below the frame obstructs the rangefinder — and a rangefinder that reads the gimbal instead of the ground does not fail loudly, it reports a confident wrong altitude at exactly the moment the aircraft is deciding whether it has landed |
+
+That last row is why this is a design question rather than a wiring one. The pins are the
+easy part.
+
+**If a gimbal is added, the downward ToF has to move or the gimbal has to be offset**, and
+whichever is chosen, §9.2's map, the `gpio-map` check and the mass model in `config.h`
+all have to move with it.
 
 
 ## 10. Software Architecture
@@ -2987,6 +3048,8 @@ Revision 2.0 introduced or left standing the following, all corrected here.
 | The blackbox ring buffer used `volatile` for `head_`, `tail_` and `dropped_` across two CPU cores — `push()` in the flight loop on core 1, `service()` in the storage task on core 0. `volatile` emits no barrier and does not order the non-volatile store of `ring_[head_]` against the volatile store to `head_`, so the consumer could observe an advanced index while the slot still held the previous record. `BlackBoxRecord` is 54 bytes, so the failure is a torn record written silently into the one file that exists to explain a crash | `std::atomic` with paired acquire/release, and a `static_assert` that the atomic is lock-free so no mutex enters the 500 Hz flight loop. `endFlight()` also drained *before* clearing its open flag, stranding every record pushed in between — the last samples before landing — and `service()` had two callers on tasks that preempt each other, sharing one batch buffer. §10.4 |
 | Nine of the ten build combinations had no parts list. The BOM covered the 9-inch reference only, while `config.h` happily built 7-inch and 10-inch aircraft whose frame, motors, propellers, battery and ESC were nowhere specified | `hardware/bom-variants.csv` covers all ten, and the `bom-mass` check reconciles every build's parts against the mass model in `config.h`. §2.1 |
 | `check_bom()` verified BOM arithmetic and the price quoted in §2, but nothing compared BOM **mass** against `config.h` — `AIRFRAME_AUW_G` sizes thrust-to-weight, hover power and the energy budget, and was free to drift from the parts that produce it | Reconciled for all ten builds, including an explicit `Airborne Mass g` column so the ground-station radio the BOM also buys is not counted as flying mass |
+| §1 advertises an MSP telemetry stream to the VTX, §9.1 allocates UART2 to it, §9.2 assigns GPIO 19/20 and the BOM buys an MSP-capable VTX — but the firmware only calls `VtxSerial.begin()` and never writes a byte. No MSP encoder exists anywhere in the repository | Recorded as finding 45 and deliberately left open: implement MSP, or drop the claim and reclaim the UART and pins. `uart-allocation` now fails any port that is opened and never used |
+| The FPV camera has no control path and the design never claimed one — but nothing said so, so a reader could reasonably assume the VTX UART covered it. The RunCam Phoenix 2 is analogue: 12 V in, composite out, no data wire | Stated explicitly in §9.6, together with what a controllable camera or a gimbal would actually cost in UARTs, pins and payload mass |
 | The bidirectional-DShot GCR decode read its four 5-bit groups from the wrong bit offsets, and most-significant group first. Every legal group still decoded to a legal nibble, so a corrupted RPM would have passed its checksum and been fed to the notch as a measurement | Corrected to read groups low-first at offsets 0/5/10/15. Caught by a full encode/decode round trip, which is why the test builds the wire format rather than trusting the decoder against itself |
 | The flight loop's period is `pdMS_TO_TICKS(1000 / FLIGHT_LOOP_HZ)`, which at the ESP-IDF default 100 Hz tick rounds to ZERO ticks — `vTaskDelayUntil` would not delay and the loop would spin, starving its core. The 1000 Hz 7-inch build has depended on Arduino-ESP32's 1000 Hz tick since revision 2.8 with nothing declaring it | `static_assert` on `configTICK_RATE_HZ`, plus one requiring `FLIGHT_LOOP_HZ` to divide 1000 exactly. Host tests check every divider derived from the loop rate. §8.3.4 |
 | Second-harmonic notching was proposed on the assumption that the SDFT already computes those bins, so tracking the overtone would be a modest addition. The bins exist, but in 8 of 10 builds 2·f₀ lands above the MPU-6050 anti-alias corner, so the IMU has already attenuated it | Implemented, but gated on observability computed at runtime from the tracked fundamental. Where 2·f₀ does not clear the corner the notch never engages, because notching an already-filtered peak buys phase lag for nothing. §8.3.3 |
