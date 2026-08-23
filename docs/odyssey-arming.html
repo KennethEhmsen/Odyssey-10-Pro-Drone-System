@@ -1,0 +1,360 @@
+<title>Odyssey-10 Pro Arming Gate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+/* Fourth sheet, same system as the interconnect, layout and flow. */
+:root{
+  --paper:#F1F4F5;--sheet:#FBFCFC;--rule:#C9D2D6;--rule-soft:#E2E8EA;
+  --ink:#131C22;--ink-2:#46565F;--ink-3:#6E818B;--copper:#A85C34;
+  --c-power:#BE3F24;--c-i2c:#8A5E0C;--c-spi:#61469C;
+  --c-uart:#0B6670;--c-pwm:#2A6E36;--c-gpio:#55666F;
+  --warn-bg:#FBF0E6;--warn-edge:#D9A273;
+  --grid:rgba(19,28,34,.055);
+  --shadow:0 1px 2px rgba(19,28,34,.06),0 8px 24px -12px rgba(19,28,34,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{margin:0;background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:32px 32px,32px 32px;color:var(--ink);
+  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:48px 24px 96px;display:flex;flex-direction:column;gap:40px}
+.masthead{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--copper)}
+h1{font-family:Archivo,sans-serif;font-weight:700;font-size:clamp(30px,5.2vw,46px);
+  line-height:1.05;letter-spacing:-.021em;margin:0;text-wrap:balance}
+.standfirst{max-width:66ch;font-size:16.5px;color:var(--ink-2);margin:0}
+.provenance{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3);
+  padding-top:6px;border-top:1px solid var(--rule-soft)}
+.provenance b{color:var(--ink-2);font-weight:600}
+.dot{color:var(--rule)}
+section{display:flex;flex-direction:column;gap:16px}
+h2{font-family:Archivo,sans-serif;font-weight:600;font-size:12px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--ink-3);margin:0;padding-bottom:9px;
+  border-bottom:1.5px solid var(--rule);display:flex;justify-content:space-between;
+  align-items:baseline;gap:16px}
+h2 span{font-family:"IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:none;
+  font-weight:400;color:var(--ink-3)}
+.lede{max-width:68ch;color:var(--ink-2);margin:0}
+.sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:2px;
+  box-shadow:var(--shadow);overflow-x:auto;overflow-y:hidden}
+.sheet svg{display:block;min-width:720px;width:100%;height:auto}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:640px}
+caption{text-align:left;font-size:13px;color:var(--ink-3);padding-bottom:10px}
+th{text-align:left;font-family:Archivo,sans-serif;font-size:11px;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+  padding:0 14px 8px 0;border-bottom:1.5px solid var(--rule);white-space:nowrap}
+td{padding:8px 14px 8px 0;border-bottom:1px solid var(--rule-soft);vertical-align:baseline}
+tbody tr:last-child td{border-bottom:none}
+.mono,td.bit{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+td.bit{font-weight:600;white-space:nowrap;border-left:3px solid var(--cls,var(--rule));
+  padding-left:11px}
+td.note{color:var(--ink-2);font-size:13px}
+.pill{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;
+  font-weight:500;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;
+  border-radius:2px;border:1px solid currentColor;white-space:nowrap}
+.callout{background:var(--warn-bg);border:1px solid var(--warn-edge);border-left-width:3px;
+  border-radius:2px;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.callout h3{font-family:Archivo,sans-serif;font-size:14px;font-weight:700;margin:0}
+.callout p{margin:0;font-size:14px;color:var(--ink-2);max-width:70ch}
+code{font-family:"IBM Plex Mono",monospace;font-size:.92em;color:var(--ink)}
+footer{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3);
+  border-top:1px solid var(--rule-soft);padding-top:16px;line-height:1.8}
+:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Odyssey-10 Pro &middot; Arming &middot; Sheet 4 of 4</div>
+    <h1>Why It Will Not Arm</h1>
+    <p class="standfirst">
+      <span id="count">Ten</span> things must be true at once, and the console tells you
+      which one is not. This is the decoder for <code>ARMING IS BLOCKED</code> — every
+      condition, its constant, and what to do about it.
+    </p>
+    <div class="provenance" id="provenance"></div>
+  </header>
+
+  <section>
+    <h2>The gate <span>evaluateArmBlockers() · main.cpp:928</span></h2>
+    <p class="lede">
+      In order. The state test wraps everything — from any state but
+      <code>PREFLIGHT_OK</code> the blockers are never even evaluated, which is why a
+      failed calibration never reaches this sheet.
+    </p>
+    <div class="sheet">
+      <svg id="gate" role="img" aria-label="The arming gate as a chain of conditions, all of which must pass"></svg>
+    </div>
+  </section>
+
+  <section>
+    <h2>The seven blocker bits <span>armBlockFlags · broadcast at 2 Hz</span></h2>
+    <div class="scroll"><table id="blockers">
+      <caption>The ground station receives this byte, so the reason is visible without a console.</caption>
+      <thead><tr><th>Bit</th><th>Raised when</th><th>Constant</th><th>What to do</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>Bit 5 can never be set</h3>
+      <p>
+        <code>ODY_ARMBLOCK_CALIB</code> — &ldquo;calibration did not pass&rdquo; — is
+        defined in the wire protocol and <b>raised by no code anywhere</b>. Every other
+        blocker has exactly one call site; this one has zero.
+        <br><br>
+        It is unreachable by construction rather than by oversight: blockers are only
+        evaluated from <code>PREFLIGHT_OK</code>, which is the state you are in
+        <em>because</em> calibration passed. But the ground station decodes this byte and
+        will never see bit 5, so the protocol advertises a reason it cannot report.
+        Harmless today; a trap for anyone who writes a decoder from the header.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Required, versus merely watched <span>6 of 13 sensors</span></h2>
+    <p class="lede">
+      Thirteen sensor flags exist. Only six gate arming — so seven can be dead and the
+      aircraft will still take off. That is mostly deliberate, and worth knowing exactly.
+    </p>
+    <div class="scroll"><table id="sensors">
+      <thead><tr><th>Sensor</th><th>Bit</th><th>Gates arming?</th><th>Consequence if dead in flight</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>You can arm without the rangefinder that lands the aircraft</h3>
+      <p>
+        <code>ODY_SENS_TOF_DOWN</code> is not in the required set, but §8 gives the
+        VL53L1X the <b>landing flare and the touchdown veto</b>. The same is true of the
+        forward LiDAR, the backup IMU, the SD card, the LoRa link and the AUX bus.
+        <br><br>
+        Most of those are right: a dead SD card should not ground an aircraft, and
+        refusing to fly without telemetry would be worse than flying without it. The
+        downward ToF is the one worth a deliberate decision rather than an inherited
+        default — it degrades to a barometric landing, which works, but nobody has
+        written down that this was chosen.
+      </p>
+    </div>
+  </section>
+
+  <footer id="titleblock"></footer>
+</div>
+
+<script>
+const DOC_REV = "5.1";
+
+/* Everything below is read from the source. Constants from config.h, bits from
+   shared/odyssey_link.h, order from evaluateArmBlockers() in main.cpp. */
+const GATES = [
+  {n:"state == PREFLIGHT_OK", d:"wraps the whole arming block",
+   c:"main.cpp:928", kind:"guard",
+   note:"From any other state the blockers are never evaluated"},
+  {n:"SENSORS", d:"required sensor set is healthy", c:"ODY_ARM_REQUIRED_SENSORS",
+   kind:"blocker", bit:0},
+  {n:"NO_HOME", d:"GNSS home position locked", c:"homeLocked",
+   kind:"blocker", bit:1},
+  {n:"RC_STALE", d:"a fresh CRSF frame exists", c:"CRSF_TIMEOUT_MS 500",
+   kind:"blocker", bit:3},
+  {n:"THROTTLE", d:"stick at the bottom, from a live frame", c:"ARM_THROTTLE_MAX_US 1050",
+   kind:"blocker", bit:2, finding:"finding 5"},
+  {n:"BATTERY", d:"pack at or above the launch minimum", c:"PACK_LAUNCH_MIN_V 23.10 V",
+   kind:"blocker", bit:4},
+  {n:"ATTITUDE", d:"aircraft roughly level", c:"ARM_MAX_TILT_DEG 8.0",
+   kind:"blocker", bit:6},
+  {n:"Arm switch", d:"transmitter switch on, from a live frame", c:"pilot.armSwitch",
+   kind:"human"},
+  {n:"Arm button", d:"physical button held down", c:"PIN_ARM_BUTTON, active LOW",
+   kind:"human"},
+  {n:"Held long enough", d:"deliberate press, not a brush", c:"ARM_BUTTON_HOLD_MS 1000",
+   kind:"human"}
+];
+
+const BLOCKERS = [
+  [0,"ODY_ARMBLOCK_SENSORS","A sensor in the required set is unhealthy",
+   "ODY_ARM_REQUIRED_SENSORS","Check the [SENSORS] line at boot — it names each one",""],
+  [1,"ODY_ARMBLOCK_NO_HOME","GNSS has not locked a home position yet",
+   "homeLocked","Wait for a fix outdoors. Without home there is nothing to return to",""],
+  [2,"ODY_ARMBLOCK_THROTTLE","Throttle stick is not at minimum, or no live frame to read it from",
+   "ARM_THROTTLE_MAX_US 1050 µs","Lower the stick. The value must come from a FRESH frame — a stale one does not count","finding 5"],
+  [3,"ODY_ARMBLOCK_RC_STALE","No CRSF frame within the timeout",
+   "CRSF_TIMEOUT_MS 500 ms","Transmitter on and bound. ExpressLRS runs at ≥50 Hz, so 500 ms is 25 missed frames",""],
+  [4,"ODY_ARMBLOCK_BATTERY","Pack below the launch minimum",
+   "PACK_LAUNCH_MIN_V 23.10 V (6S)","Charge it. This is a launch floor, well above the in-flight critical threshold",""],
+  [5,"ODY_ARMBLOCK_CALIB","<b>Never raised.</b> No call site exists",
+   "—","Nothing — see below. Calibration failure is caught by the state machine instead",""],
+  [6,"ODY_ARMBLOCK_ATTITUDE","Roll or pitch beyond the level limit",
+   "ARM_MAX_TILT_DEG 8.0°","Put it on level ground. Also catches an IMU that has not settled",""]
+];
+
+const SENSORS = [
+  ["ODY_SENS_IMU_PRIMARY",0,true, "Flight is impossible — the loop requests FAILSAFE_LANDING on sustained loss"],
+  ["ODY_SENS_IMU_BACKUP",1,false,"No redundancy left on attitude"],
+  ["ODY_SENS_BARO",2,true, "No altitude hold above rangefinder range"],
+  ["ODY_SENS_MAG",3,true, "Return-to-home cannot steer"],
+  ["ODY_SENS_GNSS",4,true, "No home, no return, no Remote ID position"],
+  ["ODY_SENS_LIDAR_FWD",5,false,"No forward obstacle stop"],
+  ["ODY_SENS_TOF_DOWN",6,false,"<b>Landing flare and touchdown veto lost</b> — falls back to barometric"],
+  ["ODY_SENS_CURRENT",7,true, "Consumed-mAh reserve becomes an estimate, and it sizes the return leg"],
+  ["ODY_SENS_SDCARD",8,false,"No flight log. Deliberately not a blocker"],
+  ["ODY_SENS_LORA",9,false,"No telemetry and no ground-station abort"],
+  ["ODY_SENS_CRSF_RC",10,true, "No manual control at all"],
+  ["ODY_SENS_AUX_BUS",11,false,"Beacon and Remote ID stop being updated"],
+  ["ODY_SENS_REMOTE_ID",12,"opt","Only required when <code>REQUIRE_REMOTE_ID_TO_ARM</code> is set — default 0. See §12.1"]
+];
+
+const $=(s)=>document.querySelector(s);
+const SVGNS="http://www.w3.org/2000/svg";
+const el=(n,a={})=>{const e=document.createElementNS(SVGNS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const esc=(s)=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+const KIND = {
+  guard:  {colour:"var(--c-gpio)",  label:"state guard"},
+  blocker:{colour:"var(--c-power)", label:"blocker bit"},
+  human:  {colour:"var(--c-pwm)",   label:"deliberate act"}
+};
+
+/* ---- the gate ---------------------------------------------------------
+   A chain, not a decision tree: every condition must pass, and any one
+   failing returns to the same place. Drawing it as a tree would imply an
+   order of evaluation that does not matter -- all seven bits are computed
+   every pass, so the console can name all of them at once.               */
+function drawGate(){
+  const svg=$("#gate");
+  const ROW=52,BW=372,PAD=30,X=PAD+96,FAIL=X+BW+126;
+  const W=FAIL+150, H=PAD*2+GATES.length*ROW+62;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.setAttribute("font-family",'"IBM Plex Mono",ui-monospace,monospace');
+  const t=(x,y,s,o={})=>{const n=el("text",Object.assign({x,y,"font-size":11,
+    fill:"var(--ink)","dominant-baseline":"middle"},o));n.textContent=s;svg.appendChild(n);return n;};
+
+  const top=PAD+26;
+  t(X,PAD+8,"ALL OF THESE, EVERY PASS",{"font-size":9,fill:"var(--ink-3)",
+    "letter-spacing":".12em"});
+  t(FAIL,PAD+8,"OTHERWISE",{"font-size":9,fill:"var(--c-power)","letter-spacing":".12em"});
+
+  /* the spine down the left */
+  svg.appendChild(el("path",{d:`M ${X-40} ${top+ROW/2} V ${top+(GATES.length-0.5)*ROW}`,
+    stroke:"var(--c-pwm)","stroke-width":2,opacity:.4,fill:"none"}));
+
+  GATES.forEach((g,i)=>{
+    const y=top+i*ROW, cy=y+ROW/2;
+    const k=KIND[g.kind], colour=k.colour;
+
+    svg.appendChild(el("path",{d:`M ${X-40} ${cy} H ${X}`,
+      stroke:"var(--c-pwm)","stroke-width":1.2,opacity:.4,fill:"none"}));
+    svg.appendChild(el("circle",{cx:X-40,cy,r:4,fill:colour}));
+
+    svg.appendChild(el("rect",{x:X,y:y+5,width:BW,height:ROW-10,rx:2,
+      fill:"var(--paper)",stroke:colour,"stroke-width":g.kind==="guard"?2:1.3}));
+    svg.appendChild(el("rect",{x:X,y:y+5,width:3,height:ROW-10,fill:colour}));
+
+    t(X+14,cy-7,g.n,{"font-size":12,"font-weight":600,"font-family":"Archivo, sans-serif"});
+    t(X+14,cy+8,g.d,{"font-size":9.5,fill:"var(--ink-3)"});
+    t(X+BW-12,cy-7,g.c,{"text-anchor":"end","font-size":9,fill:colour});
+    if(g.finding) t(X+BW-12,cy+8,g.finding,{"text-anchor":"end","font-size":8.5,
+      fill:"var(--ink-3)"});
+
+    /* the failure exit */
+    if(g.kind!=="guard"){
+      svg.appendChild(el("path",{d:`M ${X+BW} ${cy} H ${FAIL-10}`,
+        stroke:"var(--c-power)","stroke-width":1,opacity:.5,fill:"none",
+        "stroke-dasharray":"3 3"}));
+      svg.appendChild(el("path",{d:`M ${FAIL-10} ${cy} l -6 -3.5 v 7 z`,
+        fill:"var(--c-power)",opacity:.6}));
+      const msg = g.kind==="blocker" ? `bit ${g.bit} set, broadcast` : "hold timer resets";
+      t(FAIL,cy,msg,{"font-size":9,fill:"var(--c-power)",opacity:.9});
+    }else{
+      t(FAIL,cy,"blockers never evaluated",{"font-size":9,fill:"var(--ink-3)"});
+    }
+  });
+
+  /* the outcome */
+  const oy=top+GATES.length*ROW+4;
+  svg.appendChild(el("path",{d:`M ${X-40} ${top+(GATES.length-0.5)*ROW} V ${oy+16}`,
+    stroke:"var(--c-pwm)","stroke-width":2,opacity:.4,fill:"none"}));
+  svg.appendChild(el("path",{d:`M ${X-40} ${oy+22} l -5 -8 l 10 0 z`,
+    fill:"var(--c-pwm)",transform:`rotate(180 ${X-40} ${oy+18})`}));
+  svg.appendChild(el("rect",{x:X,y:oy,width:BW,height:36,rx:2,
+    fill:"var(--paper)",stroke:"var(--c-pwm)","stroke-width":2}));
+  svg.appendChild(el("rect",{x:X,y:oy,width:3,height:36,fill:"var(--c-pwm)"}));
+  t(X+14,oy+18,"ARMED",{"font-size":13,"font-weight":700,
+    "font-family":"Archivo, sans-serif",fill:"var(--c-pwm)"});
+  t(X+92,oy+18,"latch ground ref · reset controllers · open log",
+    {"font-size":9,fill:"var(--ink-3)"});
+}
+
+function tables(){
+  $("#blockers tbody").innerHTML=BLOCKERS.map(b=>{
+    const dead=b[0]===5;
+    return `<tr>
+      <td class="bit" style="--cls:${dead?"var(--ink-3)":"var(--c-power)"}">bit ${b[0]}</td>
+      <td><span class="mono" style="font-size:12px">${esc(b[1])}</span><br>
+          <span style="color:var(--ink-2);font-size:12.5px">${b[2]}</span></td>
+      <td class="mono" style="font-size:12px;color:${dead?"var(--ink-3)":"var(--c-power)"}">${esc(b[3])}</td>
+      <td class="note">${b[4]}${b[5]?` <span class="pill" style="color:var(--copper)">${esc(b[5])}</span>`:""}</td>
+    </tr>`;}).join("");
+
+  $("#sensors tbody").innerHTML=SENSORS.map(s=>{
+    const req=s[2]===true, opt=s[2]==="opt";
+    const colour=req?"var(--c-power)":opt?"var(--c-i2c)":"var(--ink-3)";
+    const label=req?"REQUIRED":opt?"OPT-IN":"watched only";
+    return `<tr>
+      <td class="bit" style="--cls:${colour}"><span class="mono" style="font-size:12px">${esc(s[0])}</span></td>
+      <td class="mono">${s[1]}</td>
+      <td><span class="pill" style="color:${colour}">${label}</span></td>
+      <td class="note">${s[3]}</td>
+    </tr>`;}).join("");
+
+  //  Written once, in the data. The standfirst said "Nine" while the provenance line
+  //  said 10, because one was prose and the other was counted.
+  const WORDS=["zero","one","two","three","four","five","six","seven","eight","nine",
+               "Ten","Eleven","Twelve"];
+  $("#count").textContent = WORDS[GATES.length] || String(GATES.length);
+
+  const req=SENSORS.filter(s=>s[2]===true).length;
+  $("#provenance").innerHTML=[
+    `<b>Gate</b> evaluateArmBlockers()`,`<span class="dot">/</span>`,
+    `<b>Conditions</b> ${GATES.length}`,`<span class="dot">/</span>`,
+    `<b>Blocker bits</b> 7, one dead`,`<span class="dot">/</span>`,
+    `<b>Sensors</b> ${req} of ${SENSORS.length} required`,`<span class="dot">/</span>`,
+    `<b>Doc</b> rev ${DOC_REV}`
+  ].join(" ");
+
+  $("#titleblock").innerHTML=
+    `Odyssey-10 Pro &middot; arming gate, revision ${DOC_REV}<br>`+
+    `Conditions and their order from <code>evaluateArmBlockers()</code> in `+
+    `<code>main.cpp</code>; bits from <code>shared/odyssey_link.h</code>; every `+
+    `threshold from <code>config.h</code>. <code>REQUIRE_REMOTE_ID_TO_ARM</code> is 0 by `+
+    `default, which is correct for a privately built sub-25 kg aircraft in the EU open `+
+    `category and wrong almost everywhere else &mdash; see §12.1.<br>`+
+    `If the code and this sheet disagree, the code is right and this sheet is a bug.`;
+}
+
+drawGate();
+tables();
+</script>

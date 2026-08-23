@@ -2494,7 +2494,7 @@ Odyssey-10-Pro-Drone-System/
 |   +-- bom.csv                     9-inch reference build
 |   +-- bom-variants.csv            what differs in the other nine
 +-- tools/
-|   +-- check_consistency.py        The specification-vs-code gate     [29 checks]
+|   +-- check_consistency.py        The specification-vs-code gate     [30 checks]
 |   +-- blackbox_decode.py          Flight log decoder, formats v2-v4
 |   +-- test_blackbox_decode.py     ...and its tests
 |   +-- patchfile.py                Line-ending-safe in-place edits
@@ -2515,6 +2515,7 @@ Odyssey-10-Pro-Drone-System/
 |   +-- odyssey-schematic.html      Interconnect and power tree, generated from config.h
 |   +-- odyssey-layout.html         Airframe layout: where every part is bolted
 |   +-- odyssey-flow.html           System blocks and the escalate-only state ladder
+|   +-- odyssey-arming.html         Every condition that blocks arming, and its constant
 ```
 
 ### 10.2 Task structure

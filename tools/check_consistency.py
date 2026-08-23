@@ -2605,6 +2605,56 @@ def check_flow_transitions(rep, fix):
                         f"drawn, plus {runtime} built at runtime")
 
 
+def check_arming_sheet(rep, fix):
+    """docs/odyssey-arming.html must carry every arm-blocker bit the protocol defines.
+
+    The sheet exists to be the decoder for a blocked arm, so a blocker it does not list
+    is the one that will strand somebody on a field. Bits are matched rather than
+    conditions, because the bit is what the ground station receives.
+
+    This also pins ODY_ARMBLOCK_CALIB: it is defined, never raised, and the sheet says
+    so. If somebody later gives it a call site, the "never raised" claim becomes false
+    and this check will say so.
+    """
+    sheet_path = ROOT / "docs" / "odyssey-arming.html"
+    if not sheet_path.exists():
+        return
+    link  = read(LINK_H)
+    main  = read(ROOT / "firmware" / "flight-controller" / "src" / "main.cpp")
+    sheet = read(sheet_path)
+
+    defined = set(re.findall(r"(ODY_ARMBLOCK_[A-Z_]+)\s*=", link))
+    if not defined:
+        rep.problem("arming-sheet", "no ODY_ARMBLOCK_* bits found in odyssey_link.h")
+        return
+
+    for bit in sorted(defined):
+        if bit not in sheet:
+            rep.problem("arming-sheet",
+                        f"{bit} is defined in the protocol but docs/odyssey-arming.html "
+                        f"does not list it. That sheet is the decoder for a blocked arm; "
+                        f"a missing bit is the one that strands somebody on a field")
+
+    #  Which bits does the firmware actually raise?
+    raised = set(re.findall(r"flags \|= (ODY_ARMBLOCK_[A-Z_]+)", main))
+    dead = defined - raised
+    claims_dead = "Never raised" in sheet or "never raised" in sheet
+
+    if dead and not claims_dead:
+        rep.problem("arming-sheet",
+                    f"{', '.join(sorted(dead))} is defined but never raised, and the "
+                    f"sheet does not say so")
+    if not dead and claims_dead:
+        rep.problem("arming-sheet",
+                    "the sheet says a blocker is never raised, but every defined bit now "
+                    "has a call site. The sheet has gone stale in the good direction")
+
+    if not (defined - set(re.findall(r"(ODY_ARMBLOCK_[A-Z_]+)", sheet))):
+        rep.note = getattr(rep, "note", [])
+        rep.note.append(f"arming-sheet: all {len(defined)} blocker bits drawn, "
+                        f"{len(raised)} raised in firmware, {len(dead)} dead")
+
+
 CHECKS = [
     ("comment-continuation", "// comments ending in a backslash swallow the next line",
      check_comment_backslash),
@@ -2631,6 +2681,9 @@ CHECKS = [
     ("flow-transitions",
      "the flow sheet lists every state transition the firmware can make",
      check_flow_transitions),
+    ("arming-sheet",
+     "the arming sheet lists every blocker bit, and flags the dead one",
+     check_arming_sheet),
     ("bom-mass",
      "the parts list and config.h agree on mass, ESC margin and connector, for every build",
      check_bom_mass),
