@@ -238,7 +238,7 @@ const TRANS = [
 
 const IMPOSSIBLE = [
   ["FAILSAFE_LANDING while in FREEFALL_PARACHUTE","<b>Refused.</b> The parachute state stands","Rank 7 cannot displace rank 8. This is finding 6 — the original defect restarted the motors under a deployed canopy"],
-  ["ARMED while in PREFLIGHT_FAIL","<b>Honoured.</b> 4 &gt; 2","A ranked ladder cannot express &ldquo;never arm after a failed preflight&rdquo;. That is enforced separately, by the arming gate, not by the state machine"],
+  ["ARMED while in PREFLIGHT_FAIL","<b>Never requested.</b>","The ladder <em>would</em> honour it — 4 &gt; 2 — so the protection is not here. The entire arming block is wrapped in <code>if (state == ODY_STATE_PREFLIGHT_OK)</code>, so a failed preflight means the request is never made. Worth knowing exactly where the guard lives: it is not the ladder, and it is not the arm-blocker flags"],
   ["PREFLIGHT_OK while in ARMED","<b>Refused.</b> 3 &lt; 4","De-escalation is legal only out of DISARMED, and only to PREFLIGHT_OK or lower"],
   ["Any transition, from either core, mid-decision","<b>Atomic.</b>","Every move is one test-and-set inside a spinlock. There is no window between the guard and the store"]
 ];
