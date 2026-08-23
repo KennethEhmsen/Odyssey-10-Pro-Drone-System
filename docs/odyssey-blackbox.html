@@ -1,0 +1,445 @@
+<title>Odyssey-10 Pro BlackBox Format</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+/* Fifth sheet, same system as the others. */
+:root{
+  --paper:#F1F4F5;--sheet:#FBFCFC;--rule:#C9D2D6;--rule-soft:#E2E8EA;
+  --ink:#131C22;--ink-2:#46565F;--ink-3:#6E818B;--copper:#A85C34;
+  --c-power:#BE3F24;--c-i2c:#8A5E0C;--c-spi:#61469C;
+  --c-uart:#0B6670;--c-pwm:#2A6E36;--c-gpio:#55666F;
+  --warn-bg:#FBF0E6;--warn-edge:#D9A273;
+  --grid:rgba(19,28,34,.055);
+  --shadow:0 1px 2px rgba(19,28,34,.06),0 8px 24px -12px rgba(19,28,34,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{margin:0;background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:32px 32px,32px 32px;color:var(--ink);
+  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:48px 24px 96px;display:flex;flex-direction:column;gap:40px}
+.masthead{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--copper)}
+h1{font-family:Archivo,sans-serif;font-weight:700;font-size:clamp(30px,5.2vw,46px);
+  line-height:1.05;letter-spacing:-.021em;margin:0;text-wrap:balance}
+.standfirst{max-width:66ch;font-size:16.5px;color:var(--ink-2);margin:0}
+.provenance{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3);
+  padding-top:6px;border-top:1px solid var(--rule-soft)}
+.provenance b{color:var(--ink-2);font-weight:600}
+.dot{color:var(--rule)}
+section{display:flex;flex-direction:column;gap:16px}
+h2{font-family:Archivo,sans-serif;font-weight:600;font-size:12px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--ink-3);margin:0;padding-bottom:9px;
+  border-bottom:1.5px solid var(--rule);display:flex;justify-content:space-between;
+  align-items:baseline;gap:16px}
+h2 span{font-family:"IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:none;
+  font-weight:400;color:var(--ink-3)}
+.lede{max-width:68ch;color:var(--ink-2);margin:0}
+.sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:2px;
+  box-shadow:var(--shadow);overflow-x:auto;overflow-y:hidden}
+.sheet svg{display:block;min-width:780px;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:"IBM Plex Mono",monospace;
+  font-size:12px;color:var(--ink-2)}
+.legend i{display:inline-block;width:22px;height:3px;margin-right:8px;
+  vertical-align:middle;border-radius:1px}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:660px}
+caption{text-align:left;font-size:13px;color:var(--ink-3);padding-bottom:10px}
+th{text-align:left;font-family:Archivo,sans-serif;font-size:11px;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+  padding:0 14px 8px 0;border-bottom:1.5px solid var(--rule);white-space:nowrap}
+td{padding:7px 14px 7px 0;border-bottom:1px solid var(--rule-soft);vertical-align:baseline}
+tbody tr:last-child td{border-bottom:none}
+.mono,td.off,td.ty{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+td.off{font-weight:600;white-space:nowrap;border-left:3px solid var(--cls,var(--rule));
+  padding-left:11px;text-align:right}
+td.ty{color:var(--ink-3);white-space:nowrap}
+td.note{color:var(--ink-2);font-size:13px}
+.pill{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;
+  font-weight:500;letter-spacing:.06em;padding:2px 8px;border-radius:2px;
+  border:1px solid currentColor;white-space:nowrap}
+.callout{background:var(--warn-bg);border:1px solid var(--warn-edge);border-left-width:3px;
+  border-radius:2px;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.callout h3{font-family:Archivo,sans-serif;font-size:14px;font-weight:700;margin:0}
+.callout p{margin:0;font-size:14px;color:var(--ink-2);max-width:70ch}
+code{font-family:"IBM Plex Mono",monospace;font-size:.92em;color:var(--ink)}
+footer{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3);
+  border-top:1px solid var(--rule-soft);padding-top:16px;line-height:1.8}
+:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Odyssey-10 Pro &middot; BlackBox &middot; Sheet 5 of 5</div>
+    <h1>Fifty-Four Bytes</h1>
+    <p class="standfirst">
+      One record, one hundred times a second. Little-endian, packed, no padding — every
+      offset below is <em>computed</em> from the field list, not transcribed, so this
+      sheet cannot disagree with itself about where a field starts.
+    </p>
+    <div class="provenance" id="provenance"></div>
+  </header>
+
+  <section>
+    <h2>File layout <span>header once, then records to the end</span></h2>
+    <div class="sheet">
+      <svg id="file" role="img" aria-label="A blackbox file: a 40-byte header followed by 54-byte records"></svg>
+    </div>
+  </section>
+
+  <section>
+    <h2>The record <span id="recspan"></span></h2>
+    <p class="lede">
+      Grouped by what the field is for. The ruler across the top is absolute byte offset
+      from the start of the record.
+    </p>
+    <div class="sheet">
+      <svg id="map" role="img" aria-label="Byte map of the 54-byte v4 blackbox record"></svg>
+    </div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section>
+    <h2>Every field <span>28 fields · v4</span></h2>
+    <div class="scroll"><table id="fields">
+      <caption>Offsets computed from the declaration order and the type sizes.</caption>
+      <thead><tr><th>Offset</th><th>Type</th><th>Field</th><th>Units and meaning</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Version history <span>append-only, on purpose</span></h2>
+    <div class="scroll"><table id="versions">
+      <thead><tr><th>Version</th><th>Bytes</th><th>Added</th><th>Still decodable?</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>The decoder reads old logs on purpose</h3>
+      <p>
+        v2 and v3 records still decode. A flight recorder whose reader only understands
+        the newest format silently makes older flights unreadable, which is the opposite
+        of what a flight recorder is for — so every version is appended at the end and
+        nothing is ever reordered or resized.
+        <br><br>
+        The header carries <code>recordBytes</code>, and the decoder checks it against the
+        size it computes for the declared version. A log written by a build whose struct
+        drifted is rejected at the door rather than silently misread by a fixed offset.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>notchFlags <span>byte 51 · one byte, five bits</span></h2>
+    <div class="scroll"><table id="flags">
+      <thead><tr><th>Bit</th><th>Name</th><th>Set when</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>Why the verdict is logged and not the spectrum</h3>
+      <p>
+        The record carries the tracker&rsquo;s <b>conclusion</b> — centre frequency,
+        confidence, and these flags — never the spectrum it came from. That is forced, not
+        preferred: the log runs at 100&nbsp;Hz, so its Nyquist limit is 50&nbsp;Hz, and
+        every notch frequency in the build matrix is 88–180&nbsp;Hz. A 120&nbsp;Hz motor
+        peak recorded at 100&nbsp;Hz does not appear at 120&nbsp;Hz — it aliases down to
+        20&nbsp;Hz, and no post-processing recovers it.
+        <br><br>
+        So the spectrum is analysed on board at the full loop rate, where the peak is
+        genuinely visible, and only the scalar is written down.
+        <code>ODY_NOTCH_FLAG_MEASURED</code> is the one to read first: it says whether the
+        centre came from RPM telemetry or from the tracker&rsquo;s own search.
+      </p>
+    </div>
+  </section>
+
+  <footer id="titleblock"></footer>
+</div>
+
+<script>
+const DOC_REV = "5.1";
+
+/* Field list in DECLARATION ORDER, from types.h. Sizes come from the type, offsets are
+   computed below -- the struct is __attribute__((packed)), so there is no padding to
+   guess at and the running sum is the offset. */
+const T = {u8:1, i8:1, u16:2, i16:2, u32:4, i32:4};
+
+const GROUPS = [
+  {g:"Time",       cls:"gpio", f:[
+    ["u32","timestampMs","Milliseconds since boot"]]},
+  {g:"Gyro",       cls:"pwm",  f:[
+    ["i16","gyroX","0.1 °/s"],["i16","gyroY","0.1 °/s"],["i16","gyroZ","0.1 °/s"]]},
+  {g:"Accel",      cls:"pwm",  f:[
+    ["i16","accelX","0.01 m/s²"],["i16","accelY","0.01 m/s²"],["i16","accelZ","0.01 m/s²"]]},
+  {g:"Attitude",   cls:"i2c",  f:[
+    ["i16","rollCentideg","0.01°"],["i16","pitchCentideg","0.01°"],
+    ["i16","headingCentideg","0.01°"]]},
+  {g:"Motors",     cls:"pwm",  f:[
+    ["u16","m1Pwm","Post-clamp, as written to the ESC"],
+    ["u16","m2Pwm","Post-clamp, as written to the ESC"],
+    ["u16","m3Pwm","Post-clamp, as written to the ESC"],
+    ["u16","m4Pwm","Post-clamp, as written to the ESC"]]},
+  {g:"Power",      cls:"power",f:[
+    ["u16","battMillivolts","mV at the pack"],
+    ["i16","currentCentiAmps","0.01 A, signed — regen reads negative"],
+    ["u16","consumedMah","mAh drawn since arming; sizes the return reserve"]]},
+  {g:"Altitude",   cls:"i2c",  f:[
+    ["i16","baroAglCm","cm above the latched ground reference"],
+    ["i16","tofAglCm","cm from the downward ToF; −1 when stale"],
+    ["i16","varioCmS","cm/s, signed"]]},
+  {g:"Perception", cls:"uart", f:[
+    ["u16","forwardObstacleCm","cm from the forward LiDAR"],
+    ["u16","sensorHealth","ODY_SENS_* bitfield, 13 bits used"]]},
+  {g:"State",      cls:"spi",  f:[
+    ["u8","flightState","OdyFlightState rank, 0–9"],
+    ["u8","mixerSaturationPct","How much authority the mixer had to give up"]]},
+  {g:"Notch",      cls:"copper",f:[
+    ["u16","notchCentreDeciHz","0.1 Hz — the tracked centre"],
+    ["u8","notchConfidence","Peak-to-mean ratio, saturating at 255"],
+    ["u8","notchFlags","See below"],
+    ["u16","notchHarmonicDeciHz","0.1 Hz — 2·f0, or 0 when not engaged"]]}
+];
+
+const HEADER = [
+  ["u32","magic","0x4F445931 — \"ODY1\""],
+  ["u16","version","4"],
+  ["u16","recordBytes","54 — checked against the decoder's own arithmetic"],
+  ["u32","logRateHz","100"],
+  ["u32","bootTimeMs","millis() when the file was opened"],
+  ["c24","airframe","AIRFRAME_NAME, NUL-padded"]
+];
+
+const VERSIONS = [
+  ["v2",46,"The original set — time, gyro, accel, attitude, motors, power, altitude, perception, state","yes"],
+  ["v3",50,"notchCentreDeciHz, notchConfidence, notchFlags","yes"],
+  ["v4",54,"notchHarmonicDeciHz","current"]
+];
+
+const NOTCH_FLAGS = [
+  [0,"ODY_NOTCH_FLAG_TRACKING","The tracker had a confident lock"],
+  [1,"ODY_NOTCH_FLAG_DYNAMIC","DYN_NOTCH_ENABLE was compiled in"],
+  [2,"ODY_NOTCH_FLAG_H2_TRACKING","The harmonic had a confident lock"],
+  [3,"ODY_NOTCH_FLAG_H2_VISIBLE","2·f0 was below the DLPF and Nyquist ceiling"],
+  [4,"ODY_NOTCH_FLAG_MEASURED","<b>The centre came from RPM telemetry, not from the DFT</b>"]
+];
+
+const CLASSES = {
+  gpio:{label:"Time",       colour:"var(--c-gpio)"},
+  pwm:{label:"Motion and motors", colour:"var(--c-pwm)"},
+  i2c:{label:"Attitude and altitude", colour:"var(--c-i2c)"},
+  power:{label:"Power",     colour:"var(--c-power)"},
+  uart:{label:"Perception", colour:"var(--c-uart)"},
+  spi:{label:"State",       colour:"var(--c-spi)"},
+  copper:{label:"Notch verdict", colour:"var(--copper)"}
+};
+
+/* ---- computed layout -------------------------------------------------- */
+const FIELDS=[]; let off=0;
+GROUPS.forEach(grp=>{
+  grp.start=off;
+  grp.f.forEach(([ty,name,units])=>{
+    FIELDS.push({off, size:T[ty], ty, name, units, cls:grp.cls, group:grp.g});
+    off+=T[ty];
+  });
+  grp.size=off-grp.start;
+});
+const RECORD_BYTES=off;
+
+let hoff=0;
+const HDR=HEADER.map(([ty,name,units])=>{
+  const size = ty==="c24" ? 24 : T[ty];
+  const r={off:hoff,size,ty,name,units}; hoff+=size; return r;
+});
+const HEADER_BYTES=hoff;
+
+const $=(s)=>document.querySelector(s);
+const SVGNS="http://www.w3.org/2000/svg";
+const el=(n,a={})=>{const e=document.createElementNS(SVGNS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const esc=(s)=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+/* ---- file layout ------------------------------------------------------ */
+function drawFile(){
+  const svg=$("#file");
+  const PAD=30,H=150,W=880,BH=52,y=64;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.setAttribute("font-family",'"IBM Plex Mono",ui-monospace,monospace');
+  const t=(x,yy,s,o={})=>{const n=el("text",Object.assign({x,y:yy,"font-size":11,
+    fill:"var(--ink)","dominant-baseline":"middle"},o));n.textContent=s;svg.appendChild(n);return n;};
+
+  const hw=180, rw=118;
+  svg.appendChild(el("rect",{x:PAD,y,width:hw,height:BH,rx:2,
+    fill:"var(--paper)",stroke:"var(--copper)","stroke-width":1.8}));
+  svg.appendChild(el("rect",{x:PAD,y,width:3,height:BH,fill:"var(--copper)"}));
+  t(PAD+14,y+19,"HEADER",{"font-size":12,"font-weight":600,"font-family":"Archivo, sans-serif"});
+  t(PAD+14,y+36,`${HEADER_BYTES} bytes, once`,{"font-size":9.5,fill:"var(--ink-3)"});
+
+  for(let i=0;i<4;i++){
+    const x=PAD+hw+10+i*(rw+8);
+    svg.appendChild(el("rect",{x,y,width:rw,height:BH,rx:2,
+      fill:"var(--paper)",stroke:"var(--c-pwm)","stroke-width":1.3}));
+    svg.appendChild(el("rect",{x,y,width:3,height:BH,fill:"var(--c-pwm)"}));
+    t(x+12,y+19,`record ${i}`,{"font-size":11,"font-weight":600,
+      "font-family":"Archivo, sans-serif"});
+    t(x+12,y+36,`${RECORD_BYTES} bytes`,{"font-size":9.5,fill:"var(--ink-3)"});
+  }
+  const lastX=PAD+hw+10+4*(rw+8);
+  t(lastX+6,y+BH/2,"…",{"font-size":18,fill:"var(--ink-3)"});
+
+  t(PAD,y-22,"OFFSET 0",{"font-size":9,fill:"var(--ink-3)","letter-spacing":".1em"});
+  t(PAD+hw+10,y-22,`OFFSET ${HEADER_BYTES}`,{"font-size":9,fill:"var(--ink-3)",
+    "letter-spacing":".1em"});
+  t(PAD,y+BH+22,`record n starts at ${HEADER_BYTES} + n × ${RECORD_BYTES}`,
+    {"font-size":9.5,fill:"var(--copper)"});
+}
+
+/* ---- the byte map -----------------------------------------------------
+   One cell per byte, fields spanning their own cells, groups banded above.
+   Absolute offset on the ruler, so a reader can index straight in.        */
+function drawMap(){
+  const svg=$("#map");
+  const CELL=13.6,PAD=34,TOP=76,ROW=132,PERROW=27;
+  const rows=Math.ceil(RECORD_BYTES/PERROW);
+  const W=PAD*2+PERROW*CELL+120, H=TOP+rows*ROW+16;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.setAttribute("font-family",'"IBM Plex Mono",ui-monospace,monospace');
+  const t=(x,y,s,o={})=>{const n=el("text",Object.assign({x,y,"font-size":11,
+    fill:"var(--ink)","dominant-baseline":"middle"},o));n.textContent=s;svg.appendChild(n);return n;};
+
+  t(PAD,32,`${RECORD_BYTES} BYTES · ${FIELDS.length} FIELDS · LITTLE-ENDIAN · PACKED`,
+    {"font-size":10,fill:"var(--ink-3)","letter-spacing":".12em"});
+
+  for(let r=0;r<rows;r++){
+    const y0=TOP+r*ROW;
+    const first=r*PERROW, last=Math.min(first+PERROW,RECORD_BYTES)-1;
+
+    /* ruler */
+    for(let b=first;b<=last;b++){
+      const x=PAD+(b-first)*CELL;
+      if(b%2===0){
+        t(x+CELL,y0-10,String(b),{"text-anchor":"middle","font-size":7.5,
+          fill:"var(--ink-3)"});
+      }
+      svg.appendChild(el("rect",{x,y:y0,width:CELL,height:26,
+        fill:"none",stroke:"var(--rule-soft)","stroke-width":.7}));
+    }
+
+    /* fields on this row */
+    FIELDS.forEach(f=>{
+      const s=Math.max(f.off,first), e=Math.min(f.off+f.size-1,last);
+      if(s>e) return;
+      const x=PAD+(s-first)*CELL, w=(e-s+1)*CELL;
+      const colour=CLASSES[f.cls].colour;
+      svg.appendChild(el("rect",{x,y:y0,width:w,height:26,
+        fill:colour,"fill-opacity":.16,stroke:colour,"stroke-width":1.2}));
+      if(f.size>=4) t(x+w/2,y0+13,String(f.size),{"text-anchor":"middle",
+        "font-size":8.5,fill:colour,"font-weight":600});
+    });
+
+    /* Group bands, with labels on two alternating tiers.
+       "State" is two bytes -- 27 px of band -- and neither its name nor its offset
+       fits in that. Alternating tiers means adjacent narrow groups are never at the
+       same height, so overflowing the band's own width stops mattering. */
+    GROUPS.forEach((g,gi)=>{
+      const s=Math.max(g.start,first), e=Math.min(g.start+g.size-1,last);
+      if(s>e) return;
+      const x=PAD+(s-first)*CELL, w=(e-s+1)*CELL;
+      const colour=CLASSES[g.cls].colour;
+      svg.appendChild(el("rect",{x,y:y0+30,width:w,height:4,fill:colour,opacity:.8}));
+
+      const tier=gi%2, base=y0+46+tier*40;
+      if(tier){
+        /* a stem, so a label on the lower tier still points at its own band */
+        svg.appendChild(el("path",{d:`M ${x+2} ${y0+36} V ${base-9}`,
+          stroke:colour,"stroke-width":1,opacity:.45}));
+      }
+      t(x+2,base,g.g,{"font-size":9.5,"font-weight":600,fill:colour});
+
+      const names=g.f.map(f=>f[1]).join(" · ");
+      const FIT=7.6*0.605;
+      t(x+2,base+13, names.length*FIT <= w-4 ? names
+                     : `${g.f.length} field${g.f.length>1?"s":""}`,
+        {"font-size":7.6,fill:"var(--ink-3)"});
+      t(x+2,base+25,`@${g.start} · ${g.size} B`,{"font-size":7.6,fill:"var(--ink-3)",
+        opacity:.85});
+    });
+  }
+}
+
+function tables(){
+  $("#recspan").textContent=`${RECORD_BYTES} bytes · ${FIELDS.length} fields · v4`;
+
+  $("#legend").innerHTML=Object.entries(CLASSES).map(([k,c])=>
+    `<span><i style="background:${c.colour}"></i>${esc(c.label)}</span>`).join("");
+
+  const TYPE={u8:"uint8",i8:"int8",u16:"uint16",i16:"int16",u32:"uint32",i32:"int32",c24:"char[24]"};
+  $("#fields tbody").innerHTML=FIELDS.map(f=>`<tr>
+      <td class="off" style="--cls:${CLASSES[f.cls].colour}">${f.off}</td>
+      <td class="ty">${TYPE[f.ty]}</td>
+      <td class="mono">${esc(f.name)}</td>
+      <td class="note">${esc(f.units)}</td>
+    </tr>`).join("");
+
+  $("#versions tbody").innerHTML=VERSIONS.map(v=>`<tr>
+      <td class="off" style="--cls:var(--copper)">${esc(v[0])}</td>
+      <td class="mono">${v[1]}</td>
+      <td class="note">${esc(v[2])}</td>
+      <td><span class="pill" style="color:${v[3]==="current"?"var(--c-pwm)":"var(--ink-3)"}">${esc(v[3])}</span></td>
+    </tr>`).join("");
+
+  $("#flags tbody").innerHTML=NOTCH_FLAGS.map(f=>`<tr>
+      <td class="off" style="--cls:var(--copper)">${f[0]}</td>
+      <td class="mono">${esc(f[1])}</td>
+      <td class="note">${f[2]}</td>
+    </tr>`).join("");
+
+  /* An assertion, shown rather than assumed: the computed size must be 54. */
+  const ok = RECORD_BYTES===54 && FIELDS.length===28;
+  $("#provenance").innerHTML=[
+    `<b>Record</b> ${RECORD_BYTES} B`,`<span class="dot">/</span>`,
+    `<b>Header</b> ${HEADER_BYTES} B`,`<span class="dot">/</span>`,
+    `<b>Fields</b> ${FIELDS.length}`,`<span class="dot">/</span>`,
+    `<b>Rate</b> 100 Hz`,`<span class="dot">/</span>`,
+    `<b>Computed</b> ${ok?"matches types.h":"MISMATCH — SHEET IS WRONG"}`,
+    `<span class="dot">/</span>`,`<b>Doc</b> rev ${DOC_REV}`
+  ].join(" ");
+
+  $("#titleblock").innerHTML=
+    `Odyssey-10 Pro &middot; BlackBox record format v4, revision ${DOC_REV}<br>`+
+    `Fields and declaration order from <code>BlackBoxRecord</code> in `+
+    `<code>types.h</code>; offsets computed here from the type sizes, because the struct `+
+    `is <code>__attribute__((packed))</code> and has no padding to guess at. The `+
+    `<code>blackbox</code> consistency check verifies the same layout against the `+
+    `compiler, field by field.<br>`+
+    `Decoder: <code>tools/blackbox_decode.py</code>. If they disagree, the struct is right.`;
+}
+
+drawFile();
+drawMap();
+tables();
+</script>

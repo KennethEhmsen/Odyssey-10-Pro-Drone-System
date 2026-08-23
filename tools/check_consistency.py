@@ -2655,6 +2655,72 @@ def check_arming_sheet(rep, fix):
                         f"{len(raised)} raised in firmware, {len(dead)} dead")
 
 
+def check_blackbox_sheet(rep, fix):
+    """docs/odyssey-blackbox.html must describe the record that types.h declares.
+
+    Field for field, in declaration order, with the same types -- because the sheet's
+    whole value is that somebody can index straight into a log with it. An offset that
+    is one field stale does not fail loudly; it silently decodes the next field's bytes
+    as this field's value, which is the failure mode the blackbox exists to avoid.
+
+    The existing `blackbox` check verifies the struct against the COMPILER. This one
+    verifies the drawing against the struct. Different halves of the same question.
+    """
+    sheet_path = ROOT / "docs" / "odyssey-blackbox.html"
+    if not sheet_path.exists():
+        return
+
+    SIZE = {"uint8_t": 1, "int8_t": 1, "uint16_t": 2,
+            "int16_t": 2, "uint32_t": 4, "int32_t": 4}
+    types = read(TYPES_H)
+    m = re.search(r"struct __attribute__\(\(packed\)\) BlackBoxRecord \{(.*?)\n\};",
+                  types, re.S)
+    if not m:
+        rep.problem("blackbox-sheet", "BlackBoxRecord not found in types.h")
+        return
+
+    truth, off = [], 0
+    for line in m.group(1).splitlines():
+        line = re.sub(r"//.*", "", line).strip()
+        d = re.match(r"(u?int\d+_t)\s+(.+);$", line)
+        if not d:
+            continue
+        for name in [n.strip() for n in d.group(2).split(",")]:
+            truth.append((off, d.group(1), name))
+            off += SIZE[d.group(1)]
+
+    sheet = read(sheet_path)
+    g = re.search(r"const GROUPS = \[(.*?)\n\];", sheet, re.S)
+    if not g:
+        rep.problem("blackbox-sheet",
+                    "docs/odyssey-blackbox.html has no GROUPS array to check")
+        return
+
+    TY = {"u8": "uint8_t", "i8": "int8_t", "u16": "uint16_t",
+          "i16": "int16_t", "u32": "uint32_t"}
+    drawn, off2 = [], 0
+    for ty, name in re.findall(r'\["(u8|i8|u16|i16|u32)","(\w+)"', g.group(1)):
+        drawn.append((off2, TY[ty], name))
+        off2 += SIZE[TY[ty]]
+
+    if off != off2:
+        rep.problem("blackbox-sheet",
+                    f"types.h declares a {off}-byte record; the sheet draws {off2} bytes")
+
+    for i in range(max(len(truth), len(drawn))):
+        a = truth[i] if i < len(truth) else None
+        b = drawn[i] if i < len(drawn) else None
+        if a != b:
+            rep.problem("blackbox-sheet",
+                        f"field {i} differs: types.h has {a}, the sheet draws {b}. "
+                        f"An offset one field stale decodes the wrong bytes silently")
+            return
+
+    rep.note = getattr(rep, "note", [])
+    rep.note.append(f"blackbox-sheet: {len(truth)} fields, {off} bytes, matching "
+                    f"types.h offset for offset")
+
+
 CHECKS = [
     ("comment-continuation", "// comments ending in a backslash swallow the next line",
      check_comment_backslash),
@@ -2684,6 +2750,9 @@ CHECKS = [
     ("arming-sheet",
      "the arming sheet lists every blocker bit, and flags the dead one",
      check_arming_sheet),
+    ("blackbox-sheet",
+     "the byte map matches BlackBoxRecord field for field and offset for offset",
+     check_blackbox_sheet),
     ("bom-mass",
      "the parts list and config.h agree on mass, ESC margin and connector, for every build",
      check_bom_mass),
