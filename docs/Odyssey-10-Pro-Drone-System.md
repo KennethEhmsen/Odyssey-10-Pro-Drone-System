@@ -2494,12 +2494,13 @@ Odyssey-10-Pro-Drone-System/
 |   +-- bom.csv                     9-inch reference build
 |   +-- bom-variants.csv            what differs in the other nine
 +-- tools/
-|   +-- check_consistency.py        The specification-vs-code gate     [31 checks]
+|   +-- check_consistency.py        The specification-vs-code gate     [32 checks]
 |   +-- blackbox_decode.py          Flight log decoder, formats v2-v4
 |   +-- test_blackbox_decode.py     ...and its tests
 |   +-- patchfile.py                Line-ending-safe in-place edits
 |   +-- test_patchfile.py           ...and its tests
 |   +-- md2docx.py                  Regenerates the Word documents, reproducibly
+|   +-- gen_build_matrix.py         Regenerates docs/odyssey-builds.html from config.h
 |   +-- fetch_arduino_libs.py       Vendors the Arduino libraries as IDF components
 |   +-- run_android_parser_tests.sh Decoder tests with plain javac
 |   +-- git-hooks/pre-push          Runs the whole gate before every push
@@ -2517,6 +2518,7 @@ Odyssey-10-Pro-Drone-System/
 |   +-- odyssey-flow.html           System blocks and the escalate-only state ladder
 |   +-- odyssey-arming.html         Every condition that blocks arming, and its constant
 |   +-- odyssey-blackbox.html       The 54-byte record, field by field and byte by byte
+|   +-- odyssey-builds.html         Ten builds, resolved by the C preprocessor
 ```
 
 ### 10.2 Task structure

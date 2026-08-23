@@ -2721,6 +2721,77 @@ def check_blackbox_sheet(rep, fix):
                     f"types.h offset for offset")
 
 
+def check_build_matrix_sheet(rep, fix):
+    """docs/odyssey-builds.html must hold the numbers the preprocessor actually produces.
+
+    Every row is a resolved build, so a coupled constant that moves in config.h moves
+    this sheet with it -- or should. The matrix is the one place somebody compares
+    builds side by side before choosing one, and a stale notch centre or peak current
+    there is a choice made on last month's arithmetic.
+
+    Re-resolves each combination through the same resolved_defines() the rest of this
+    file uses, so the sheet is compared against the compiler's view rather than against
+    another transcription.
+    """
+    sheet_path = ROOT / "docs" / "odyssey-builds.html"
+    if not sheet_path.exists():
+        return
+    sheet = read(sheet_path)
+
+    drawn = {}
+    for m in re.finditer(
+            r"\{frame:(\d+), motor:\"(\w+)\", blades:(\d+),(.*?)\}", sheet):
+        key = (int(m.group(1)), "MOTOR_" + m.group(2), int(m.group(3)))
+        vals = dict(re.findall(r"(\w+):(-?[\d.]+)", m.group(4)))
+        drawn[key] = vals
+
+    if not drawn:
+        rep.problem("build-matrix", "docs/odyssey-builds.html has no BUILDS rows")
+        return
+
+    expected = 0
+    for frame, motors in FRAME_MOTORS.items():
+        for mc in motors:
+            for pb in (2, 3):
+                expected += 1
+                d = resolved_defines((f"-DFRAME_SIZE_IN={frame}",
+                                      f"-DMOTOR_CLASS={mc}",
+                                      f"-DPROP_BLADES={pb}",
+                                      "-DACCEPT_CONNECTOR_OVER_RATING=1"))
+                if not d:
+                    rep.problem("build-matrix",
+                                "no C preprocessor available to resolve config.h",
+                                severity="warn")
+                    return
+                row = drawn.get((frame, mc, pb))
+                if row is None:
+                    rep.problem("build-matrix",
+                                f"the sheet has no row for {frame}\" {mc} {pb}-blade")
+                    continue
+
+                #  The columns that would change a decision if they were stale.
+                for key, cname, tol in (("notch", "NOTCH_CENTER_HZ", 0.51),
+                                        ("loop",  "FLIGHT_LOOP_HZ",  0.51),
+                                        ("dlpf",  "IMU_DLPF_HZ",     0.51),
+                                        ("auw",   "AIRFRAME_AUW_G",  0.51),
+                                        ("peak",  "PROP_PEAK_PACK_A", 0.06)):
+                    if cname not in d:
+                        continue
+                    if abs(float(row.get(key, "nan")) - d[cname]) > tol:
+                        rep.problem("build-matrix",
+                                    f"{frame}\" {mc} {pb}-blade: the sheet says "
+                                    f"{key}={row.get(key)}, the preprocessor says "
+                                    f"{cname}={d[cname]:g}")
+
+    if len(drawn) != expected:
+        rep.problem("build-matrix",
+                    f"the sheet draws {len(drawn)} builds; config.h offers {expected}")
+        return
+
+    rep.note = getattr(rep, "note", [])
+    rep.note.append(f"build-matrix: {len(drawn)} builds match the preprocessor")
+
+
 CHECKS = [
     ("comment-continuation", "// comments ending in a backslash swallow the next line",
      check_comment_backslash),
@@ -2753,6 +2824,9 @@ CHECKS = [
     ("blackbox-sheet",
      "the byte map matches BlackBoxRecord field for field and offset for offset",
      check_blackbox_sheet),
+    ("build-matrix",
+     "the build matrix holds the numbers the preprocessor produces",
+     check_build_matrix_sheet),
     ("bom-mass",
      "the parts list and config.h agree on mass, ESC margin and connector, for every build",
      check_bom_mass),

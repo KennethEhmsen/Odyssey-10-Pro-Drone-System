@@ -1,0 +1,321 @@
+<title>Odyssey-10 Pro Build Matrix</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+/* Sixth sheet, same system as the others. */
+:root{
+  --paper:#F1F4F5;--sheet:#FBFCFC;--rule:#C9D2D6;--rule-soft:#E2E8EA;
+  --ink:#131C22;--ink-2:#46565F;--ink-3:#6E818B;--copper:#A85C34;
+  --c-power:#BE3F24;--c-i2c:#8A5E0C;--c-spi:#61469C;
+  --c-uart:#0B6670;--c-pwm:#2A6E36;--c-gpio:#55666F;
+  --warn-bg:#FBF0E6;--warn-edge:#D9A273;
+  --grid:rgba(19,28,34,.055);
+  --shadow:0 1px 2px rgba(19,28,34,.06),0 8px 24px -12px rgba(19,28,34,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{margin:0;background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:32px 32px,32px 32px;color:var(--ink);
+  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:48px 24px 96px;display:flex;flex-direction:column;gap:40px}
+.masthead{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--copper)}
+h1{font-family:Archivo,sans-serif;font-weight:700;font-size:clamp(30px,5.2vw,46px);
+  line-height:1.05;letter-spacing:-.021em;margin:0;text-wrap:balance}
+.standfirst{max-width:66ch;font-size:16.5px;color:var(--ink-2);margin:0}
+.provenance{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3);
+  padding-top:6px;border-top:1px solid var(--rule-soft)}
+.provenance b{color:var(--ink-2);font-weight:600}
+.dot{color:var(--rule)}
+section{display:flex;flex-direction:column;gap:16px}
+h2{font-family:Archivo,sans-serif;font-weight:600;font-size:12px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--ink-3);margin:0;padding-bottom:9px;
+  border-bottom:1.5px solid var(--rule);display:flex;justify-content:space-between;
+  align-items:baseline;gap:16px}
+h2 span{font-family:"IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:none;
+  font-weight:400;color:var(--ink-3)}
+.lede{max-width:68ch;color:var(--ink-2);margin:0}
+.sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:2px;
+  box-shadow:var(--shadow);overflow-x:auto;overflow-y:hidden}
+.sheet svg{display:block;min-width:780px;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:"IBM Plex Mono",monospace;
+  font-size:12px;color:var(--ink-2)}
+.legend i{display:inline-block;width:22px;height:3px;margin-right:8px;
+  vertical-align:middle;border-radius:1px}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:660px}
+caption{text-align:left;font-size:13px;color:var(--ink-3);padding-bottom:10px}
+th{text-align:left;font-family:Archivo,sans-serif;font-size:11px;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+  padding:0 14px 8px 0;border-bottom:1.5px solid var(--rule);white-space:nowrap}
+td{padding:7px 14px 7px 0;border-bottom:1px solid var(--rule-soft);vertical-align:baseline}
+tbody tr:last-child td{border-bottom:none}
+.mono,td.off,td.ty{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+td.off{font-weight:600;white-space:nowrap;border-left:3px solid var(--cls,var(--rule));
+  padding-left:11px;text-align:right}
+td.ty{color:var(--ink-3);white-space:nowrap}
+td.note{color:var(--ink-2);font-size:13px}
+td.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.pill{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;
+  font-weight:500;letter-spacing:.06em;padding:2px 8px;border-radius:2px;
+  border:1px solid currentColor;white-space:nowrap}
+.callout{background:var(--warn-bg);border:1px solid var(--warn-edge);border-left-width:3px;
+  border-radius:2px;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.callout h3{font-family:Archivo,sans-serif;font-size:14px;font-weight:700;margin:0}
+.callout p{margin:0;font-size:14px;color:var(--ink-2);max-width:70ch}
+code{font-family:"IBM Plex Mono",monospace;font-size:.92em;color:var(--ink)}
+footer{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3);
+  border-top:1px solid var(--rule-soft);padding-top:16px;line-height:1.8}
+:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Odyssey-10 Pro &middot; Build matrix &middot; Sheet 6 of 6</div>
+    <h1>Three Switches, Ten Aircraft</h1>
+    <p class="standfirst">
+      Frame size, motor class and blade count. Everything else &mdash; loop rate, filter
+      corner, notch centre, mass, thrust, peak current &mdash; follows from those three,
+      which is why they are compile-time switches rather than sets of edits you make by
+      hand and hope you made consistently.
+    </p>
+    <div class="provenance" id="provenance"></div>
+  </header>
+
+  <section>
+    <h2>What one switch moves <span>the coupling, not the values</span></h2>
+    <p class="lede">
+      Set <code>FRAME_SIZE_IN</code> and eight other constants move with it. That is the
+      whole argument for the switch: these numbers are not independent, and a build where
+      the notch matches the old propeller is not a build that flies badly &mdash; it is a
+      build that flies badly for a reason nobody can see.
+    </p>
+    <div class="sheet">
+      <svg id="cascade" role="img" aria-label="How the three build switches cascade into the derived constants"></svg>
+    </div>
+  </section>
+
+  <section>
+    <h2>The ten builds <span id="mspan"></span></h2>
+    <p class="lede">
+      Resolved by running the C preprocessor over <code>config.h</code> once per
+      combination &mdash; the same way <code>tools/check_consistency.py</code> does it, so
+      these are the constants the compiler would actually see.
+    </p>
+    <div class="scroll"><table id="matrix">
+      <caption>A 2807 on a 10-inch is under-stator&rsquo;d and a 3115 on a 7-inch is dead weight, so neither pairing is offered.</caption>
+      <thead><tr>
+        <th>Build</th><th>Wheel&shy;base</th><th>Loop</th><th>DLPF</th><th>Notch</th>
+        <th>Bins</th><th>AUW</th><th>Cruise</th><th>Peak</th><th>2&middot;f0</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section>
+    <h2>Three builds exceed the connector <span>XT90-S, 90 A continuous</span></h2>
+    <div class="scroll"><table id="over">
+      <thead><tr><th>Build</th><th>Peak pack current</th><th>Over by</th><th>Required</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>A burst rating, not a cruise rating</h3>
+      <p>
+        <code>PROP_PEAK_PACK_A</code> is a full-throttle burst, not a number the aircraft
+        sits at &mdash; cruise is a third of it. But the XT90-S is the single connector
+        every amp passes through, and a burst is exactly when you find out. These builds
+        need <code>-DACCEPT_CONNECTOR_OVER_RATING=1</code>, which is a deliberate
+        acknowledgement rather than a silencer, or a bigger connector.
+        <br><br>
+        All three are <b>3-blade</b>. A third blade buys thrust and costs current, and
+        this is where that bill arrives.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Only two builds can see their harmonic <span>2 of 10</span></h2>
+    <div class="scroll"><table id="harm">
+      <thead><tr><th>Build</th><th>2&middot;f0</th><th>Ceiling</th><th>Set by</th><th>Visible?</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>The ceiling is the IMU&rsquo;s anti-alias corner, not the loop rate</h3>
+      <p>
+        The harmonic tracker searches up to <code>min(IMU_DLPF_HZ, 0.8 &times; Nyquist)</code>.
+        On the 500&nbsp;Hz builds Nyquist gives 200&nbsp;Hz but the DLPF corner is
+        184&nbsp;Hz, so <b>the filter decides, not the loop</b>. Only the 10-inch 3-blade
+        builds put 2&middot;f0 at 180&nbsp;Hz &mdash; just under it.
+        <br><br>
+        This is why the tracker reports observability as its own flag rather than
+        inferring it: on eight of ten builds a harmonic search would be looking above the
+        corner, where there is nothing but the filter&rsquo;s own roll-off. Notching an
+        artefact costs real phase lag.
+      </p>
+    </div>
+  </section>
+
+  <footer id="titleblock"></footer>
+</div>
+
+<script>
+const DOC_REV = "5.1";
+const CONNECTOR_RATING_A = 90.0;   /* XT90-S continuous, from config.h */
+
+/* Resolved by the C preprocessor, one pass per combination. Regenerate with the
+   script in tools/ rather than editing by hand. */
+const BUILDS = [
+  {frame:7, motor:"2807", blades:2, wb:295, prop:7, kv:1300, loop:1000, dlpf:260, notch:180, bins:256, auw:1210, peak:75.0, cruise:8.46, mah:3000, h2:360, ceiling:260, h2vis:false, over:false},
+  {frame:7, motor:"2807", blades:3, wb:295, prop:7, kv:1300, loop:1000, dlpf:260, notch:150, bins:256, auw:1214, peak:99.0, cruise:9.28, mah:3000, h2:300, ceiling:260, h2vis:false, over:true},
+  {frame:9, motor:"2810", blades:2, wb:387, prop:9, kv:900, loop:500, dlpf:184, notch:120, bins:128, auw:1584, peak:51.0, cruise:9.71, mah:4500, h2:240, ceiling:184, h2vis:false, over:false},
+  {frame:9, motor:"2810", blades:3, wb:387, prop:9, kv:900, loop:500, dlpf:184, notch:100, bins:128, auw:1592, peak:67.0, cruise:10.69, mah:4500, h2:200, ceiling:184, h2vis:false, over:false},
+  {frame:9, motor:"3110", blades:2, wb:387, prop:9, kv:900, loop:500, dlpf:184, notch:120, bins:128, auw:1648, peak:52.7, cruise:10.07, mah:4500, h2:240, ceiling:184, h2vis:false, over:false},
+  {frame:9, motor:"3110", blades:3, wb:387, prop:9, kv:900, loop:500, dlpf:184, notch:100, bins:128, auw:1656, peak:69.2, cruise:11.08, mah:4500, h2:200, ceiling:184, h2vis:false, over:false},
+  {frame:10, motor:"3110", blades:2, wb:430, prop:10, kv:900, loop:500, dlpf:184, notch:105, bins:128, auw:1746, peak:67.1, cruise:10.08, mah:4500, h2:210, ceiling:184, h2vis:false, over:false},
+  {frame:10, motor:"3110", blades:3, wb:430, prop:10, kv:900, loop:500, dlpf:184, notch:90, bins:128, auw:1754, peak:91.9, cruise:11.09, mah:4500, h2:180, ceiling:184, h2vis:true, over:true},
+  {frame:10, motor:"3115", blades:2, wb:430, prop:10, kv:900, loop:500, dlpf:184, notch:105, bins:128, auw:1786, peak:69.5, cruise:10.29, mah:4500, h2:210, ceiling:184, h2vis:false, over:false},
+  {frame:10, motor:"3115", blades:3, wb:430, prop:10, kv:900, loop:500, dlpf:184, notch:90, bins:128, auw:1794, peak:95.2, cruise:11.33, mah:4500, h2:180, ceiling:184, h2vis:true, over:true}
+];
+
+const CLASSES = {
+  f7:{label:"7-inch", colour:"var(--c-uart)"},
+  f9:{label:"9-inch", colour:"var(--c-pwm)"},
+  f10:{label:"10-inch", colour:"var(--copper)"}
+};
+const col = (b)=>CLASSES["f"+b.frame].colour;
+const name = (b)=>`${b.frame}" ${b.motor} ${b.blades}b`;
+
+const $=(s)=>document.querySelector(s);
+const SVGNS="http://www.w3.org/2000/svg";
+const el=(n,a={})=>{const e=document.createElementNS(SVGNS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const esc=(s)=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+/* ---- the cascade ------------------------------------------------------
+   Three switches on the left, what each one moves on the right. Drawn as a
+   fan rather than a tree, because several constants are moved by more than
+   one switch and a tree would have to pick one parent and lie.            */
+const SWITCHES = [
+  {n:"FRAME_SIZE_IN", v:"7 · 9 · 10", cls:"f9", moves:[
+    "FRAME_WHEELBASE_MM","PROP_DIAMETER_IN","FRAME_BASE_DRY_G","BATTERY_MASS_G",
+    "PACK_CAPACITY_MAH","FLIGHT_LOOP_HZ","IMU_DLPF_HZ","DYN_NOTCH_BINS"]},
+  {n:"MOTOR_CLASS", v:"2807 · 2810 · 3110 · 3115", cls:"f10", moves:[
+    "MOTOR_KV","MOTOR_MASS_G_EACH","MOTOR_THRUST_G_EACH","MOTOR_STATOR_MM"]},
+  {n:"PROP_BLADES", v:"2 · 3", cls:"f7", moves:[
+    "PROP_NOTCH_DEFAULT_HZ","PROP_MASS_G_EACH","PROP_BASE_PEAK_A","CRUISE_CURRENT_A"]}
+];
+
+function drawCascade(){
+  const svg=$("#cascade");
+  const PAD=32,SW=232,SH=62,GAP=30,CX=PAD+SW+150,CW=214;
+  const rowsMax=Math.max(...SWITCHES.map(s=>s.moves.length));
+  const W=CX+CW+PAD, H=PAD*2+SWITCHES.length*(SH+GAP*3.6);
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.setAttribute("font-family",'"IBM Plex Mono",ui-monospace,monospace');
+  const t=(x,y,s,o={})=>{const n=el("text",Object.assign({x,y,"font-size":11,
+    fill:"var(--ink)","dominant-baseline":"middle"},o));n.textContent=s;svg.appendChild(n);return n;};
+
+  SWITCHES.forEach((s,i)=>{
+    const y=PAD+i*(SH+GAP*3.6), cy=y+SH/2, colour=CLASSES[s.cls].colour;
+    svg.appendChild(el("rect",{x:PAD,y,width:SW,height:SH,rx:2,
+      fill:"var(--paper)",stroke:colour,"stroke-width":1.8}));
+    svg.appendChild(el("rect",{x:PAD,y,width:3,height:SH,fill:colour}));
+    t(PAD+14,y+24,s.n,{"font-size":12.5,"font-weight":600,
+      "font-family":"Archivo, sans-serif"});
+    t(PAD+14,y+42,s.v,{"font-size":9.5,fill:"var(--ink-3)"});
+
+    /* one leader per moved constant, fanning to a stacked column */
+    s.moves.forEach((m,j)=>{
+      const my=y+14+j*18;
+      svg.appendChild(el("path",{
+        d:`M ${PAD+SW} ${cy} C ${PAD+SW+60} ${cy}, ${CX-70} ${my}, ${CX-10} ${my}`,
+        stroke:colour,"stroke-width":1,fill:"none",opacity:.42}));
+      svg.appendChild(el("circle",{cx:CX-6,cy:my,r:2.6,fill:colour,opacity:.8}));
+      t(CX+6,my,m,{"font-size":9.5,fill:"var(--ink-2)"});
+    });
+    t(CX+6,y+14+s.moves.length*18+4,`${s.moves.length} constants`,
+      {"font-size":8.5,fill:colour,opacity:.85});
+  });
+}
+
+function tables(){
+  $("#mspan").textContent=`${BUILDS.length} combinations · resolved by cpp`;
+  $("#legend").innerHTML=Object.values(CLASSES).map(c=>
+    `<span><i style="background:${c.colour}"></i>${esc(c.label)}</span>`).join("");
+
+  $("#matrix tbody").innerHTML=BUILDS.map(b=>`<tr>
+      <td class="off" style="--cls:${col(b)};text-align:left">${esc(name(b))}</td>
+      <td class="num">${b.wb} mm</td>
+      <td class="num">${b.loop} Hz</td>
+      <td class="num">${b.dlpf} Hz</td>
+      <td class="num" style="color:${col(b)};font-weight:600">${b.notch} Hz</td>
+      <td class="num">${b.bins}</td>
+      <td class="num">${b.auw} g</td>
+      <td class="num">${b.cruise.toFixed(1)} A</td>
+      <td class="num" style="color:${b.over?"var(--c-power)":"inherit"};font-weight:${b.over?600:400}">${b.peak.toFixed(0)} A</td>
+      <td class="num" style="color:${b.h2vis?"var(--c-pwm)":"var(--ink-3)"}">${b.h2vis?b.h2+" Hz":"—"}</td>
+    </tr>`).join("");
+
+  const over=BUILDS.filter(b=>b.over);
+  $("#over tbody").innerHTML=over.map(b=>`<tr>
+      <td class="off" style="--cls:var(--c-power);text-align:left">${esc(name(b))}</td>
+      <td class="num" style="color:var(--c-power);font-weight:600">${b.peak.toFixed(1)} A</td>
+      <td class="num">+${(b.peak-CONNECTOR_RATING_A).toFixed(1)} A</td>
+      <td class="note"><code>-DACCEPT_CONNECTOR_OVER_RATING=1</code>, or a bigger connector</td>
+    </tr>`).join("");
+
+  $("#harm tbody").innerHTML=BUILDS.map(b=>`<tr>
+      <td class="off" style="--cls:${b.h2vis?"var(--c-pwm)":"var(--ink-3)"};text-align:left">${esc(name(b))}</td>
+      <td class="num">${b.h2} Hz</td>
+      <td class="num">${b.ceiling} Hz</td>
+      <td class="note">${b.dlpf<=b.loop*0.4?"IMU anti-alias corner":"Nyquist margin"}</td>
+      <td><span class="pill" style="color:${b.h2vis?"var(--c-pwm)":"var(--ink-3)"}">${b.h2vis?"visible":"above the ceiling"}</span></td>
+    </tr>`).join("");
+
+  const vis=BUILDS.filter(b=>b.h2vis).length;
+  $("#provenance").innerHTML=[
+    `<b>Builds</b> ${BUILDS.length}`,`<span class="dot">/</span>`,
+    `<b>Source</b> cpp over config.h`,`<span class="dot">/</span>`,
+    `<b>Over connector</b> ${over.length}`,`<span class="dot">/</span>`,
+    `<b>Harmonic visible</b> ${vis}`,`<span class="dot">/</span>`,
+    `<b>Doc</b> rev ${DOC_REV}`
+  ].join(" ");
+
+  $("#titleblock").innerHTML=
+    `Odyssey-10 Pro &middot; build matrix, revision ${DOC_REV}<br>`+
+    `Every number resolved by running the C preprocessor over <code>config.h</code> once `+
+    `per combination, the same way <code>tools/check_consistency.py</code> resolves them `+
+    `&mdash; so these are the constants the compiler sees, not a transcription of them.<br>`+
+    `<code>CRUISE_CURRENT_A</code> is still modelled rather than measured, on every row. `+
+    `It sizes the return-to-home reserve, and the thrust stand in §4.3.2 step 3 is what settles it.`;
+}
+
+drawCascade();
+tables();
+</script>
