@@ -109,7 +109,7 @@ footer{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3)
 
   <header class="masthead">
     <div class="eyebrow">Odyssey-10 Pro &middot; Drawing set &middot; revision 5.1</div>
-    <h1>Eleven Sheets</h1>
+    <h1>13 Sheets</h1>
     <p class="standfirst">
       Each one answers a question the specification answers in prose, and each is held to
       the source by a check that fails the build when they drift apart. If a sheet and the
@@ -119,7 +119,7 @@ footer{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3)
   </header>
 
   <section>
-    <h2>The set <span>11 sheets</span></h2>
+    <h2>The set <span>13 sheets</span></h2>
     <div class="cards">
       <a class="card" href="odyssey-schematic.html" style="--cls:var(--c-pwm)">
         <div class="no">SHEET 1</div>
@@ -187,6 +187,18 @@ footer{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3)
         <div class="cardsub">Eighteen defects found by review, forty-six by building it</div>
         <div class="cardmeta"><span>rev 5.1</span><span><code>findings-ledger</code> · <code>findings</code></span></div>
       </a>
+      <a class="card" href="odyssey-history.html" style="--cls:var(--c-i2c)">
+        <div class="no">SHEET 12</div>
+        <div class="cardq">How it got here</div>
+        <div class="cardsub">Thirty-one revisions in four days, read out of git</div>
+        <div class="cardmeta"><span>rev 5.1</span><span><span style='opacity:.6'>no dedicated check</span></span></div>
+      </a>
+      <a class="card" href="odyssey-spec.html" style="--cls:var(--c-gpio)">
+        <div class="no">SHEET 13</div>
+        <div class="cardq">What the specification contains</div>
+        <div class="cardsub">Thirteen sections measured, and where the findings cluster</div>
+        <div class="cardmeta"><span>rev 5.1</span><span><span style='opacity:.6'>no dedicated check</span></span></div>
+      </a>
     </div>
   </section>
 
@@ -243,7 +255,7 @@ footer{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3)
 
 <script>
 const DOC_REV = "5.1";
-const SHEETS = 11;
+const SHEETS = 13;
 document.querySelector("#provenance").innerHTML = [
   `<b>Sheets</b> ${SHEETS}`, `<span class="dot">/</span>`,
   `<b>Revision</b> ${DOC_REV}`, `<span class="dot">/</span>`,

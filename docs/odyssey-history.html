@@ -1,0 +1,308 @@
+<title>Odyssey-10 Pro Project History</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+/* Twelfth sheet, same system as the others. */
+:root{
+  --paper:#F1F4F5;--sheet:#FBFCFC;--rule:#C9D2D6;--rule-soft:#E2E8EA;
+  --ink:#131C22;--ink-2:#46565F;--ink-3:#6E818B;--copper:#A85C34;
+  --c-power:#BE3F24;--c-i2c:#8A5E0C;--c-spi:#61469C;
+  --c-uart:#0B6670;--c-pwm:#2A6E36;--c-gpio:#55666F;
+  --warn-bg:#FBF0E6;--warn-edge:#D9A273;
+  --grid:rgba(19,28,34,.055);
+  --shadow:0 1px 2px rgba(19,28,34,.06),0 8px 24px -12px rgba(19,28,34,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{margin:0;background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:32px 32px,32px 32px;color:var(--ink);
+  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:48px 24px 96px;display:flex;flex-direction:column;gap:40px}
+.masthead{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--copper)}
+.eyebrow a{color:var(--copper);text-decoration:none;border-bottom:1px dotted currentColor;padding-bottom:1px}
+.eyebrow a:hover{border-bottom-style:solid}
+h1{font-family:Archivo,sans-serif;font-weight:700;font-size:clamp(30px,5.2vw,46px);
+  line-height:1.05;letter-spacing:-.021em;margin:0;text-wrap:balance}
+.standfirst{max-width:66ch;font-size:16.5px;color:var(--ink-2);margin:0}
+.provenance{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3);
+  padding-top:6px;border-top:1px solid var(--rule-soft)}
+.provenance b{color:var(--ink-2);font-weight:600}
+.dot{color:var(--rule)}
+section{display:flex;flex-direction:column;gap:16px}
+h2{font-family:Archivo,sans-serif;font-weight:600;font-size:12px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--ink-3);margin:0;padding-bottom:9px;
+  border-bottom:1.5px solid var(--rule);display:flex;justify-content:space-between;
+  align-items:baseline;gap:16px}
+h2 span{font-family:"IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:none;
+  font-weight:400;color:var(--ink-3)}
+.lede{max-width:68ch;color:var(--ink-2);margin:0}
+.sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:2px;
+  box-shadow:var(--shadow);overflow-x:auto;overflow-y:hidden}
+.sheet svg{display:block;min-width:760px;width:100%;height:auto}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:660px}
+caption{text-align:left;font-size:13px;color:var(--ink-3);padding-bottom:10px}
+th{text-align:left;font-family:Archivo,sans-serif;font-size:11px;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+  padding:0 14px 8px 0;border-bottom:1.5px solid var(--rule);white-space:nowrap}
+td{padding:8px 14px 8px 0;border-bottom:1px solid var(--rule-soft);vertical-align:baseline}
+tbody tr:last-child td{border-bottom:none}
+.mono,td.k{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+td.k{font-weight:600;white-space:nowrap;border-left:3px solid var(--cls,var(--rule));
+  padding-left:11px}
+td.note{color:var(--ink-2);font-size:13px}
+td.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.pill{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10px;
+  letter-spacing:.06em;padding:1px 7px;border-radius:2px;border:1px solid currentColor;
+  white-space:nowrap}
+.callout{background:var(--warn-bg);border:1px solid var(--warn-edge);border-left-width:3px;
+  border-radius:2px;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.callout h3{font-family:Archivo,sans-serif;font-size:14px;font-weight:700;margin:0}
+.callout p{margin:0;font-size:14px;color:var(--ink-2);max-width:70ch}
+code{font-family:"IBM Plex Mono",monospace;font-size:.92em;color:var(--ink)}
+footer{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3);
+  border-top:1px solid var(--rule-soft);padding-top:16px;line-height:1.8}
+:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow"><a href="index.html">&larr; All sheets</a> &middot; Odyssey-10 Pro &middot; History &middot; Sheet 12 of 12</div>
+    <h1>Thirty-One Revisions</h1>
+    <p class="standfirst">
+      Four days, 70 commits, and a document that renamed its own subtitle every time
+      it learned something. The revision line is the project narrating itself &mdash; these
+      are read out of git, not rewritten here.
+    </p>
+    <div class="provenance" id="provenance"></div>
+  </header>
+
+  <section>
+    <h2>Four days <span>commits per day</span></h2>
+    <div class="sheet">
+      <svg id="days" role="img" aria-label="Commits per day across the project"></svg>
+    </div>
+  </section>
+
+  <section>
+    <h2>How it moved <span>four phases</span></h2>
+    <div class="scroll"><table id="phases">
+      <thead><tr><th>Phase</th><th>Revisions</th><th>What was happening</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>The subtitles change character halfway down</h3>
+      <p>
+        The early ones describe <em>decisions</em> — &ldquo;re-based on the 387&nbsp;mm
+        airframe&rdquo;, &ldquo;propeller configuration is a build switch&rdquo;. The later
+        ones describe <em>discoveries</em> — &ldquo;eight of nine source files had never
+        been compiled&rdquo;, &ldquo;the documented build command does not work&rdquo;,
+        &ldquo;the pinout no longer sits on the P4's USB data lines&rdquo;.
+        <br><br>
+        That is the moment the project stopped being written and started being built. The
+        board arrived, and the document began finding out what it had assumed.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Every revision <span id="revspan"></span></h2>
+    <div class="scroll"><table id="revs">
+      <caption>Read from the <code>Document revision:</code> line at each commit that changed it.</caption>
+      <thead><tr><th>Rev</th><th>Date</th><th>Its own account of itself</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Where it ended up <span>as of revision 5.1</span></h2>
+    <div class="scroll"><table id="now">
+      <thead><tr><th>&nbsp;</th><th>Count</th><th>&nbsp;</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>What none of this proves</h3>
+      <p>
+        Nothing here has flown. The firmware boots, initialises DShot and blocks arming
+        correctly on a bench with no sensors attached. Six of thirteen sensor drivers have
+        never had a device answer them, the blackbox ring has never executed on hardware,
+        and <code>CRUISE_CURRENT_A</code> — which sizes the return-to-home reserve on all
+        ten builds — is still modelled rather than measured.
+        <br><br>
+        A specification with thirty-four checks and 413 assertions behind it is a better
+        starting point than one without. It is still a starting point.
+      </p>
+    </div>
+  </section>
+
+  <footer id="titleblock"></footer>
+</div>
+
+<script>
+const DOC_REV = "5.1";
+const COMMITS = 70;
+const SPEC_WORDS = 31809;
+const SPEC_LINES = 3114;
+const CHECKS = 41;
+const SHEETS = 13;
+
+/* Read from git by tools/gen_history.py -- regenerate rather than edit. */
+const REVS = [
+  {rev:"2.0", date:"2026-08-20", note:"engineering review applied"},
+  {rev:"2.1", date:"2026-08-20", note:"engineering review applied, regulatory position corrected"},
+  {rev:"2.2", date:"2026-08-20", note:"re-based on the 387 mm 9-inch airframe"},
+  {rev:"2.3", date:"2026-08-20", note:"motors matched to the 9-inch airframe"},
+  {rev:"2.4", date:"2026-08-20", note:"propulsion chain matched to the 9-inch airframe"},
+  {rev:"2.5", date:"2026-08-20", note:"propulsion and energy matched to the 9-inch airframe"},
+  {rev:"2.6", date:"2026-08-20", note:"propeller configuration is a build switch"},
+  {rev:"2.7", date:"2026-08-20", note:"motor and propeller are both build switches"},
+  {rev:"2.8", date:"2026-08-20", note:"frame, motor and propeller are all build switches"},
+  {rev:"2.9", date:"2026-08-21", note:"the gyro notch measures itself"},
+  {rev:"3.0", date:"2026-08-21", note:"the notch measurement is recorded, and the procedure that could never have produced it is withdrawn"},
+  {rev:"3.1", date:"2026-08-21", note:"second-harmonic tracking, and an honest account of where the hardware can support it"},
+  {rev:"3.2", date:"2026-08-21", note:"the 1000 Hz loop costed, and a scheduling dependency nobody had declared"},
+  {rev:"3.3", date:"2026-08-21", note:"the IMU read is split, which was step 2 of the 1000 Hz sequencing and pays at 500 Hz too"},
+  {rev:"3.4", date:"2026-08-21", note:"DShot at the protocol level, with the RPM the notch has been estimating all along"},
+  {rev:"3.5", date:"2026-08-21", note:"the loop rate is a build switch, and at 1000 Hz the second harmonic finally appears"},
+  {rev:"3.6", date:"2026-08-22", note:"the RMT driver is written, and the half of it that can be tested is"},
+  {rev:"3.7", date:"2026-08-22", note:"DShot is wired into the flight loop, and the notch prefers a measurement to a search"},
+  {rev:"3.8", date:"2026-08-22", note:"documentation brought back into line with the repository, and a check so it stays there"},
+  {rev:"3.9", date:"2026-08-22", note:"the other nine builds have a parts list, and mass is reconciled against the firmware"},
+  {rev:"4.0", date:"2026-08-22", note:"the DShot bench procedure, with the parts and the numbers to measure against"},
+  {rev:"4.1", date:"2026-08-22", note:"the bench procedure gains an order list for starting from nothing"},
+  {rev:"4.3", date:"2026-08-22", note:"a real price for the P4 board, and the mass question it exposes"},
+  {rev:"4.4", date:"2026-08-22", note:"the EV board's on-board C6 claims four of the project's pins"},
+  {rev:"4.5", date:"2026-08-22", note:"the documented build command does not work, and why"},
+  {rev:"4.6", date:"2026-08-22", note:"eight of nine source files had never been compiled"},
+  {rev:"4.7", date:"2026-08-22", note:"the pinout no longer sits on the P4's USB data lines"},
+  {rev:"4.8", date:"2026-08-23", note:"the build instructions describe a build that has actually run"},
+  {rev:"4.9", date:"2026-08-23", note:"the power rails are assigned, and the 3.3 V budget is stated"},
+  {rev:"5.0", date:"2026-08-23", note:"the MSP OSD is exposed as unimplemented, and the camera and gimbal question is answered"},
+  {rev:"5.1", date:"2026-08-23", note:"the airframe layout is drawn, and §8's diagram no longer claims a 10-inch propeller"}
+];
+const DAYS = [["2026-08-20",22], ["2026-08-21",9], ["2026-08-22",15], ["2026-08-23",24]];
+
+const PHASES = [
+  ["2.0 – 2.8","Applying the review",
+   "Eighteen findings resolved, then the airframe re-based on the 9-inch and every coupled constant turned into a build switch"],
+  ["2.9 – 3.5","Making the notch honest",
+   "The gyro notch learns to measure itself, a measurement procedure that could never have worked is withdrawn, and the second harmonic gets an honest account of where it is observable"],
+  ["3.6 – 4.2","Costing what was written",
+   "DShot wired into the flight loop, the other nine builds given parts lists, and a bench procedure with the numbers to measure against"],
+  ["4.3 – 5.1","Meeting the hardware",
+   "The board arrives. The build command turns out not to work, eight of nine source files turn out never to have been compiled, and the pinout turns out to sit on the USB data lines"]
+];
+
+const $=(s)=>document.querySelector(s);
+const SVGNS="http://www.w3.org/2000/svg";
+const el=(n,a={})=>{const e=document.createElementNS(SVGNS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const esc=(s)=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+function drawDays(){
+  const svg=$("#days"), PAD=44, W=920, H=210;
+  const max=Math.max(...DAYS.map(d=>d[1]));
+  const bw=Math.min(120,(W-PAD*2)/DAYS.length-20), gap=26;
+  const base=H-52;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.setAttribute("font-family",'"IBM Plex Mono",ui-monospace,monospace');
+  const t=(x,y,s,o={})=>{const n=el("text",Object.assign({x,y,"font-size":11,
+    fill:"var(--ink)","dominant-baseline":"middle"},o));n.textContent=s;svg.appendChild(n);return n;};
+
+  svg.appendChild(el("path",{d:`M ${PAD} ${base} H ${W-PAD}`,
+    stroke:"var(--rule)","stroke-width":1}));
+
+  DAYS.forEach((d,i)=>{
+    const x=PAD+i*(bw+gap), h=d[1]/max*(base-58);
+    const colour = i===DAYS.length-1 ? "var(--copper)" : "var(--c-pwm)";
+    svg.appendChild(el("rect",{x,y:base-h,width:bw,height:h,rx:2,
+      fill:colour,"fill-opacity":.2,stroke:colour,"stroke-width":1.4}));
+    t(x+bw/2,base-h-14,String(d[1]),{"text-anchor":"middle","font-size":15,
+      "font-weight":700,fill:colour,"font-family":"Archivo, sans-serif"});
+    t(x+bw/2,base+16,d[0],{"text-anchor":"middle","font-size":9.5,fill:"var(--ink-3)"});
+  });
+  t(PAD,26,`${COMMITS} COMMITS ACROSS ${DAYS.length} DAYS`,
+    {"font-size":10,fill:"var(--ink-3)","letter-spacing":".12em"});
+  t(W-PAD,base+34,"the last day is the drawing set",
+    {"text-anchor":"end","font-size":9,fill:"var(--copper)","font-style":"italic"});
+}
+
+function tables(){
+  $("#revspan").textContent=`${REVS.length} revisions · ${REVS[0].rev} to ${REVS[REVS.length-1].rev}`;
+
+  $("#phases tbody").innerHTML=PHASES.map((p,i)=>{
+    const colour=["var(--c-gpio)","var(--c-i2c)","var(--c-uart)","var(--copper)"][i];
+    return `<tr>
+      <td class="k" style="--cls:${colour}">${esc(p[0])}</td>
+      <td class="mono">${esc(p[1])}</td>
+      <td class="note">${esc(p[2])}</td></tr>`;}).join("");
+
+  $("#revs tbody").innerHTML=REVS.map(r=>{
+    const major=parseInt(r.rev,10);
+    const colour=major<3?"var(--c-gpio)":major<4?"var(--c-i2c)":
+                 r.rev>="4.3"?"var(--copper)":"var(--c-uart)";
+    return `<tr>
+      <td class="k" style="--cls:${colour};text-align:right">${esc(r.rev)}</td>
+      <td class="mono" style="color:var(--ink-3);font-size:12px">${esc(r.date)}</td>
+      <td class="note">${esc(r.note)}</td></tr>`;}).join("");
+
+  $("#now tbody").innerHTML=[
+    ["Specification",`${SPEC_LINES.toLocaleString()} lines`,`${SPEC_WORDS.toLocaleString()} words across 13 sections`],
+    ["Drawing set",`${SHEETS} sheets`,"each derived from source, most held to it by a named check"],
+    ["Consistency checks",`${CHECKS}`,"run before every push; 19 trace to a specific defect"],
+    ["Host assertions","413","the algorithms, verified without hardware"],
+    ["Findings recorded","64","18 by review, 46 by building it"],
+    ["Firmware","boots","DShot initialises; arming correctly blocked with nothing attached"],
+    ["Flights","0","nothing here has left the ground"]
+  ].map(r=>`<tr>
+      <td class="k" style="--cls:${r[1]==="0"?"var(--c-power)":"var(--c-pwm)"}">${esc(r[0])}</td>
+      <td class="num" style="font-weight:600">${esc(r[1])}</td>
+      <td class="note">${esc(r[2])}</td></tr>`).join("");
+
+  $("#provenance").innerHTML=[
+    `<b>Revisions</b> ${REVS.length}`,`<span class="dot">/</span>`,
+    `<b>Commits</b> ${COMMITS}`,`<span class="dot">/</span>`,
+    `<b>Days</b> ${DAYS.length}`,`<span class="dot">/</span>`,
+    `<b>Source</b> git`,`<span class="dot">/</span>`,
+    `<b>Doc</b> rev ${DOC_REV}`
+  ].join(" ");
+
+  $("#titleblock").innerHTML=
+    `Odyssey-10 Pro &middot; project history, revision ${DOC_REV}<br>`+
+    `Every row read from git by <code>tools/gen_history.py</code>: the `+
+    `<code>Document revision:</code> line at each commit that changed it, and the commit `+
+    `counts per day. The phase groupings and their descriptions are the only editorial `+
+    `content on this sheet.<br>`+
+    `Regenerate rather than edit &mdash; a history that drifted from its own record would `+
+    `be the failure this project spent four days finding.`;
+}
+
+drawDays();
+tables();
+</script>

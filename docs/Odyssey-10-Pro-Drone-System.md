@@ -2502,6 +2502,8 @@ Odyssey-10-Pro-Drone-System/
 |   +-- md2docx.py                  Regenerates the Word documents, reproducibly
 |   +-- gen_build_matrix.py         Regenerates docs/odyssey-builds.html from config.h
 |   +-- gen_docs_index.py           Regenerates docs/index.html by reading the sheets
+|   +-- gen_history.py              Regenerates docs/odyssey-history.html from git
+|   +-- gen_spec_map.py             Regenerates docs/odyssey-spec.html from the specification
 |   +-- fetch_arduino_libs.py       Vendors the Arduino libraries as IDF components
 |   +-- run_android_parser_tests.sh Decoder tests with plain javac
 |   +-- git-hooks/pre-push          Runs the whole gate before every push
@@ -2525,6 +2527,8 @@ Odyssey-10-Pro-Drone-System/
 |   +-- odyssey-bringup.html        Bring-up status: four steps, four assumptions
 |   +-- odyssey-checklist.html      The §11 commissioning checklist, tickable
 |   +-- odyssey-findings.html       The findings ledger: 18 by review, 46 by doing
+|   +-- odyssey-history.html        Thirty-one revisions in four days, read from git
+|   +-- odyssey-spec.html           The specification measured, section by section
 |   +-- index.html                  The map for the nine sheets
 ```
 
