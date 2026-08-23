@@ -69,6 +69,34 @@ idf_build_set_property(COMPILE_DEFINITIONS "PIN_VTX_TX=31" APPEND)    # was 19, 
 #  unverified-defaults check keeps DSHOT_ENABLE at 0 in config.h.
 idf_build_set_property(COMPILE_DEFINITIONS "DSHOT_ENABLE=1" APPEND)
 
+#  BUILD SWITCHES FROM THE COMMAND LINE.
+#
+#  Section 3.2 documents the frame/motor/propeller matrix as compile-time switches
+#  rather than sets of edits, and under PlatformIO that was `pio run -- -DFRAME_SIZE_IN=7`.
+#  idf.py's -D sets CMake CACHE variables, not compile definitions, so it needs this
+#  forwarding step to mean the same thing:
+#
+#      idf.py build -DFRAME_SIZE_IN=7
+#      idf.py build -DFRAME_SIZE_IN=10 -DMOTOR_CLASS=MOTOR_3115 -DPROP_BLADES=3
+#
+#  ONE DIFFERENCE FROM pio, AND IT WILL CATCH SOMEBODY. CMake caches these, so a switch
+#  passed once keeps applying to every later `idf.py build` until it is overridden or the
+#  cache is cleared with `idf.py fullclean`. pio applied them per invocation. The build
+#  prints what it applied for exactly this reason, and so does the firmware at boot.
+#
+#  Every name here is #ifndef-guarded in config.h; the build-switches check in
+#  tools/check_consistency.py verifies that, so a switch cannot be documented here and
+#  silently ignored by the header.
+#  DSHOT_ENABLE is deliberately absent: it is force-set above for bring-up, and
+#  appending a second definition would leave two -D flags disagreeing.
+foreach(sw FRAME_SIZE_IN MOTOR_CLASS PROP_BLADES FLIGHT_LOOP_HZ
+           REQUIRE_REMOTE_ID_TO_ARM ACCEPT_CONNECTOR_OVER_RATING)
+  if(DEFINED ${sw})
+    idf_build_set_property(COMPILE_DEFINITIONS "${sw}=${${sw}}" APPEND)
+    message(STATUS "odyssey: build switch ${sw}=${${sw}}")
+  endif()
+endforeach()
+
 project(odyssey-fc)
 
 

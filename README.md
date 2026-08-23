@@ -10,7 +10,7 @@
 Autonomous long-range 9-inch quadcopter. ESP32-P4 dual-core RISC-V avionics, integrated
 perception, kinetic recovery and safety stack.
 
-**Status:** revision 4.7 — DShot bench procedure ready; the driver awaits its first contact with hardware. All eighteen defects found in the
+**Status:** revision 4.8 — DShot bench procedure ready; the driver awaits its first contact with hardware. All eighteen defects found in the
 revision 1.0 review are fixed — and eighteen was not the end of it. Reworking them
 surfaced more, and the work since has surfaced more again, several worse than
 anything in the original list. See
@@ -53,13 +53,24 @@ found afterwards.
 
 ## Building the firmware
 
-Each firmware directory is an independent [PlatformIO](https://platformio.org) project.
-They share `shared/odyssey_link.h` by include path, so a protocol change rebuilds all
-four.
+Four independent firmware images. They share `shared/odyssey_link.h` by include path,
+so a protocol change rebuilds all four.
+
+**The flight controller builds with [ESP-IDF](https://docs.espressif.com/projects/esp-idf/)
+5.x**, not PlatformIO — the stock `espressif32` platform does not list the ESP32-P4, so
+`pio run` fails resolving the board before it reaches a compiler. A fresh clone needs the
+first two steps once; `sdkconfig` and the vendored Arduino components are gitignored.
 
 ```bash
-cd firmware/flight-controller && pio run -t upload
+cd firmware/flight-controller
+python ../../tools/fetch_arduino_libs.py
+idf.py set-target esp32p4
+idf.py build
+idf.py -p COM12 flash monitor
 ```
+
+**The other three are [PlatformIO](https://platformio.org) projects**, which suits the
+ESP32-C3, C6 and S3 they run on.
 
 ```bash
 cd firmware/beacon-node && pio run -t upload
@@ -97,8 +108,12 @@ Three things to settle before your first flight:
    cruise current that sizes the return-to-home reserve.
 
    ```bash
-   pio run -- -DFRAME_SIZE_IN=10 -DMOTOR_CLASS=MOTOR_3115 -DPROP_BLADES=3
+   idf.py build -DFRAME_SIZE_IN=10 -DMOTOR_CLASS=MOTOR_3115 -DPROP_BLADES=3
    ```
+
+   `idf.py -D` writes to the CMake cache, so a switch keeps applying to later builds
+   until it is overridden or cleared with `idf.py fullclean`. The build prints each
+   switch it applied, and the firmware prints its configuration at boot.
 
    Ten combinations across 7, 9 and 10 inch are characterised and tested; anything else
    fails the build with a specific message. The firmware prints which one it is at boot.

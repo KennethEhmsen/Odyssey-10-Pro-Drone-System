@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 4.7 — the pinout no longer sits on the P4's USB data lines
+**Document revision:** 4.8 — the build instructions describe a build that has actually run
 
 ---
 
@@ -410,10 +410,17 @@ the better choice and the 1.4 km of range is a fair price.
 coupled constants, so they are compile-time switches rather than sets of edits:
 
 ```bash
-pio run -e odyssey-fc                                       # 9-inch, 2810, 2-blade
-pio run -e odyssey-fc -- -DFRAME_SIZE_IN=7
-pio run -e odyssey-fc -- -DFRAME_SIZE_IN=10 -DMOTOR_CLASS=MOTOR_3115 -DPROP_BLADES=3
+idf.py build                                                # 9-inch, 2810, 2-blade
+idf.py build -DFRAME_SIZE_IN=7
+idf.py build -DFRAME_SIZE_IN=10 -DMOTOR_CLASS=MOTOR_3115 -DPROP_BLADES=3
 ```
+
+**These are cached, unlike the `pio run` form they replace.** `idf.py -D` sets a CMake
+cache variable, so a switch passed once keeps applying to every later `idf.py build`
+until it is overridden or cleared with `idf.py fullclean`. The configure step prints
+each switch it applied (`-- odyssey: build switch FRAME_SIZE_IN=7`) and the firmware
+prints the resulting configuration at boot, because two builds are otherwise
+indistinguishable once flashed.
 
 | Frame | Motors | Default | Wheelbase | Loop | Notch (2b / 3b) |
 | --- | --- | --- | --- | --- | --- |
@@ -421,20 +428,25 @@ pio run -e odyssey-fc -- -DFRAME_SIZE_IN=10 -DMOTOR_CLASS=MOTOR_3115 -DPROP_BLAD
 | **9-inch** | 2810, 3110 | **2810** | 387 mm | 500 Hz | **120** / 100 Hz |
 | 10-inch | 3110, 3115 | 3115 | 430 mm | 500 Hz | 105 / 90 Hz |
 
-> **The `pio run` commands above do not work today, and this was verified on hardware
-> day.** PlatformIO's stock `espressif32` platform lists 242 boards and
-> `esp32-p4-function-ev-board` — the board `firmware/flight-controller/platformio.ini`
-> names — is not among them. `pio run -e odyssey-fc` fails resolving the board, before it
-> reaches a compiler. The ESP32-P4 is simply newer than the stock platform.
+> **The flight controller builds with ESP-IDF, not PlatformIO, and this section was
+> rewritten only after a build succeeded.** PlatformIO's stock `espressif32` platform
+> lists 242 boards and `esp32-p4-function-ev-board` — the board
+> `firmware/flight-controller/platformio.ini` names — is not among them, so
+> `pio run -e odyssey-fc` fails resolving the board before it reaches a compiler. The
+> ESP32-P4 is simply newer than the stock platform.
 >
-> Two routes exist. **pioarduino**, a community fork of the platform carrying a current
-> Arduino-ESP32, keeps the build file almost unchanged but points the toolchain at a
-> third-party fork. **ESP-IDF 5.5**, which is official and supports the P4 directly, but
-> means an IDF project layout with Arduino pulled in as a component.
+> Of the two routes — **pioarduino**, a community fork carrying a current Arduino-ESP32,
+> or **ESP-IDF 5.5**, official and supporting the P4 directly — ESP-IDF was chosen, with
+> Arduino pulled in as a managed component.
 >
-> **ESP-IDF was chosen.** The build instructions in this section will be rewritten once a
-> build has actually succeeded — not before. Documenting a command that has never run is
-> what produced this note in the first place.
+> **The other three images are still PlatformIO projects**, and correctly so: the beacon
+> node, Remote ID module and ground station target the ESP32-C3, C6 and S3, which the
+> stock platform has supported for years. Only the P4 needed moving. See §10.6.
+>
+> An earlier revision of this note promised the instructions would be rewritten "when a
+> build succeeds, not before". They have been, and the switches above were verified by
+> building a non-default combination and confirming the binary changed — the 9-inch
+> image embeds `2810 900 KV`, the `-DFRAME_SIZE_IN=7` image embeds `2807 1300 KV`.
 
 Ten combinations, all building and passing the host tests. Invalid pairings stop the
 build with a specific message — a 2807 on a 10-inch frame is under-stator'd and a 3115 on
@@ -797,10 +809,15 @@ the design needs no instrument at all.**
 
 **Parts: none.** The flight controller, a USB cable, and a terminal.
 
-Build with DShot enabled and read what it says at boot:
+Build with DShot enabled and read what it says at boot. `DSHOT_ENABLE` is force-set in
+`firmware/flight-controller/CMakeLists.txt` rather than passed on the command line, so
+that the `unverified-defaults` check can keep it at 0 in `config.h` — an unproven
+feature must not become the default by being convenient:
 
 ```bash
-pio run -e odyssey-fc -t upload -- -DDSHOT_ENABLE=1
+idf.py set-target esp32p4          # first time only; sdkconfig.defaults does not set it
+idf.py build
+idf.py -p COM12 flash monitor      # your port
 ```
 
 `DShotRmt::begin()` reports each failure separately, on purpose. Assumptions 1 to 3 are
@@ -812,6 +829,29 @@ answered here:
 | `RX channel on GPIO n failed` | **assumption 1 is false.** A pin cannot carry both a TX and an RX channel. Bidirectional telemetry needs a different capture mechanism, not different settings — stop and change the design |
 | `TX channel on GPIO n failed` | the resolution or clock source was rejected. `DSHOT_RMT_RESOLUTION_HZ` needs to change, and §4.3.1's table says what it must still satisfy |
 | `copy encoder allocation failed` | out of RMT memory; reduce `mem_block_symbols` |
+
+> **STEP 0 IS DONE. Assumptions 1, 2 and 3 hold**, on an ESP32-P4-Function-EV-Board on
+> 2026-08-23:
+>
+> ```
+> I (378) dshot: DShot300 on 10 MHz RMT: 33 ticks/bit (9999 ppm error), bidirectional
+> DShot output active (analog PWM is NOT in use)
+> ```
+>
+> Four TX and four RX channels allocated on shared GPIOs. **Assumption 1 — that a TX and
+> an RX channel can share one pin — is confirmed**, which was the one that could have
+> invalidated the bidirectional design rather than merely needed tuning. The 9999 ppm bit
+> error is 1%, exactly what the host tests compute from 33 ticks at 10 MHz, and the first
+> agreement between this document's arithmetic and the silicon.
+>
+> **Assumption 4 remains untested.** It needs an ESC, and it is step 2.
+>
+> Two things had to be fixed to get here, and neither was a DShot problem — see findings
+> 42 and 43 below. A third was found before them: `mem_block_symbols` was 64 against a
+> chip whose RMT channels hold 48 words, so the first two motors consumed all four TX
+> candidates and motor 2 failed with `no free tx channels`. It is now derived from
+> `SOC_RMT_MEM_WORDS_PER_CHANNEL`. Note that four TX plus four RX uses the **entire** RMT
+> peripheral, 8 of 8: nothing else in this firmware may ever claim an RMT channel.
 
 > **Expect compile errors before you see any of this.** `dshot_rmt.cpp` has never been
 > through a compiler. The ESP-IDF RMT API changed between IDF 4 and 5, and the code is
@@ -943,8 +983,9 @@ safer and more informative.
 **Not needed:** a level shifter. The ESP32-P4 drives 3.3 V logic and ESC signal inputs
 accept it directly.
 
-**Also required, and free:** a toolchain with ESP32-P4 support — PlatformIO, or ESP-IDF
-5.x directly. `dshot_rmt.cpp` is written against the IDF 5 RMT API.
+**Also required, and free:** **ESP-IDF 5.x**. Not PlatformIO — its stock platform cannot
+resolve the P4 at all (§3.2). `dshot_rmt.cpp` is written against the IDF 5 RMT API, which
+is also why the port was cheap: the code already targeted the toolchain it moved to.
 
 ##### Step 3 — thrust stand, still no propeller
 
@@ -1951,7 +1992,7 @@ scheduling slack for it. That is a reasonable trade to make deliberately and a p
 to make by default.
 
 ```bash
-pio run -e odyssey-fc -- -DFLIGHT_LOOP_HZ=1000        # 9-inch, faster loop
+idf.py build -DFLIGHT_LOOP_HZ=1000                    # 9-inch, faster loop
 ```
 
 Doing it in the other order buys a harmonic notch on two more airframes, at the cost of
@@ -1981,6 +2022,44 @@ to filter a peak that RPM telemetry would have located exactly.
 >
 > Corrected: the four moved to GPIO 39–42, and the `devboard-pins` check now refuses any
 > build that puts a function back on 24–27.
+
+> **FINDING 42. The battery ADC was on a pin that has no ADC.** `PIN_BATT_ADC` was
+> GPIO 1. The ESP32-P4's ADC reaches GPIO 16–23 (ADC1) and 49–54 (ADC2) and nothing else.
+>
+> `analogReadMilliVolts()` on any other pin does not return a poor reading — it takes a
+> Load access fault:
+>
+> ```
+> Guru Meditation Error: Core 0 panic'ed (Load access fault)
+>   __analogReadMilliVolts  <- SensorHub::serviceSlowSensors  <- TaskTelemetry
+> ```
+>
+> Pack voltage drives the return-to-home threshold and the landing decision, so this
+> crashed the aircraft's judgement rather than a displayed number. Moved to **GPIO 51**
+> on ADC2, because every free ADC1 pin collides with the GNSS, the VTX, the LiDAR or the
+> development board's SDIO bus. The `devboard-pins` check now refuses any build whose
+> `PIN_BATT_ADC` cannot reach an ADC.
+>
+> Found on the first DShot-enabled boot — not by DShot, but because that was the first
+> boot that ran far enough to reach the telemetry task.
+
+> **FINDING 43, and it was mine.** Moving `PIN_AUX_BUS_TX` to GPIO 39 to clear the USB
+> data lines (finding 41) broke the AUX bus, because `AuxSerial` was `HardwareSerial(5)`
+> — the LP-UART, which can only attach to LP-IO pins, GPIO 0–15 on this chip:
+>
+> ```
+> lp_uart_config_io(): Failed to initialize LP_IO 39
+> ```
+>
+> That whole range is already spoken for by the ADC input, the arm button, the motors,
+> I²C and the LoRa SPI bus, so there was nowhere to put it. `AuxSerial` moved to
+> **UART1** instead. The AUX bus is a one-way broadcast to the beacon and Remote ID
+> module while the aircraft is powered, so it gains nothing from a low-power UART, and
+> UART1 was free once the console moved to USB.
+>
+> The lesson is narrower than "check the pins": a pin move is not a local edit when the
+> peripheral behind the pin has its own constraints. The check added for finding 41
+> verified that 24–27 stayed clear; it did not know the LP-UART existed. It does now.
 
 ### 8.4 Radio frequency plan
 
@@ -2148,8 +2227,10 @@ avionics or jam the line.
 
 ## 10. Software Architecture
 
-The firmware is a buildable PlatformIO project, not a listing in this document. Four
-images share one protocol header.
+The firmware is a set of buildable projects, not a listing in this document. Four images
+share one protocol header. The flight controller builds with **ESP-IDF** because
+PlatformIO cannot target the ESP32-P4 (§3.2); the other three remain **PlatformIO**
+projects, which suits the C3, C6 and S3 they run on.
 
 ### 10.1 Repository layout
 
@@ -2308,13 +2389,35 @@ regression in these specific algorithms from reaching a flight test at all.
 
 ### 10.6 Building
 
+**Flight controller — ESP-IDF.** A fresh clone or a new git worktree needs two setup
+steps first, because `sdkconfig` and the vendored Arduino components are both
+gitignored. Skipping them produces two failures in a row that name neither cause: an
+unresolved `Adafruit_BusIO`, then a missing `xtensa-esp32-elf-gcc` — the default target,
+not the P4.
+
 ```bash
-cd firmware/flight-controller && pio run -t upload
+cd firmware/flight-controller
+python ../../tools/fetch_arduino_libs.py   # vendors the 6 Arduino libraries
+idf.py set-target esp32p4                  # sdkconfig.defaults does NOT set the target
+idf.py build
+idf.py -p COM12 flash monitor              # your port
 ```
 
-Each of the four firmware directories is an independent PlatformIO project. Build them
-in any order; they share `shared/odyssey_link.h` by include path, so a protocol change
-rebuilds all four.
+`idf.py set-target` implies a `fullclean` and refuses to run if `build/` exists but is
+not a valid CMake tree, so delete `build/` by hand if an earlier failed configure left
+one behind.
+
+**Beacon node, Remote ID and ground station — PlatformIO.** These target the ESP32-C3,
+C6 and S3, all of which the stock `espressif32` platform has supported for years:
+
+```bash
+cd firmware/beacon-node   && pio run -t upload
+cd firmware/remote-id     && pio run -t upload
+cd firmware/ground-station && pio run -t upload
+```
+
+Build them in any order; all four share `shared/odyssey_link.h` by include path, so a
+protocol change rebuilds every image.
 
 ---
 
@@ -2754,7 +2857,10 @@ Revision 2.0 introduced or left standing the following, all corrected here.
 | 3-blade propellers on a long-range platform with thrust to spare | Changed to 9x5x2. About 10% better hover efficiency for ~12% of peak thrust: 24 min hover and 16 km one-way, up from 22 min and 14.1 km |
 | `initVl53l1x()` read the downward rangefinder's model ID through `i2cRead(..., 0x010F, ...)`, whose register parameter is a `uint8_t`. The VL53L1X uses 16-bit register addressing, so 0x010F truncated to 0x0F and addressed the wrong register; the correct two-byte fallback beneath it ran only if that malformed transaction happened to fail. The landing flare and touchdown veto depend on this sensor | Corrected to two-byte addressing, matching `readVl53l1x()`. Found by the compiler on the first build of the file — "changes value from 271 to 15" |
 | Eight of the nine `.cpp` files in the repository had never been compiled by anything. The host suite builds the headers, where most of the logic lives, but links only `identity.cpp` — every other implementation file needs Arduino and ESP-IDF, so none was ever built. The first real compile found `sensors.cpp` using `SlewLimitedEma` without including `filters.h` | Recorded in §10.4. `idf.py build` is now the compile check for those files and §11.1 requires it before flashing. A green host run means the algorithms are right, not that the firmware compiles |
-| The build command given throughout the specification, `pio run -e odyssey-fc`, cannot work. PlatformIO's stock `espressif32` platform has no `esp32-p4-function-ev-board` — the board `platformio.ini` names — so the build fails resolving the board before reaching a compiler. Every `pio run` line in the document was written without ever being run | Recorded in §3.2. ESP-IDF 5.5 chosen over the pioarduino community fork; the instructions will be rewritten when a build succeeds, not before |
+| The build command given throughout the specification, `pio run -e odyssey-fc`, cannot work. PlatformIO's stock `espressif32` platform has no `esp32-p4-function-ev-board` — the board `platformio.ini` names — so the build fails resolving the board before reaching a compiler. Every `pio run` line in the document was written without ever being run | **Closed.** ESP-IDF 5.5 chosen over the pioarduino community fork, and every `pio run` line for the flight controller rewritten in §3.2, §4.3.2, §6 and §10.6 — after a build succeeded, as that note promised. `idf.py -D` sets CMake cache variables rather than compile definitions, so `CMakeLists.txt` now forwards the documented switches; verified by building a non-default combination and confirming the binary changed. The other three images are still PlatformIO, correctly |
+| `PIN_BATT_ADC` was GPIO 1, which has no ADC on the ESP32-P4 — ADC1 is 16–23 and ADC2 is 49–54. `analogReadMilliVolts()` there takes a Load access fault rather than returning a poor reading, in the telemetry task, and pack voltage drives the return-to-home threshold and the landing decision | Moved to GPIO 51 on ADC2; `devboard-pins` now refuses a `PIN_BATT_ADC` that cannot reach an ADC. §8.3, finding 42 |
+| Moving `PIN_AUX_BUS_TX` off the USB data lines put it on GPIO 39, but `AuxSerial` was the LP-UART, which can only attach to LP-IO pins — GPIO 0–15. The AUX broadcast to the beacon and Remote ID module failed to start. Introduced by the fix for finding 41 | `AuxSerial` moved to UART1, free since the console went to USB; the LP-IO constraint is now checked. §8.3, finding 43 |
+| The blackbox ring buffer used `volatile` for `head_`, `tail_` and `dropped_` across two CPU cores — `push()` in the flight loop on core 1, `service()` in the storage task on core 0. `volatile` emits no barrier and does not order the non-volatile store of `ring_[head_]` against the volatile store to `head_`, so the consumer could observe an advanced index while the slot still held the previous record. `BlackBoxRecord` is 54 bytes, so the failure is a torn record written silently into the one file that exists to explain a crash | `std::atomic` with paired acquire/release, and a `static_assert` that the atomic is lock-free so no mutex enters the 500 Hz flight loop. `endFlight()` also drained *before* clearing its open flag, stranding every record pushed in between — the last samples before landing — and `service()` had two callers on tasks that preempt each other, sharing one batch buffer. §10.4 |
 | Nine of the ten build combinations had no parts list. The BOM covered the 9-inch reference only, while `config.h` happily built 7-inch and 10-inch aircraft whose frame, motors, propellers, battery and ESC were nowhere specified | `hardware/bom-variants.csv` covers all ten, and the `bom-mass` check reconciles every build's parts against the mass model in `config.h`. §2.1 |
 | `check_bom()` verified BOM arithmetic and the price quoted in §2, but nothing compared BOM **mass** against `config.h` — `AIRFRAME_AUW_G` sizes thrust-to-weight, hover power and the energy budget, and was free to drift from the parts that produce it | Reconciled for all ten builds, including an explicit `Airborne Mass g` column so the ground-station radio the BOM also buys is not counted as flying mass |
 | The bidirectional-DShot GCR decode read its four 5-bit groups from the wrong bit offsets, and most-significant group first. Every legal group still decoded to a legal nibble, so a corrupted RPM would have passed its checksum and been fed to the notch as a measurement | Corrected to read groups low-first at offsets 0/5/10/15. Caught by a full encode/decode round trip, which is why the test builds the wire format rather than trusting the decoder against itself |
