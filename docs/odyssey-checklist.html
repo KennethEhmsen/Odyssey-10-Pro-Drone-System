@@ -1,0 +1,302 @@
+<title>Odyssey-10 Pro Commissioning</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+/* Tenth sheet, same system as the others -- but this one is used, not read. */
+:root{
+  --paper:#F1F4F5;--sheet:#FBFCFC;--rule:#C9D2D6;--rule-soft:#E2E8EA;
+  --ink:#131C22;--ink-2:#46565F;--ink-3:#6E818B;--copper:#A85C34;
+  --c-power:#BE3F24;--c-i2c:#8A5E0C;--c-spi:#61469C;
+  --c-uart:#0B6670;--c-pwm:#2A6E36;--c-gpio:#55666F;
+  --warn-bg:#FBF0E6;--warn-edge:#D9A273;
+  --grid:rgba(19,28,34,.055);
+  --shadow:0 1px 2px rgba(19,28,34,.06),0 8px 24px -12px rgba(19,28,34,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{margin:0;background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:32px 32px,32px 32px;color:var(--ink);
+  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:48px 24px 96px;display:flex;flex-direction:column;gap:40px}
+.masthead{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--copper)}
+.eyebrow a{color:var(--copper);text-decoration:none;border-bottom:1px dotted currentColor;padding-bottom:1px}
+.eyebrow a:hover{border-bottom-style:solid}
+h1{font-family:Archivo,sans-serif;font-weight:700;font-size:clamp(30px,5.2vw,46px);
+  line-height:1.05;letter-spacing:-.021em;margin:0;text-wrap:balance}
+.standfirst{max-width:66ch;font-size:16.5px;color:var(--ink-2);margin:0}
+.provenance{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3);
+  padding-top:6px;border-top:1px solid var(--rule-soft)}
+.provenance b{color:var(--ink-2);font-weight:600}
+.dot{color:var(--rule)}
+section{display:flex;flex-direction:column;gap:16px}
+h2{font-family:Archivo,sans-serif;font-weight:600;font-size:12px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--ink-3);margin:0;padding-bottom:9px;
+  border-bottom:1.5px solid var(--rule);display:flex;justify-content:space-between;
+  align-items:baseline;gap:16px}
+h2 span{font-family:"IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:none;
+  font-weight:400;color:var(--ink-3)}
+.lede{max-width:68ch;color:var(--ink-2);margin:0}
+.callout{background:var(--warn-bg);border:1px solid var(--warn-edge);border-left-width:3px;
+  border-radius:2px;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.callout h3{font-family:Archivo,sans-serif;font-size:14px;font-weight:700;margin:0}
+.callout p{margin:0;font-size:14px;color:var(--ink-2);max-width:70ch}
+code{font-family:"IBM Plex Mono",monospace;font-size:.92em;color:var(--ink)}
+footer{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3);
+  border-top:1px solid var(--rule-soft);padding-top:16px;line-height:1.8}
+:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---- the checklist itself ---- */
+.phase{display:flex;flex-direction:column;gap:2px}
+.phasehead{display:flex;align-items:baseline;gap:12px;padding:10px 0 8px;
+  border-bottom:1.5px solid var(--cls)}
+.phaseno{font-family:"IBM Plex Mono",monospace;font-size:10.5px;font-weight:600;
+  letter-spacing:.12em;color:var(--cls)}
+.phasename{font-family:Archivo,sans-serif;font-size:17px;font-weight:600}
+.phasecount{margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:11px;
+  color:var(--ink-3)}
+.item{display:grid;grid-template-columns:26px 1fr;gap:12px;padding:12px 12px 12px 4px;
+  border-bottom:1px solid var(--rule-soft);align-items:start}
+.item:last-child{border-bottom:none}
+.item.done{opacity:.55}
+.item.done .itemname{text-decoration:line-through}
+.box{appearance:none;width:18px;height:18px;margin:3px 0 0;border-radius:3px;
+  border:1.6px solid var(--rule);background:var(--sheet);cursor:pointer;
+  display:grid;place-content:center;transition:border-color .12s,background .12s}
+.box:checked{background:var(--cls);border-color:var(--cls)}
+.box:checked::after{content:"";width:5px;height:9px;border:solid var(--paper);
+  border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.box:hover{border-color:var(--cls)}
+.itemname{font-weight:600;font-size:14.5px;letter-spacing:-.003em}
+.itemwhy{font-size:13px;color:var(--ink-2);margin-top:2px;max-width:74ch}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.tag{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.06em;
+  padding:1px 7px;border-radius:2px;border:1px solid currentColor;white-space:nowrap}
+.t-safety{color:var(--c-power)}
+.t-finding{color:var(--copper)}
+.t-blocked{color:var(--ink-3)}
+.t-ready{color:var(--c-pwm)}
+.t-done{color:var(--c-pwm)}
+.bar{height:6px;background:var(--rule-soft);border-radius:3px;overflow:hidden}
+.barfill{height:100%;background:var(--c-pwm);width:0;transition:width .2s}
+.summary{display:flex;flex-wrap:wrap;gap:10px 26px;align-items:center;
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3)}
+.reset{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink-3);
+  background:none;border:1px solid var(--rule);border-radius:2px;padding:3px 10px;
+  cursor:pointer}
+.reset:hover{border-color:var(--copper);color:var(--copper)}
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow"><a href="index.html">&larr; All sheets</a> &middot; Odyssey-10 Pro &middot; Commissioning &middot; Sheet 10 of 10</div>
+    <h1>Before It Flies</h1>
+    <p class="standfirst">
+      Thirty-one checks in five phases, in the order they have to happen. Every other sheet
+      in this set tells you what something <em>is</em>; this is the only one that tells you
+      what to <em>do</em>. Tick them off — the boxes remember.
+    </p>
+    <div class="provenance" id="provenance"></div>
+  </header>
+
+  <section>
+    <h2>Progress <span>§11</span></h2>
+    <div class="bar"><div class="barfill" id="bar"></div></div>
+    <div class="summary" id="summary"></div>
+  </section>
+
+  <section id="phases"></section>
+
+  <section>
+    <h2>Three that are not like the others <span>read these twice</span></h2>
+    <div class="callout">
+      <h3>The ones with a body count behind them</h3>
+      <p>
+        <b>Throttle-low arm interlock.</b> Finding 5, and the specification says of it:
+        &ldquo;it is the one that hurts people&rdquo;. Confirm arming is <em>refused</em>
+        with the stick raised — not that it works with the stick down.
+        <br><br>
+        <b>Motor direction, propellers removed.</b> Props-out, and each diagonal pair must
+        match: M1 with M4, M2 with M3. Get this wrong with propellers fitted and the
+        aircraft inverts itself into the ground at full throttle.
+        <br><br>
+        <b>IMU polarity.</b> Nose-down must give positive pitch, right-wing-down positive
+        roll. An inversion here diverges on the first take-off, and there is no recovering
+        from it in the air.
+      </p>
+    </div>
+    <div class="callout">
+      <h3>And one procedure that was replaced because it could not work</h3>
+      <p>
+        The revision 1.0 free-fall test — drop the craft 10 cm, or invert it — was
+        arithmetically incapable of passing. A 10 cm drop gives 143 ms of free fall against
+        a 400 ms threshold, and inverting leaves the accelerometer magnitude at
+        9.8&nbsp;m/s², nowhere near the 1.5&nbsp;m/s² trigger. It would have &ldquo;passed&rdquo;
+        by never firing. Use the tethered drop rig from §11.3 instead.
+      </p>
+    </div>
+  </section>
+
+  <footer id="titleblock"></footer>
+</div>
+
+<script>
+const DOC_REV = "5.1";
+
+/* Every item is a checkbox in §11, in document order. `why` is what it catches;
+   `state` is where this build actually stands today. */
+const PHASES = [
+  {n:"11.1", name:"Bench", cls:"c-gpio", items:[
+    ["Power rail isolation","Current-limited supply at 1.0 A; confirm clean 5.0 V and 12.0 V","blocked"],
+    ["Sensor enumeration","<code>[SENSORS] IMU:1 BACKUP:1 BARO:1 MAG:1 TOF:1 INA:1</code> — every one must read 1. A zero is a wiring or address fault, not something to fly past","blocked"],
+    ["GNSS link negotiation","Console must show the module answering, and the switch to 115200 if it started at 9600","blocked"],
+    ["Voltage divider calibration","Set <code>VOLTAGE_DIVIDER_TRIM</code> against a multimeter. A 2% error shifts the critical threshold by 0.4 V","blocked"],
+    ["Current shunt zero","INA226 within ±0.2 A of zero with motors idle","blocked"],
+    ["IMU polarity","Nose-down → positive pitch; right-wing-down → positive roll","blocked","safety"],
+    ["Compass calibration","Hard-iron offsets, then <b>repeat with motors at hover throttle</b>. More than 5° of shift means the mast is too short or the power leads need twisting","blocked"]
+  ]},
+  {n:"11.2", name:"Propulsion", cls:"c-pwm", items:[
+    ["<code>idf.py build</code> completes","The only thing that compiles the nine .cpp files — the host tests never did","done","finding 40"],
+    ["Weigh the flight-controller board","The BOM carries 9 g and it is the least-supported mass in it. Propagates into AUW, the hover point and the return reserve","ready"],
+    ["ESC endpoint calibration","400 Hz PWM input, 1000–2000 µs","blocked"],
+    ["Motor direction, propellers removed","Props-out. M1 rear-right CCW, M2 front-right CW, M3 rear-left CW, M4 front-left CCW. Each diagonal pair must match","blocked","safety"],
+    ["Thrust stand","Per-motor thrust at 20/40/60/80/100%, then correct <code>CRUISE_CURRENT_A</code>. The energy budget depends on these being real","blocked"],
+    ["Gyro notch measurement","Hover 30 s, decode the log, read the notch verdict. Do <b>not</b> analyse the logged gyro — it is post-notch and sampled below the peak","blocked","finding 34"]
+  ]},
+  {n:"11.3", name:"Safety systems", cls:"c-power", items:[
+    ["Arm blocker sweep","Verify each condition blocks arming and reports the right flag: throttle up, handset off, GNSS covered, compass disconnected","blocked"],
+    ["Throttle-low arm interlock","Confirm arming is <b>refused</b> with the stick raised. &ldquo;This is the one that hurts people&rdquo;","blocked","finding 5","safety"],
+    ["Free-fall parachute test","Tethered drop from ≥1.5 m onto a crash mat. <b>Not</b> the revision 1.0 procedure — see below","blocked","finding 34","safety"],
+    ["Beacon position feed","The beacon must be receiving position over the AUX bus before it is trusted to report one","blocked"],
+    ["Beacon latch","The solid-state latch fires and the beacon runs from its own cell","blocked"],
+    ["LiDAR intervention","Forward obstacle actually stops the aircraft","blocked"],
+    ["LiDAR staleness","A stale reading must not be treated as a live one","blocked","finding 15"],
+    ["BlackBox","A card in the slot, a file written, and the decoder reading it back","ready"]
+  ]},
+  {n:"11.4", name:"Links", cls:"c-uart", items:[
+    ["ExpressLRS binding","Set receiver failsafe to <b>no pulses</b>, so the flight controller sees a genuine link loss","blocked"],
+    ["Handset channel map","Roll, pitch, throttle, yaw on 1–4; arm on 5; RTH on 6","blocked"],
+    ["RC failsafe","Power off the handset on the bench. Expect RTH with a home lock, failsafe landing without","blocked"],
+    ["Ground station","A moving attitude indicator and a plausible battery reading. Nothing at all means the MAVLink CRC is wrong","blocked","finding 9"],
+    ["Land permission round trip","Force AWAITING_LAND_PERMIT, press PERMIT, confirm the transition. This path was unreachable in revision 1.0","blocked","finding 11"],
+    ["Remote ID — only if fitting it","Confirm a receiver app sees <b>your</b> operator ID and serial. Until both are valid it broadcasts nothing, deliberately","blocked"],
+    ["2.4 GHz coexistence","Watch <code>rcLinkQuality</code> for 60 s with Remote ID broadcasting. A dip in step with it means the antennas are too close","blocked"]
+  ]},
+  {n:"11.5", name:"Field", cls:"c-i2c", items:[
+    ["GNSS home lock","≥6 satellites and a HOME LOCKED line before arming","blocked"],
+    ["First flight, low and close","Hover at 3 m for 60 s. Pull the log; sustained mixer saturation above 30% means it is out of control authority","blocked"],
+    ["RTH proving flight","100 m out, 30 m up, plenty of pack. Command RTH and watch it come home. <b>Do not discover in an emergency that this works</b>","blocked","safety"]
+  ]}
+];
+
+const $=(s)=>document.querySelector(s);
+const esc=(s)=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const KEY="odyssey-commissioning-v1";
+
+/* Tick state survives a reload where storage is allowed, and the page degrades to a
+   plain printable checklist where it is not. */
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { state = {}; }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+
+const ALL = PHASES.flatMap((p,pi)=>p.items.map((it,ii)=>({p,pi,ii,it})));
+
+function render(){
+  $("#phases").innerHTML = PHASES.map((p,pi)=>{
+    const rows = p.items.map((it,ii)=>{
+      const id=`${pi}-${ii}`;
+      const done = state[id] || it[2]==="done";
+      const tags=[];
+      if(it.includes("safety")) tags.push('<span class="tag t-safety">SAFETY-CRITICAL</span>');
+      const f=it.find(x=>typeof x==="string" && x.startsWith("finding"));
+      if(f) tags.push(`<span class="tag t-finding">${esc(f)}</span>`);
+      if(it[2]==="done") tags.push('<span class="tag t-done">already done</span>');
+      else if(it[2]==="ready") tags.push('<span class="tag t-ready">can do now</span>');
+      else tags.push('<span class="tag t-blocked">needs parts</span>');
+      return `<label class="item${done?" done":""}" style="--cls:var(--${p.cls})">
+          <input type="checkbox" class="box" data-id="${id}"${done?" checked":""}
+                 ${it[2]==="done"?"disabled":""}>
+          <span>
+            <span class="itemname">${it[0]}</span>
+            <div class="itemwhy">${it[1]}</div>
+            <div class="tags">${tags.join("")}</div>
+          </span>
+        </label>`;
+    }).join("");
+    return `<div class="phase" style="--cls:var(--${p.cls})">
+        <div class="phasehead">
+          <span class="phaseno">§${p.n}</span>
+          <span class="phasename">${esc(p.name)}</span>
+          <span class="phasecount">${p.items.length} checks</span>
+        </div>${rows}
+      </div>`;
+  }).join("");
+
+  document.querySelectorAll(".box").forEach(b=>{
+    b.addEventListener("change",()=>{
+      state[b.dataset.id]=b.checked; save(); render();
+    });
+  });
+  summarise();
+}
+
+function summarise(){
+  const done = ALL.filter(({pi,ii,it})=>state[`${pi}-${ii}`]||it[2]==="done").length;
+  const ready = ALL.filter(({it})=>it[2]==="ready").length;
+  const safety = ALL.filter(({it})=>it.includes("safety")).length;
+  $("#bar").style.width = `${done/ALL.length*100}%`;
+  $("#summary").innerHTML =
+    `<span><b style="color:var(--ink-2)">${done}</b> of ${ALL.length} complete</span>`+
+    `<span><b style="color:var(--c-pwm)">${ready}</b> can be done today</span>`+
+    `<span><b style="color:var(--c-power)">${safety}</b> safety-critical</span>`+
+    `<span>${ALL.length-done-ready} waiting on parts</span>`+
+    `<button class="reset" id="reset">clear ticks</button>`;
+  const r=$("#reset");
+  if(r) r.addEventListener("click",()=>{state={};save();render();});
+}
+
+$("#provenance").innerHTML=[
+  `<b>Checks</b> ${ALL.length}`,`<span class="dot">/</span>`,
+  `<b>Phases</b> ${PHASES.length}`,`<span class="dot">/</span>`,
+  `<b>Source</b> §11, in document order`,`<span class="dot">/</span>`,
+  `<b>Ticks</b> saved in this browser`,`<span class="dot">/</span>`,
+  `<b>Doc</b> rev ${DOC_REV}`
+].join(" ");
+
+$("#titleblock").innerHTML=
+  `Odyssey-10 Pro &middot; commissioning checklist, revision ${DOC_REV}<br>`+
+  `Every item is a checkbox in §11 of the specification, in document order, with the `+
+  `reason it exists rather than only the instruction. Ticks are stored in this browser `+
+  `and nowhere else &mdash; clearing them is one button, and they do not travel with the `+
+  `file.<br>`+
+  `The order matters: the bench phase catches what would otherwise be discovered in the `+
+  `air, and the field phase assumes everything above it passed.`;
+
+render();
+</script>

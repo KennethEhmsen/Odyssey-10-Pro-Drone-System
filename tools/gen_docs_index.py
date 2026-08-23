@@ -35,10 +35,19 @@ META = {
     "odyssey-link.html": ("How the four images talk",
         "Frame anatomy, the header, the four types and the command opcodes",
         [], "uart"),
+    "odyssey-checklist.html": ("What to do before it flies",
+        "Thirty-one checks in five phases, in the order they have to happen",
+        [], "power"),
     "odyssey-bringup.html": ("Where the project is",
         "Four steps, four DShot assumptions, and what is actually verified",
         [], "gpio"),
 }
+
+#  Spelled out, because a headline reading "10 Sheets" is not a headline. Written
+#  once here rather than typed into the HTML, where it said "Nine" while the page
+#  listed ten.
+WORDS = {1:"One", 2:"Two", 3:"Three", 4:"Four", 5:"Five", 6:"Six",
+         7:"Seven", 8:"Eight", 9:"Nine", 10:"Ten", 11:"Eleven", 12:"Twelve"}
 
 sheets = []
 for path in sorted(DOCS.glob("*.html")):
@@ -110,7 +119,7 @@ HTML = f"""<title>Odyssey-10 Pro Drawing Set</title>
 
   <header class="masthead">
     <div class="eyebrow">Odyssey-10 Pro &middot; Drawing set &middot; revision {sorted(revs)[-1]}</div>
-    <h1>Nine Sheets</h1>
+    <h1>{WORDS.get(len(sheets), len(sheets))} Sheets</h1>
     <p class="standfirst">
       Each one answers a question the specification answers in prose, and each is held to
       the source by a check that fails the build when they drift apart. If a sheet and the

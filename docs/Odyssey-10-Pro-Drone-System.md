@@ -2523,6 +2523,7 @@ Odyssey-10-Pro-Drone-System/
 |   +-- odyssey-dshot.html          The DShot300 waveform, drawn to scale
 |   +-- odyssey-link.html           The LoRa/AUX frame format, field by field
 |   +-- odyssey-bringup.html        Bring-up status: four steps, four assumptions
+|   +-- odyssey-checklist.html      The §11 commissioning checklist, tickable
 |   +-- index.html                  The map for the nine sheets
 ```
 

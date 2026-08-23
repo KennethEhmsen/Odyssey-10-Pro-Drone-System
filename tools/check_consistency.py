@@ -2531,11 +2531,12 @@ def check_schematic_revision(rep, fix):
                         fixable=True)
             continue
 
-        #  And no stray hardcoded revision may survive alongside the constant.
-        strays = [x for x in re.findall(r"revision ([0-9]+\.[0-9]+)", html)
-                  if x != doc_rev]
-        strays += [x for x in re.findall(r"\brev ([0-9]+\.[0-9]+)", html)
-                   if x != doc_rev]
+        #  A second, hardcoded declaration alongside the constant. Only the title-block
+        #  form counts: these sheets discuss the specification's history constantly
+        #  ("the revision 1.0 free-fall test", "unreachable in revision 1.0") and none of
+        #  that is a declaration. An earlier version matched any "revision N.N" and fired
+        #  on correct prose, which is worse than not checking.
+        strays = [x for x in re.findall(r"REV ([0-9]+\.[0-9]+)", html) if x != doc_rev]
         if strays:
             rep.problem("schematic-rev",
                         f"{rel} hardcodes revision {', '.join(sorted(set(strays)))} "
