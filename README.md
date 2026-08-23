@@ -1,7 +1,7 @@
 # Odyssey-10 Pro
 
 [![host-tests](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml/badge.svg?branch=main)](https://github.com/KennethEhmsen/Odyssey-10-Pro-Drone-System/actions/workflows/host-tests.yml)
-[![assertions](https://img.shields.io/badge/host_assertions-387-blue)](tools/host_tests/)
+[![assertions](https://img.shields.io/badge/host_assertions-413-blue)](tools/host_tests/)
 [![consistency](https://img.shields.io/badge/consistency_checks-25-blue)](tools/check_consistency.py)
 [![decoder](https://img.shields.io/badge/RID_decoder_tests-80-blue)](android/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)

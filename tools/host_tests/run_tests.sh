@@ -15,6 +15,7 @@ g++ -std=c++17 -Wall -Wextra ${EXTRA_CXXFLAGS:-} \
     -I ../../firmware/remote-id/src \
     test_all.cpp \
     ../../firmware/remote-id/src/identity.cpp \
+    ../../firmware/flight-controller/src/blackbox.cpp \
     -o test_all
 
 ./test_all

@@ -59,24 +59,58 @@ bool BlackBox::startFlight(uint32_t flightNumber) {
   tail_.store(0, std::memory_order_relaxed);
   dropped_.store(0, std::memory_order_relaxed);
   written_ = 0;
-  fileOpen_ = true;
+  lastFlushMs_ = millis();
+
+  //  RELEASE, and last. Opening the gate is what publishes the reset indices above to
+  //  the producer on the other core.
+  fileOpen_.store(true, std::memory_order_release);
   Serial.printf("[BLACKBOX] logging to %s\n", path_);
   return true;
 }
 
 void BlackBox::endFlight() {
-  if (!fileOpen_) return;
-  service();                 // drain whatever is still buffered
+  //  SHUT THE PRODUCER OFF FIRST, then drain. The old order drained and only then
+  //  cleared the flag, so every record the flight loop pushed in between was stranded
+  //  in the ring and lost when the file closed -- the last samples before landing,
+  //  which are the ones most worth having.
+  //
+  //  exchange() does both jobs at once: it closes the gate and reports whether we are
+  //  the one who closed it, which preserves the old early return.
+  if (!fileOpen_.exchange(false, std::memory_order_acq_rel)) return;
+
+  //  A push() already past its fileOpen_ check may still be completing on the other
+  //  core. push() is wait-free -- no allocation, no I/O, tens of microseconds -- so
+  //  2 ms is a very large margin. This runs at landing, not in a control path.
+  delay(2);
+
+  //  Claim the drain. TaskStorage may be holding it, and it is a LOWER priority task
+  //  on this same core, so we must yield rather than spin -- spinning would stop it
+  //  ever running to release the flag.
+  uint32_t waited = 0;
+  while (draining_.exchange(true, std::memory_order_acquire)) {
+    delay(1);
+    if (++waited >= 2000) {
+      //  A full drain is 8 batches; even a pathological 100 ms card stall on each is
+      //  under a second. If we are still waiting after two, say so rather than hang.
+      //  Closing anyway risks a torn final batch; not closing loses the whole flight.
+      Serial.println("[BLACKBOX] storage task did not yield the drain; closing anyway");
+      break;
+    }
+  }
+
+  drain_();
   logFile.flush();
   logFile.close();
-  fileOpen_ = false;
+  draining_.store(false, std::memory_order_release);
   Serial.printf("[BLACKBOX] closed %s -- %lu records, %lu dropped\n",
                 path_, (unsigned long)written_,
                 (unsigned long)dropped_.load(std::memory_order_relaxed));
 }
 
 void BlackBox::push(const BlackBoxRecord& rec) {
-  if (!fileOpen_) return;
+  //  Acquire: pairs with the release store in startFlight(). A producer that observes
+  //  an open file also observes the ring indices that go with it.
+  if (!fileOpen_.load(std::memory_order_acquire)) return;
 
   //  Relaxed on our own index: this task is the only writer of head_.
   const uint32_t head = head_.load(std::memory_order_relaxed);
@@ -99,10 +133,28 @@ void BlackBox::push(const BlackBoxRecord& rec) {
 }
 
 void BlackBox::service() {
-  if (!fileOpen_) return;
+  if (!fileOpen_.load(std::memory_order_acquire)) return;
 
+  //  If endFlight() already holds the drain there is nothing useful to do here: it
+  //  will take everything in the ring, and re-entering would corrupt its batch.
+  if (draining_.exchange(true, std::memory_order_acquire)) return;
+
+  drain_();
+
+  // Flush roughly once a second. Frequent flushes cost throughput; rare ones cost
+  // data if the aircraft loses power hard.
+  const uint32_t now = millis();
+  if (now - lastFlushMs_ >= 1000) {
+    lastFlushMs_ = now;
+    logFile.flush();
+  }
+
+  draining_.store(false, std::memory_order_release);
+}
+
+//  Caller must hold draining_.
+void BlackBox::drain_() {
   // Copy out of the ring in blocks so the SD layer sees large sequential writes.
-  static BlackBoxRecord batch[BLACKBOX_FLUSH_RECORDS];
   //  ACQUIRE, paired with the release store in push(): every record published
   //  before this head value is visible to us now.
   uint32_t head = head_.load(std::memory_order_acquire);
@@ -111,7 +163,7 @@ void BlackBox::service() {
   while (tail != head) {
     uint32_t n = 0;
     while (tail != head && n < BLACKBOX_FLUSH_RECORDS) {
-      batch[n++] = ring_[tail];
+      batch_[n++] = ring_[tail];
       tail = (tail + 1) % BLACKBOX_RING_RECORDS;
     }
     if (n == 0) break;
@@ -122,18 +174,9 @@ void BlackBox::service() {
     //  turning into dropped samples.
     tail_.store(tail, std::memory_order_release);
 
-    logFile.write((const uint8_t*)batch, n * sizeof(BlackBoxRecord));
+    logFile.write((const uint8_t*)batch_, n * sizeof(BlackBoxRecord));
     written_ += n;
 
     head = head_.load(std::memory_order_acquire);
-  }
-
-  // Flush roughly once a second. Frequent flushes cost throughput; rare ones cost
-  // data if the aircraft loses power hard.
-  static uint32_t lastFlush = 0;
-  const uint32_t now = millis();
-  if (now - lastFlush >= 1000) {
-    lastFlush = now;
-    logFile.flush();
   }
 }

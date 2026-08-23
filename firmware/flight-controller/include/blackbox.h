@@ -79,9 +79,39 @@ private:
   static_assert(std::atomic<uint32_t>::is_always_lock_free,
                 "blackbox ring indices must be lock-free: push() runs in the flight "
                 "loop and must never block");
+  static_assert(std::atomic<bool>::is_always_lock_free,
+                "fileOpen_ is read by push() in the flight loop and must never block");
+  //  Moves the ring to the card. No fileOpen_ gate and no locking of its own --
+  //  both callers must hold draining_ first.
+  void drain_();
+
   uint32_t written_ = 0;
+
+  //  ready_ is deliberately NOT atomic: begin() runs in setup() (main.cpp:1329),
+  //  before any task is created, and nothing writes it afterwards.
   bool     ready_   = false;
-  bool     fileOpen_ = false;
+
+  //  Gates the producer, and is read by it on the other core every 10 ms. Acquire on
+  //  that read pairs with the release store in startFlight(), so a producer that sees
+  //  true is guaranteed to see the reset ring indices too -- not a stale head_ from
+  //  the previous flight.
+  std::atomic<bool> fileOpen_{false};
+
+  //  ONE DRAINER AT A TIME. service() has two callers: TaskStorage at priority 1, and
+  //  endFlight() from TaskTelemetry at priority 3. Both are pinned to core 0, so the
+  //  higher-priority one can preempt the other part-way through a drain -- and the
+  //  drain is not re-entrant. It shares the batch buffer and it advances tail_ in
+  //  steps that assume a single consumer, so an interleaving writes mixed records to
+  //  the card and loses others outright.
+  //
+  //  This is a defect that making fileOpen_ atomic would NOT have fixed. Atomics
+  //  order memory; they do not make a critical section exclusive.
+  std::atomic<bool> draining_{false};
+
+  //  Was a function-static in service(). Both drainers shared it, which was half of
+  //  the bug above. It lives here now because it is drain state, held by draining_.
+  BlackBoxRecord batch_[BLACKBOX_FLUSH_RECORDS];
+  uint32_t lastFlushMs_ = 0;
   char     path_[32] = {0};
 };
 

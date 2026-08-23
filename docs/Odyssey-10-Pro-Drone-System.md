@@ -2212,6 +2212,8 @@ Odyssey-10-Pro-Drone-System/
 |       +-- test_all.cpp
 |       +-- arduino_shim.h
 |       +-- Arduino.h
+|       +-- sd_shim.h                 Fake MicroSD, so the real blackbox ring runs here
+|       +-- SD.h, SPI.h, FS.h         Resolve blackbox.cpp's includes to sd_shim.h
 |       +-- run_tests.sh
 +-- .github/workflows/host-tests.yml
 +-- docs/

@@ -10,6 +10,7 @@
 // =====================================================================================
 
 #include "arduino_shim.h"
+#include "sd_shim.h"
 
 uint32_t g_millis = 0;
 
@@ -24,6 +25,7 @@ uint32_t g_millis = 0;
 #include "dynamic_notch.h"
 #include "dshot.h"
 #include "dshot_rmt.h"
+#include "blackbox.h"
 
 #include <cstdio>
 #include <vector>
@@ -1481,6 +1483,165 @@ static void testNotchIsNotObservableInTheLog() {
   }
 }
 
+// =====================================================================================
+//  BlackBox ring: the drain contract
+//
+//  These run the REAL blackbox.cpp, linked into this binary against the fake card in
+//  sd_shim.h. They exist because commits a668baa and this one changed how the ring is
+//  gated and drained, and until now the only evidence either change was correct was
+//  that it compiled -- the bench has no MicroSD card, so push() returns immediately on
+//  hardware and the ring never runs at all.
+//
+//  Read the limits in sd_shim.h before trusting a green result here. In short: this
+//  covers the BOOKKEEPING, not the memory ordering. x86 cannot reorder the stores that
+//  an ESP32-P4 can, so these same assertions would have passed on the volatile code
+//  that a668baa replaced.
+// =====================================================================================
+static BlackBoxRecord seqRecord(uint32_t n) {
+  BlackBoxRecord r{};
+  r.timestampMs = n;
+  return r;
+}
+
+//  Reads back what actually reached the card: the header, then every record in order.
+static std::vector<uint32_t> recordedSequence(const std::string& path, bool* headerOk) {
+  std::vector<uint32_t> seq;
+  auto it = hostsd::files().find(path);
+  if (it == hostsd::files().end()) { *headerOk = false; return seq; }
+
+  const std::vector<uint8_t>& b = it->second.bytes;
+  if (b.size() < sizeof(BlackBoxHeader)) { *headerOk = false; return seq; }
+
+  BlackBoxHeader h{};
+  memcpy(&h, b.data(), sizeof(h));
+  *headerOk = (h.magic == BLACKBOX_MAGIC) &&
+              (h.version == BLACKBOX_VERSION) &&
+              (h.recordBytes == sizeof(BlackBoxRecord));
+
+  const size_t payload = b.size() - sizeof(BlackBoxHeader);
+  for (size_t off = 0; off + sizeof(BlackBoxRecord) <= payload;
+       off += sizeof(BlackBoxRecord)) {
+    BlackBoxRecord r{};
+    memcpy(&r, b.data() + sizeof(BlackBoxHeader) + off, sizeof(r));
+    seq.push_back(r.timestampMs);
+  }
+  return seq;
+}
+
+static bool isAscendingFrom(const std::vector<uint32_t>& v, uint32_t first) {
+  for (size_t i = 0; i < v.size(); ++i) {
+    if (v[i] != first + (uint32_t)i) return false;
+  }
+  return true;
+}
+
+static void testBlackBoxRingContract() {
+  section("BlackBox ring: every record is written or counted, never silently lost");
+
+  // ---- no card ----------------------------------------------------------------------
+  hostsd::reset();
+  hostsd::cardPresent() = false;
+  check(!blackbox.begin(), "begin() reports failure when no card is present");
+  check(!blackbox.ready(), "and the recorder does not claim to be ready");
+  check(!blackbox.startFlight(1), "startFlight() refuses without a card");
+  blackbox.push(seqRecord(0));      // must be a harmless no-op, not a crash
+  check(hostsd::files().empty(), "pushing with no file open writes nothing");
+
+  // ---- a normal flight ---------------------------------------------------------------
+  hostsd::reset();
+  check(blackbox.begin(), "begin() succeeds with a card");
+  check(blackbox.startFlight(7), "startFlight() opens a file");
+
+  const std::string path = "/flight_0007.ody";
+  bool headerOk = false;
+  recordedSequence(path, &headerOk);
+  check(headerOk, "the file opens with a valid v4 header the decoder can read");
+
+  //  Fewer than the ring holds, drained as we go.
+  for (uint32_t i = 0; i < 100; ++i) {
+    blackbox.push(seqRecord(i));
+    if (i % 10 == 9) blackbox.service();
+  }
+  blackbox.endFlight();
+
+  std::vector<uint32_t> seq = recordedSequence(path, &headerOk);
+  check(seq.size() == 100, "all 100 records reach the card");
+  check(isAscendingFrom(seq, 0), "and they arrive in the order they were pushed");
+  check(blackbox.recordsDropped() == 0, "nothing is dropped when the drain keeps up");
+
+  // ---- THE REGRESSION THIS GUARDS ----------------------------------------------------
+  //
+  //  endFlight() used to drain and only THEN clear the gate. Anything the flight loop
+  //  pushed in between stayed in the ring and died with the file -- the last samples
+  //  before landing. The order is now: close the gate, wait out any push already in
+  //  flight, drain. Here the ring is left deliberately full of undrained records so a
+  //  gate-then-drain mistake shows up as missing data.
+  hostsd::reset();
+  check(blackbox.begin(), "card remounts for the next case");
+  check(blackbox.startFlight(8), "a second flight opens its own file");
+
+  for (uint32_t i = 0; i < 50; ++i) blackbox.push(seqRecord(i));   // never serviced
+  blackbox.endFlight();
+
+  seq = recordedSequence("/flight_0008.ody", &headerOk);
+  check(seq.size() == 50,
+        "endFlight() drains what is still buffered -- no record is stranded by the "
+        "gate closing");
+  check(isAscendingFrom(seq, 0), "and the rescued records are still in order");
+
+  // ---- the gate really is shut --------------------------------------------------------
+  blackbox.push(seqRecord(999));
+  blackbox.service();
+  seq = recordedSequence("/flight_0008.ody", &headerOk);
+  check(seq.size() == 50, "a push after endFlight() is ignored, not appended");
+
+  const uint32_t writtenBefore = blackbox.recordsWritten();
+  blackbox.endFlight();
+  check(blackbox.recordsWritten() == writtenBefore,
+        "a second endFlight() is a no-op rather than a double close");
+
+  // ---- overflow is counted, not silent -------------------------------------------------
+  hostsd::reset();
+  check(blackbox.begin(), "card remounts again");
+  check(blackbox.startFlight(9), "a third flight opens");
+
+  const uint32_t pushed = BLACKBOX_RING_RECORDS * 3;
+  for (uint32_t i = 0; i < pushed; ++i) blackbox.push(seqRecord(i));   // no drain at all
+  blackbox.endFlight();
+
+  seq = recordedSequence("/flight_0009.ody", &headerOk);
+  const uint32_t written = (uint32_t)seq.size();
+  const uint32_t dropped = blackbox.recordsDropped();
+  check(written + dropped == pushed,
+        "every record pushed is either on the card or in the dropped count -- the ring "
+        "never loses one without saying so");
+  check(written == BLACKBOX_RING_RECORDS - 1,
+        "a ring of N holds N-1 before it is full, the usual one-slot sacrifice");
+  check(isAscendingFrom(seq, 0),
+        "the records kept are the OLDEST ones: overflow drops the newest sample rather "
+        "than corrupting the history already buffered");
+
+  // ---- wrap-around ---------------------------------------------------------------------
+  hostsd::reset();
+  check(blackbox.begin(), "card remounts for the wrap case");
+  check(blackbox.startFlight(10), "a fourth flight opens");
+
+  //  Several times the ring size, drained in small bites so tail_ and head_ both wrap
+  //  repeatedly and the batch boundary lands at every offset.
+  const uint32_t total = BLACKBOX_RING_RECORDS * 5;
+  for (uint32_t i = 0; i < total; ++i) {
+    blackbox.push(seqRecord(i));
+    if (i % 7 == 6) blackbox.service();
+  }
+  blackbox.endFlight();
+
+  seq = recordedSequence("/flight_0010.ody", &headerOk);
+  check(seq.size() == total, "every record survives repeated wraps of the ring");
+  check(isAscendingFrom(seq, 0), "and the order holds across every wrap");
+  check(blackbox.recordsDropped() == 0,
+        "draining every 7 pushes keeps a 256-slot ring well clear of full");
+}
+
 // Same driver, plus energy at a second frequency -- a real propeller puts a harmonic
 // there and the tracker has to tell it apart from the fundamental.
 static void driveTracker2(DynamicNotchTracker& tr, float sampleRate,
@@ -1798,6 +1959,7 @@ int main() {
   testHarmonicObservability();
   testHarmonicIsNotAssumed();
   testHarmonicStaysInBounds();
+  testBlackBoxRingContract();
   testCtaSerial();
   testCaaRegistration();
   testOperatorId();
