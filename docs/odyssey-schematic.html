@@ -580,7 +580,7 @@ function draw() {
   const W = PAD + CARD_W + GUTTER + IC_W + GUTTER + CARD_W + PAD;
   /* Deep bottom margin: the title block sits clear of the drawing, the way a
      drawing sheet keeps its border zone free of the circuit. */
-  const H = icH + 246;
+  const H = icH + 272;
   const icX = PAD + CARD_W + GUTTER, icY = 56;
 
   const svg = $("#schematic");
@@ -615,11 +615,17 @@ function draw() {
     "text-anchor": "middle", "font-size": 18, "font-weight": 600,
     "font-family": "Archivo, sans-serif"
   });
-  t(icX + IC_W / 2, icY + icH + 20, "dual RISC-V · 400 MHz", {
+  //  BOTH cores, because the split is the design. The flight loop owns core 1
+  //  outright; telemetry and storage share core 0 so that an SD write stall -- which
+  //  can exceed 100 ms on a cheap card -- cannot delay a control deadline. See §10.2.
+  t(icX + IC_W / 2, icY + icH + 20, "dual RISC-V @ 400 MHz", {
     "text-anchor": "middle", "font-size": 10.5, fill: "var(--ink-3)"
   });
-  t(icX + IC_W / 2, icY + icH + 36, "flight loop 500 Hz on core 1", {
-    "text-anchor": "middle", "font-size": 10.5, fill: "var(--ink-3)"
+  t(icX + IC_W / 2, icY + icH + 38, "CORE 1   flight loop 500 Hz, priority MAX−1", {
+    "text-anchor": "middle", "font-size": 10, fill: "var(--ink-2)"
+  });
+  t(icX + IC_W / 2, icY + icH + 54, "CORE 0   telemetry 50 Hz · blackbox storage 20 Hz", {
+    "text-anchor": "middle", "font-size": 10, fill: "var(--ink-2)"
   });
 
   /* one flank */
