@@ -1,0 +1,394 @@
+<title>Odyssey-10 Pro System Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+/* Third sheet, same visual system as the interconnect and the layout. */
+:root{
+  --paper:#F1F4F5;--sheet:#FBFCFC;--rule:#C9D2D6;--rule-soft:#E2E8EA;
+  --ink:#131C22;--ink-2:#46565F;--ink-3:#6E818B;--copper:#A85C34;
+  --c-power:#BE3F24;--c-i2c:#8A5E0C;--c-spi:#61469C;
+  --c-uart:#0B6670;--c-pwm:#2A6E36;--c-gpio:#55666F;
+  --warn-bg:#FBF0E6;--warn-edge:#D9A273;
+  --grid:rgba(19,28,34,.055);
+  --shadow:0 1px 2px rgba(19,28,34,.06),0 8px 24px -12px rgba(19,28,34,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{margin:0;background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:32px 32px,32px 32px;color:var(--ink);
+  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:48px 24px 96px;display:flex;flex-direction:column;gap:40px}
+.masthead{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--copper)}
+h1{font-family:Archivo,sans-serif;font-weight:700;font-size:clamp(30px,5.2vw,46px);
+  line-height:1.05;letter-spacing:-.021em;margin:0;text-wrap:balance}
+.standfirst{max-width:66ch;font-size:16.5px;color:var(--ink-2);margin:0}
+.provenance{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3);
+  padding-top:6px;border-top:1px solid var(--rule-soft)}
+.provenance b{color:var(--ink-2);font-weight:600}
+.dot{color:var(--rule)}
+section{display:flex;flex-direction:column;gap:16px}
+h2{font-family:Archivo,sans-serif;font-weight:600;font-size:12px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--ink-3);margin:0;padding-bottom:9px;
+  border-bottom:1.5px solid var(--rule);display:flex;justify-content:space-between;
+  align-items:baseline;gap:16px}
+h2 span{font-family:"IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:none;
+  font-weight:400;color:var(--ink-3)}
+.lede{max-width:68ch;color:var(--ink-2);margin:0}
+.sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:2px;
+  box-shadow:var(--shadow);overflow-x:auto;overflow-y:hidden}
+.sheet svg{display:block;min-width:760px;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:"IBM Plex Mono",monospace;
+  font-size:12px;color:var(--ink-2)}
+.legend i{display:inline-block;width:22px;height:3px;margin-right:8px;
+  vertical-align:middle;border-radius:1px}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:620px}
+caption{text-align:left;font-size:13px;color:var(--ink-3);padding-bottom:10px}
+th{text-align:left;font-family:Archivo,sans-serif;font-size:11px;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+  padding:0 14px 8px 0;border-bottom:1.5px solid var(--rule);white-space:nowrap}
+td{padding:8px 14px 8px 0;border-bottom:1px solid var(--rule-soft);vertical-align:baseline}
+tbody tr:last-child td{border-bottom:none}
+.mono,td.rank,td.src{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+td.rank{font-weight:600;white-space:nowrap;border-left:3px solid var(--cls,var(--rule));
+  padding-left:11px}
+td.note{color:var(--ink-2);font-size:13px}
+td.src{font-size:12px;color:var(--ink-3);white-space:nowrap}
+.callout{background:var(--warn-bg);border:1px solid var(--warn-edge);border-left-width:3px;
+  border-radius:2px;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.callout h3{font-family:Archivo,sans-serif;font-size:14px;font-weight:700;margin:0}
+.callout p{margin:0;font-size:14px;color:var(--ink-2);max-width:70ch}
+code{font-family:"IBM Plex Mono",monospace;font-size:.92em;color:var(--ink)}
+footer{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3);
+  border-top:1px solid var(--rule-soft);padding-top:16px;line-height:1.8}
+:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Odyssey-10 Pro &middot; System &middot; Sheet 3 of 3</div>
+    <h1>How The System Decides</h1>
+    <p class="standfirst">
+      Four processors, five links, and one state machine that can only ever move in one
+      direction. Every transition here is a real call site — they were read out of
+      <code>main.cpp</code>, not drawn from the design intent.
+    </p>
+    <div class="provenance" id="provenance"></div>
+  </header>
+
+  <section>
+    <h2>System block diagram <span>four images, five links</span></h2>
+    <p class="lede">
+      What talks to what, in which direction, and over what. The beacon and the video
+      downlink are one-way by design — neither can be told anything by the aircraft's
+      peers, so neither can be used to reach it.
+    </p>
+    <div class="sheet">
+      <svg id="blocks" role="img" aria-label="Block diagram of the four processors and the radio links between them"></svg>
+    </div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section>
+    <h2>The state ladder <span>escalate-only · §6</span></h2>
+    <p class="lede">
+      Not a state graph — a <b>ratchet</b>. The ten states are ranked by severity, and
+      <code>request()</code> is honoured only if it moves to an equal or higher rank.
+      There is exactly one way back down.
+    </p>
+    <div class="sheet">
+      <svg id="ladder" role="img" aria-label="The ten flight states as a severity ladder with their triggers"></svg>
+    </div>
+    <div class="callout">
+      <h3>Why a ladder, and not a state graph</h3>
+      <p>
+        Revision 1.0 checked the state and then assigned it, from two cores, with no lock.
+        A free-fall detection on the flight core could be overwritten by a failsafe-landing
+        request on the telemetry core — and the result was <b>all four motors spinning back
+        up underneath an already-deployed canopy</b>.
+        <br><br>
+        Ranking the states fixes it structurally rather than narrowing the window.
+        <code>FAILSAFE_LANDING</code> is 7 and <code>FREEFALL_PARACHUTE</code> is 8, so
+        the dangerous transition cannot happen <em>however</em> the two cores interleave.
+        Every move is a single atomic test-and-set under a spinlock; the race is not made
+        rarer, it is made harmless. That is finding 6.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Every transition <span>23 call sites in main.cpp</span></h2>
+    <div class="scroll"><table id="trans">
+      <caption>Read from the source. The reason string is what the aircraft actually logs and broadcasts.</caption>
+      <thead><tr><th>To state</th><th>Reason logged</th><th>Guard</th><th>Site</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>What cannot happen <span>by construction</span></h2>
+    <div class="scroll"><table id="impossible">
+      <thead><tr><th>Attempted</th><th>Outcome</th><th>Why</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <footer id="titleblock"></footer>
+</div>
+
+<script>
+const DOC_REV = "5.1";
+
+const CLASSES = {
+  pwm:  {label:"Flight controller", colour:"var(--c-pwm)"},
+  uart: {label:"Radio link",        colour:"var(--c-uart)"},
+  spi:  {label:"Recovery",          colour:"var(--c-spi)"},
+  i2c:  {label:"Regulatory",        colour:"var(--c-i2c)"},
+  gpio: {label:"Ground",            colour:"var(--c-gpio)"},
+  power:{label:"Escalation",        colour:"var(--c-power)"}
+};
+
+/* Four firmware images plus the two things a pilot holds. */
+const NODES = [
+  {id:"fc",     name:"Flight controller",  sub:"ESP32-P4 · 500 Hz",     cls:"pwm",  col:1, row:1},
+  {id:"rid",    name:"Remote ID",          sub:"ESP32-C6 · ASTM F3411",  cls:"i2c",  col:2, row:0},
+  {id:"beacon", name:"Beacon node",        sub:"ESP32-C3 · own 1S cell", cls:"spi",  col:2, row:2},
+  {id:"gs",     name:"Ground station",     sub:"ESP32-S3 · operator",    cls:"gpio", col:0, row:1},
+  {id:"tx",     name:"Handset",            sub:"ExpressLRS",             cls:"gpio", col:0, row:0},
+  {id:"gog",    name:"Goggles",            sub:"5.8 GHz analogue",       cls:"gpio", col:0, row:2}
+];
+
+/* Each edge is a real wire or a real radio link, with its direction. */
+const EDGES = [
+  /* The AUX bus out and the health line back are one relationship, not two edges
+     (§9.4): GPIO 39 tells the module what to broadcast, GPIO 40 says whether it is. */
+  {from:"fc", to:"rid",    label:"AUX out · health back",  sub:"GPIO 39 → · ← GPIO 40", both:true},
+  {from:"fc", to:"beacon", label:"AUX bus · same wire",    sub:"position updates"},
+  {from:"gs", to:"fc",     label:"LoRa 433 MHz",           sub:"RTH · abort · land permit", both:true},
+  {from:"tx", to:"fc",     label:"CRSF 2.4 GHz",           sub:"manual control", both:true},
+  {from:"fc", to:"gog",    label:"5.8 GHz video",          sub:"continuous, one-way"}
+];
+
+/* The ten states, in rank order. Triggers are the reason strings from main.cpp. */
+const STATES = [
+  {r:0, n:"BOOT",                 t:["power on"]},
+  {r:1, n:"CALIBRATING",          t:["auto-zero"]},
+  {r:2, n:"PREFLIGHT_FAIL",       t:["sensor bring-up failed","calibration failure"]},
+  {r:3, n:"PREFLIGHT_OK",         t:["calibration passed"]},
+  {r:4, n:"ARMED",                t:["operator armed"]},
+  {r:5, n:"RTH_NAVIGATING",       t:["energy budget exhausted","RC link lost","pilot commanded RTH","ground station RTH"]},
+  {r:6, n:"AWAITING_LAND_PERMIT", t:["insufficient energy to return"]},
+  {r:7, n:"FAILSAFE_LANDING",     t:["primary IMU lost","battery critical","reached home","GNSS lost during return","land permission timeout","RC link lost, no home fix","pilot permitted landing","ground station abort"]},
+  {r:8, n:"FREEFALL_PARACHUTE",   t:["free-fall detected"]},
+  {r:9, n:"DISARMED",             t:["touchdown confirmed","landing timeout","selftest reset"]}
+];
+
+const TRANS = [
+  ["CALIBRATING","auto-zero","request","main.cpp:1342"],
+  ["PREFLIGHT_FAIL","sensor bring-up failed","request","main.cpp:1333"],
+  ["PREFLIGHT_FAIL","(calibration failure text)","request","main.cpp:1378"],
+  ["PREFLIGHT_OK","calibration passed","request","main.cpp:1372"],
+  ["ARMED","operator armed","request","main.cpp:942"],
+  ["RTH_NAVIGATING","energy budget exhausted","requestFrom ARMED","main.cpp:984"],
+  ["RTH_NAVIGATING","RC link lost","requestFrom ARMED","main.cpp:1030"],
+  ["RTH_NAVIGATING","pilot commanded RTH","requestFrom ARMED","main.cpp:1045"],
+  ["RTH_NAVIGATING","ground station RTH","requestFrom ARMED","main.cpp:1076"],
+  ["AWAITING_LAND_PERMIT","insufficient energy to return","request","main.cpp:971"],
+  ["FAILSAFE_LANDING","primary IMU lost","request","main.cpp:241"],
+  ["FAILSAFE_LANDING","battery critical","request","main.cpp:966"],
+  ["FAILSAFE_LANDING","reached home","request","main.cpp:1005"],
+  ["FAILSAFE_LANDING","GNSS lost during return","request","main.cpp:1011"],
+  ["FAILSAFE_LANDING","land permission timeout","request","main.cpp:1020"],
+  ["FAILSAFE_LANDING","RC link lost, no home fix","request","main.cpp:1039"],
+  ["FAILSAFE_LANDING","pilot permitted landing","request","main.cpp:1063"],
+  ["FAILSAFE_LANDING","ground station abort","request","main.cpp:1088"],
+  ["FREEFALL_PARACHUTE","free-fall detected","request","main.cpp:412"],
+  ["DISARMED","touchdown confirmed","request","main.cpp:572"],
+  ["DISARMED","landing timeout","request","main.cpp:585"],
+  ["DISARMED","selftest reset","request","main.cpp:819"],
+  ["PREFLIGHT_OK","selftest reset","resetFromDisarmed","main.cpp:820"]
+];
+
+const IMPOSSIBLE = [
+  ["FAILSAFE_LANDING while in FREEFALL_PARACHUTE","<b>Refused.</b> The parachute state stands","Rank 7 cannot displace rank 8. This is finding 6 — the original defect restarted the motors under a deployed canopy"],
+  ["ARMED while in PREFLIGHT_FAIL","<b>Honoured.</b> 4 &gt; 2","A ranked ladder cannot express &ldquo;never arm after a failed preflight&rdquo;. That is enforced separately, by the arming gate, not by the state machine"],
+  ["PREFLIGHT_OK while in ARMED","<b>Refused.</b> 3 &lt; 4","De-escalation is legal only out of DISARMED, and only to PREFLIGHT_OK or lower"],
+  ["Any transition, from either core, mid-decision","<b>Atomic.</b>","Every move is one test-and-set inside a spinlock. There is no window between the guard and the store"]
+];
+
+const $=(s)=>document.querySelector(s);
+const SVGNS="http://www.w3.org/2000/svg";
+const el=(n,a={})=>{const e=document.createElementNS(SVGNS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const esc=(s)=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+/* ---- block diagram ---------------------------------------------------- */
+function drawBlocks(){
+  const svg=$("#blocks");
+  //  CX must exceed BW by more than the widest edge label, or a label centred on
+  //  a short edge ends up inside the block at one end of it.
+  const BW=196,BH=62,CX=372,CY=132,PAD=34;
+  const W=PAD*2+CX*2+BW, H=PAD*2+CY*2+BH;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.setAttribute("font-family",'"IBM Plex Mono",ui-monospace,monospace');
+  const t=(x,y,s,o={})=>{const n=el("text",Object.assign({x,y,"font-size":11,
+    fill:"var(--ink)","dominant-baseline":"middle"},o));n.textContent=s;svg.appendChild(n);return n;};
+
+  const pos={};
+  NODES.forEach(n=>{pos[n.id]={x:PAD+n.col*CX, y:PAD+n.row*CY, w:BW, h:BH,
+    cx:PAD+n.col*CX+BW/2, cy:PAD+n.row*CY+BH/2};});
+
+  /* edges first, so blocks sit on top of them */
+  EDGES.forEach((e,i)=>{
+    const a=pos[e.from], b=pos[e.to];
+    const colour=CLASSES.uart.colour;
+    /* leave from the nearest edge of each block, orthogonally */
+    let x1,y1,x2,y2;
+    if(a.cx===b.cx){ x1=a.cx; x2=b.cx; y1=a.cy+(b.cy>a.cy?a.h/2:-a.h/2); y2=b.cy+(b.cy>a.cy?-b.h/2:b.h/2); }
+    else { x1=a.cx+(b.cx>a.cx?a.w/2:-a.w/2); x2=b.cx+(b.cx>a.cx?-b.w/2:b.w/2); y1=a.cy; y2=b.cy; }
+    const mx=(x1+x2)/2, my=(y1+y2)/2;
+    svg.appendChild(el("path",{d:`M ${x1} ${y1} L ${x2} ${y2}`,
+      stroke:colour,"stroke-width":1.4,fill:"none"}));
+
+    const head=(hx,hy,a)=>svg.appendChild(el("path",{
+      d:`M ${hx} ${hy} l ${-8*Math.cos(a)+4*Math.sin(a)} ${-8*Math.sin(a)-4*Math.cos(a)} `+
+        `l ${-8*Math.sin(a)} ${8*Math.cos(a)} z`,
+      fill:colour}));
+    const ang=Math.atan2(y2-y1,x2-x1);
+    head(x2,y2,ang);
+    if(e.both) head(x1,y1,ang+Math.PI);
+
+    t(mx,my-9,e.label,{"text-anchor":"middle","font-size":9.5,fill:colour});
+    t(mx,my+3,e.sub,{"text-anchor":"middle","font-size":8.5,fill:"var(--ink-3)"});
+  });
+
+  NODES.forEach(n=>{
+    const p=pos[n.id], colour=CLASSES[n.cls].colour;
+    svg.appendChild(el("rect",{x:p.x,y:p.y,width:p.w,height:p.h,rx:2,
+      fill:"var(--paper)",stroke:colour,"stroke-width":n.id==="fc"?2:1.3}));
+    svg.appendChild(el("rect",{x:p.x,y:p.y,width:3,height:p.h,fill:colour}));
+    t(p.x+14,p.y+24,n.name,{"font-size":12.5,"font-weight":600,
+      "font-family":"Archivo, sans-serif"});
+    t(p.x+14,p.y+42,n.sub,{"font-size":9.5,fill:"var(--ink-3)"});
+  });
+}
+
+/* ---- the ladder ------------------------------------------------------- */
+function drawLadder(){
+  const svg=$("#ladder");
+  const ROW=54,BW=250,PAD=30,X=PAD+52;
+  const W=980, H=PAD*2+STATES.length*ROW+26;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.setAttribute("font-family",'"IBM Plex Mono",ui-monospace,monospace');
+  const t=(x,y,s,o={})=>{const n=el("text",Object.assign({x,y,"font-size":11,
+    fill:"var(--ink)","dominant-baseline":"middle"},o));n.textContent=s;svg.appendChild(n);return n;};
+
+  /* rank axis: severity increases downward, which is the direction the machine moves */
+  const top=PAD+ROW/2, bot=PAD+(STATES.length-0.5)*ROW;
+  svg.appendChild(el("path",{d:`M ${PAD+22} ${top} V ${bot}`,
+    stroke:"var(--c-power)","stroke-width":2,opacity:.45,fill:"none"}));
+  svg.appendChild(el("path",{d:`M ${PAD+22} ${bot} l -5 -9 l 10 0 z`,
+    fill:"var(--c-power)",opacity:.6,transform:`rotate(180 ${PAD+22} ${bot-4})`}));
+  t(PAD+8,top-22,"SEVERITY",{"font-size":8.5,fill:"var(--c-power)","letter-spacing":".12em"});
+
+  STATES.forEach((s,i)=>{
+    const y=PAD+i*ROW, cy=y+ROW/2;
+    /* the parachute rank is the one the ladder exists to protect */
+    const guard=s.r===8;
+    const colour=guard?"var(--c-spi)":(s.r>=7?"var(--c-power)":
+                 s.r>=4?"var(--c-pwm)":"var(--c-gpio)");
+    svg.appendChild(el("circle",{cx:PAD+22,cy,r:5,fill:colour}));
+    svg.appendChild(el("rect",{x:X,y:y+6,width:BW,height:ROW-12,rx:2,
+      fill:"var(--paper)",stroke:colour,"stroke-width":guard?2:1.3}));
+    svg.appendChild(el("rect",{x:X,y:y+6,width:3,height:ROW-12,fill:colour}));
+    t(X+14,cy-7,s.n,{"font-size":12,"font-weight":600,"font-family":"Archivo, sans-serif"});
+    t(X+14,cy+9,`rank ${s.r}`,{"font-size":9.5,fill:"var(--ink-3)"});
+
+    /* triggers, wrapped to two columns when there are many */
+    const tx=X+BW+26;
+    const per=Math.ceil(s.t.length/2), two=s.t.length>4;
+    s.t.forEach((trig,j)=>{
+      const col=two&&j>=per?1:0;
+      const row=two?(j%per):j;
+      const ty=cy-((two?per:s.t.length)-1)*6.5+row*13;
+      t(tx+col*272,ty,`· ${trig}`,{"font-size":9.5,fill:"var(--ink-2)"});
+    });
+  });
+
+  /* the single de-escalation edge */
+  const dis=PAD+9*ROW+ROW/2, ok=PAD+3*ROW+ROW/2;
+  const rx=X+BW+8;
+  svg.appendChild(el("path",{d:`M ${X-8} ${dis} H ${X-30} V ${ok} H ${X-8}`,
+    stroke:"var(--c-i2c)","stroke-width":1.5,fill:"none","stroke-dasharray":"5 4"}));
+  svg.appendChild(el("path",{d:`M ${X-8} ${ok} l -8 -4 l 0 8 z`,fill:"var(--c-i2c)"}));
+  t(X-36,(dis+ok)/2,"resetFromDisarmed()",{"text-anchor":"end","font-size":9,
+    fill:"var(--c-i2c)","font-weight":600});
+  t(X-36,(dis+ok)/2+12,"the only way down",{"text-anchor":"end","font-size":8.5,
+    fill:"var(--ink-3)"});
+}
+
+/* ---- tables ----------------------------------------------------------- */
+function tables(){
+  $("#legend").innerHTML=Object.entries(CLASSES).map(([k,c])=>
+    `<span><i style="background:${c.colour}"></i>${esc(c.label)}</span>`).join("");
+
+  $("#trans tbody").innerHTML=TRANS.map(r=>`<tr>
+      <td class="rank" style="--cls:${r[0]==="FREEFALL_PARACHUTE"?"var(--c-spi)":
+        r[0].startsWith("FAILSAFE")||r[0].startsWith("AWAIT")?"var(--c-power)":
+        "var(--c-pwm)"}">${esc(r[0])}</td>
+      <td class="mono">${esc(r[1])}</td>
+      <td class="note">${esc(r[2])}</td>
+      <td class="src">${esc(r[3])}</td>
+    </tr>`).join("");
+
+  $("#impossible tbody").innerHTML=IMPOSSIBLE.map(r=>`<tr>
+      <td class="rank" style="--cls:var(--c-power)">${esc(r[0])}</td>
+      <td>${r[1]}</td>
+      <td class="note">${r[2]}</td>
+    </tr>`).join("");
+
+  $("#provenance").innerHTML=[
+    `<b>States</b> odyssey_link.h`,`<span class="dot">/</span>`,
+    `<b>Transitions</b> ${TRANS.length} call sites in main.cpp`,`<span class="dot">/</span>`,
+    `<b>Rule</b> escalate-only`,`<span class="dot">/</span>`,
+    `<b>Doc</b> rev ${DOC_REV}`
+  ].join(" ");
+
+  $("#titleblock").innerHTML=
+    `Odyssey-10 Pro &middot; system flow, revision ${DOC_REV}<br>`+
+    `The ten states are <code>OdyFlightState</code> in <code>shared/odyssey_link.h</code>; `+
+    `every transition below was read from a <code>flightState.request()</code> call site `+
+    `in <code>main.cpp</code>, with the reason string the aircraft actually logs.<br>`+
+    `Not a design sketch &mdash; if the code and this sheet disagree, the code is right and this sheet is a bug.`;
+}
+
+drawBlocks();
+drawLadder();
+tables();
+</script>

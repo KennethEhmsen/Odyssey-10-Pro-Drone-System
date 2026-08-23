@@ -2547,6 +2547,64 @@ def check_schematic_revision(rep, fix):
                         f"are all revision {doc_rev}")
 
 
+def check_flow_transitions(rep, fix):
+    """docs/odyssey-flow.html must list every state transition the firmware can make.
+
+    The sheet claims to be read from the source rather than drawn from intent, and that
+    claim is only worth anything if something keeps it true. A new failsafe added to
+    main.cpp without updating the drawing turns the drawing into a lie of omission --
+    and the omitted arrow would be exactly the one nobody knew about.
+
+    Reason strings are matched, not state names, because the reason is what the aircraft
+    logs and broadcasts, and it is unique per call site.
+    """
+    flow = ROOT / "docs" / "odyssey-flow.html"
+    if not flow.exists():
+        return
+    main = read(ROOT / "firmware" / "flight-controller" / "src" / "main.cpp")
+    sheet = read(flow)
+
+    literals = set()
+    runtime = 0
+    for m in re.finditer(
+            r"flightState\.(?:request|requestFrom|resetFromDisarmed)\s*\((.*?)\)\s*[;)\{]",
+            main, re.S):
+        quoted = re.findall(r'"([^"]*)"', m.group(1))
+        if quoted:
+            literals.add(quoted[-1])
+        else:
+            #  e.g. request(ODY_STATE_PREFLIGHT_FAIL, cal.failure) -- the reason is
+            #  built at runtime, so there is no string to match. Counted, not matched.
+            runtime += 1
+
+    on_sheet = set(re.findall(r'"([^"]*)","(?:request|requestFrom ARMED|resetFromDisarmed)"',
+                              sheet))
+
+    for missing in sorted(literals - on_sheet):
+        rep.problem("flow-transitions",
+                    f'main.cpp can transition with reason "{missing}" but '
+                    f"docs/odyssey-flow.html does not list it. The sheet says it was "
+                    f"read from the source; that has stopped being true")
+
+    #  A row on the sheet with no call site is the same defect mirrored -- except for
+    #  the deliberate placeholder standing in for the runtime-built reason.
+    PLACEHOLDER = "(calibration failure text)"
+    for extra in sorted(on_sheet - literals - {PLACEHOLDER}):
+        rep.problem("flow-transitions",
+                    f'docs/odyssey-flow.html lists a transition with reason "{extra}" '
+                    f"that no call site in main.cpp produces")
+
+    if runtime and PLACEHOLDER not in on_sheet:
+        rep.problem("flow-transitions",
+                    f"{runtime} transition(s) build their reason at runtime and the "
+                    f"sheet does not carry a placeholder row for them")
+
+    if not (literals ^ (on_sheet - {PLACEHOLDER})):
+        rep.note = getattr(rep, "note", [])
+        rep.note.append(f"flow-transitions: all {len(literals)} literal transitions "
+                        f"drawn, plus {runtime} built at runtime")
+
+
 CHECKS = [
     ("comment-continuation", "// comments ending in a backslash swallow the next line",
      check_comment_backslash),
@@ -2568,8 +2626,11 @@ CHECKS = [
      "no two peripherals share a UART, and section 9.1 agrees with the firmware",
      check_uart_allocation),
     ("schematic-rev",
-     "the schematic states the specification's revision",
+     "every drawing states the specification's revision",
      check_schematic_revision),
+    ("flow-transitions",
+     "the flow sheet lists every state transition the firmware can make",
+     check_flow_transitions),
     ("bom-mass",
      "the parts list and config.h agree on mass, ESC margin and connector, for every build",
      check_bom_mass),
