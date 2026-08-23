@@ -4,7 +4,7 @@
 
 **Architecture:** 9-inch long-range airframe, ESP32-P4 dual-core RISC-V avionics, integrated perception, kinetic recovery and safety stack
 
-**Document revision:** 4.8 — the build instructions describe a build that has actually run
+**Document revision:** 4.9 — the power rails are assigned, and the 3.3 V budget is stated
 
 ---
 
@@ -2257,6 +2257,81 @@ never listens on this bus, so a faulty auxiliary module cannot feed data back in
 avionics or jam the line.
 
 ---
+
+### 9.5 Power rails
+
+The BOM's dual step-down BEC gives **5 V at 3 A and 12 V at 3 A**. It does **not** give
+3.3 V, and every sensor on this aircraft except the LiDAR wants 3.3 V. That gap is the
+whole of this section: 3.3 V has to be made on the flight controller carrier, and how
+much of it that carrier must supply is a specification, not a detail.
+
+| Rail | Source | Feeds |
+| --- | --- | --- |
+| **6S pack** | XT90-S, 22.2 V nominal / 25.2 V full | 4-in-1 ESC only |
+| **12 V, 3 A** | BEC | 5.8 GHz VTX, FPV camera |
+| **5 V, 3 A** | BEC | FC carrier input, TFmini-S LiDAR, ExpressLRS receiver, BN-220 GNSS, parachute servo |
+| **3.3 V** | *the carrier's own regulator* | ESP32-P4, the six I²C sensors, SX1278 LoRa, MicroSD, Remote ID module |
+| **1S cell** | Beacon's own battery, diode-OR with 5 V | Beacon node — deliberately survives the main pack |
+
+The split follows the parts, not preference. The VTX and camera are the only things that
+want more than 5 V and the only things that radiate; keeping them on their own rail keeps
+video switching noise away from the sensors. Everything on 5 V is there because it cannot
+run on 3.3 V. Everything else is 3.3 V because the ESP32-P4's GPIO are 3.3 V and are
+**not 5 V tolerant**.
+
+#### Four rules that are not negotiable
+
+**1. The entire I²C bus is 3.3 V, including the pull-ups.** Six devices share SDA 7 and
+SCL 8. Several of the common breakouts — GY-521 for the MPU-6050, GY-271 for the QMC5883L
+— carry their own regulator and will happily accept 5 V, and if you give it to them their
+pull-ups sit at 5 V and drive 5 V into the P4's GPIO through the bus. One device powered
+from the wrong rail contaminates the whole bus.
+
+**2. The SX1278 is 3.3 V only, on power and on every signal line.** It is not 5 V
+tolerant anywhere. There is nothing else on SPI2, so no level shifting is needed — but
+there is also nothing to protect it if the rail is wrong.
+
+**3. Anything powered from 5 V that drives a line *into* the P4 must output 3.3 V
+logic.** The TFmini-S (LVTTL), the ExpressLRS CRSF line and the BN-220's TX all do. The
+VTX's MSP TX line is the one to verify with a meter before connecting it, because MSP
+telemetry is optional and a 5 V line here damages a pin that is not optional.
+
+**4. The parachute servo gets its own pair of wires from the BEC.** Not daisy-chained
+through the flight controller. A stalled 9 g servo can pull most of an amp, and the
+parachute fires at precisely the moment the flight controller must stay alive.
+
+#### What the carrier's 3.3 V regulator has to supply
+
+§2.2 specifies "an ESP32-P4 module on a compact carrier" without naming one. This is the
+number that carrier has to meet, beyond whatever the P4 itself draws:
+
+| On 3.3 V | Continuous | Worst-case peak | Note |
+| --- | --- | --- | --- |
+| SX1278 LoRa | 12 mA (RX) | **120 mA** | +20 dBm TX through PA_BOOST |
+| MicroSD | ~5 mA idle | **~100 mA** | Write bursts; cards vary widely |
+| VL53L1X | ~20 mA | ~40 mA | While ranging |
+| MPU-6050 | 3.9 mA | — | |
+| ICM-42688-P | ~0.9 mA | — | |
+| BMP280, QMC5883L, INA226 | <2 mA combined | — | |
+| **Total** | **~45 mA** | **~270 mA** | Peak assumes LoRa TX, an SD write and a ranging cycle coincide, which nothing prevents |
+
+**Specify the carrier's 3.3 V regulator with at least 300 mA of headroom above the P4's
+own demand.** The peak is not hypothetical: the blackbox writes at 100 Hz, the LiDAR
+ranges continuously and telemetry transmits on its own schedule. Nothing sequences them.
+
+**Bulk capacitance at the SX1278 is required, not optional** — 470 µF electrolytic plus
+100 nF ceramic at the module's own pins. A 120 mA transmit pulse on a shared 3.3 V rail
+is the classic way to brown out an MCU, and the failure looks like a random reset rather
+than a power problem. The passives are already in the BOM's wiring line.
+
+#### Still unmeasured
+
+The current figures above are datasheet and typical-application values, not measurements
+of this aircraft. `CRUISE_CURRENT_A` — which sizes the return-to-home reserve — is still
+modelled rather than measured, and that remains the thrust stand's job in §4.3.2 step 3.
+The INA226 on the pack measures total draw, not per-rail, so the 5 V and 12 V budgets
+here cannot be confirmed in flight without instrumenting the BEC outputs separately.
+
 
 ## 10. Software Architecture
 
