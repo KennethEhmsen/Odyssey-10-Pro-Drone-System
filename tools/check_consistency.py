@@ -704,6 +704,15 @@ def check_doc_refs(rep, fix):
     tops = {s.split(".")[0] for s in sections}
     sections |= tops
 
+    #  Cross-references INSIDE the specification, written as §N or §N.M. These were
+    #  invisible to this check until section 9.6 shipped pointing at a section 9.7 that
+    #  did not exist yet.
+    for m in re.finditer(r"§\s*(\d+(?:\.\d+)?)", spec):
+        if m.group(1) not in sections:
+            rep.problem("doc-refs",
+                        f"the specification refers to §{m.group(1)}, which does not "
+                        f"exist in it")
+
     for f in source_files() + [ROOT / "README.md"]:
         if not f.exists():
             continue
@@ -1024,6 +1033,7 @@ def check_prose_constants(rep, fix):
 #  therefore derived and compared, not trusted -- and --fix rewrites them.
 # =====================================================================================
 README = ROOT / "README.md"
+SCHEMATIC = ROOT / "docs" / "odyssey-schematic.html"
 
 
 def _run_suite_count():
@@ -2476,6 +2486,60 @@ def check_uart_allocation(rep, fix):
                         f"matching section 9.1")
 
 
+def check_schematic_revision(rep, fix):
+    """docs/odyssey-schematic.html must carry the specification's revision.
+
+    The drawing states a revision in its title block, and somebody wiring from a
+    printout has no other way to tell whether it matches the document they were given.
+    It drifted the moment §9.6 landed: the specification went to 5.0 and the schematic
+    still said 4.9 -- and its own three copies had already disagreed with each other
+    (4.9, 4.9, 4.8) before that. There is one constant now, and this holds it to §1.
+    """
+    if not SCHEMATIC.exists():
+        return
+    spec = read(SPEC)
+    m = re.search(r"\*\*Document revision:\*\*\s*([0-9]+\.[0-9]+)", spec)
+    if not m:
+        rep.problem("schematic-rev", "the specification does not state a revision")
+        return
+    doc_rev = m.group(1)
+
+    html = read(SCHEMATIC)
+    d = re.search(r'const DOC_REV\s*=\s*"([0-9]+\.[0-9]+)"', html)
+    if not d:
+        rep.problem("schematic-rev",
+                    "docs/odyssey-schematic.html has no DOC_REV constant -- the drawing "
+                    "must state which revision of the specification it draws")
+        return
+
+    if d.group(1) != doc_rev:
+        if fix:
+            write(SCHEMATIC, html.replace(f'const DOC_REV = "{d.group(1)}"',
+                                          f'const DOC_REV = "{doc_rev}"'))
+            rep.fix("schematic-rev",
+                    f"schematic revision {d.group(1)} -> {doc_rev}")
+            return
+        rep.problem("schematic-rev",
+                    f"the schematic says revision {d.group(1)}, the specification says "
+                    f"{doc_rev}. Somebody wiring from a printout cannot tell whether it "
+                    f"matches the document they were given",
+                    fixable=True)
+        return
+
+    #  And no stray hardcoded revision may survive alongside the constant.
+    strays = [x for x in re.findall(r"revision ([0-9]+\.[0-9]+)", html)
+              if x != doc_rev]
+    strays += [x for x in re.findall(r"\brev ([0-9]+\.[0-9]+)", html) if x != doc_rev]
+    if strays:
+        rep.problem("schematic-rev",
+                    f"the schematic hardcodes revision {', '.join(sorted(set(strays)))} "
+                    f"somewhere alongside DOC_REV={doc_rev}. One constant, not several")
+        return
+
+    rep.note = getattr(rep, "note", [])
+    rep.note.append(f"schematic-rev: the drawing and the specification are both {doc_rev}")
+
+
 CHECKS = [
     ("comment-continuation", "// comments ending in a backslash swallow the next line",
      check_comment_backslash),
@@ -2496,6 +2560,9 @@ CHECKS = [
     ("uart-allocation",
      "no two peripherals share a UART, and section 9.1 agrees with the firmware",
      check_uart_allocation),
+    ("schematic-rev",
+     "the schematic states the specification's revision",
+     check_schematic_revision),
     ("bom-mass",
      "the parts list and config.h agree on mass, ESC margin and connector, for every build",
      check_bom_mass),

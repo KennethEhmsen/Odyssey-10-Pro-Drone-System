@@ -2398,7 +2398,7 @@ usually decides it:
 | --- | --- |
 | **Serial gimbal** (SimpleBGC, STorM32) | **No UART is free.** All five are allocated and the LP-UART cannot reach a usable pin — finding 43. Unless UART2 is reclaimed from the unimplemented MSP OSD (finding 45), a serial gimbal has nowhere to attach |
 | **PWM gimbal**, 2 or 3 servos | Straightforward: 19 GPIOs are free on the aircraft (§9.7), and `PIN_PARACHUTE_SRV` already establishes the LEDC 50 Hz pattern to copy |
-| **Mass** | The payload reserve is **170 g** (§2.3). A 2-axis micro gimbal for an analogue camera is roughly 60–90 g and fits. A 3-axis is typically 120–180 g and consumes the entire reserve, which comes straight out of endurance |
+| **Mass** | The payload reserve is **170 g** (§3.1). A 2-axis micro gimbal for an analogue camera is roughly 60–90 g and fits. A 3-axis is typically 120–180 g and consumes the entire reserve, which comes straight out of endurance |
 | **Where it physically goes** | **This is the real conflict.** "Underneath" is already occupied: the VL53L1X looks down for the landing flare and the touchdown veto, and the ballistic parachute needs a clear line. A gimbal hung below the frame obstructs the rangefinder — and a rangefinder that reads the gimbal instead of the ground does not fail loudly, it reports a confident wrong altitude at exactly the moment the aircraft is deciding whether it has landed |
 
 That last row is why this is a design question rather than a wiring one. The pins are the
@@ -2407,6 +2407,29 @@ easy part.
 **If a gimbal is added, the downward ToF has to move or the gimbal has to be offset**, and
 whichever is chosen, §9.2's map, the `gpio-map` check and the mass model in `config.h`
 all have to move with it.
+
+
+### 9.7 GPIO budget
+
+The ESP32-P4 has **55** GPIOs, numbered 0–54 — `SOC_GPIO_PIN_COUNT` in the ESP-IDF
+headers for this chip, not a datasheet reading.
+
+| | Count | GPIOs |
+| --- | --- | --- |
+| Total | 55 | 0–54 |
+| Used by this firmware | 30 | §9.2 |
+| Reserved by the silicon | 6 | 24 · 25 · 26 · 27 (USB Serial/JTAG), 37 · 38 (ROM console) |
+| **Free on the aircraft** | **19** | 0 · 1 · 14 · 16 · 29 · 30 · 31 · 32 · 43 · 44 · 45 · 46 · 47 · 48 · 49 · 50 · 52 · 53 · 54 |
+| …taken by the EV board's C6 | 3 | 14 · 16 · 54 (SDIO) |
+| **Free on the development board** | **16** | 0 · 1 · 29 · 30 · 31 · 32 · 43–50 · 52 · 53 |
+
+**Free is not the same as usable.** Of the 19 free on the aircraft, only **six reach an
+ADC** — 16, 49, 50, 52, 53, 54 — and only **three are LP-IO**: 0, 1 and 14. That second
+scarcity is why finding 43 had to move the AUX bus to a full UART rather than the
+low-power one: there was nothing left in GPIO 0–15 to put it on.
+
+So the honest count for a new peripheral is: 19 pins, of which anything needing an ADC
+competes for six and anything needing RTC-domain IO competes for three.
 
 
 ## 10. Software Architecture
@@ -2464,7 +2487,7 @@ Odyssey-10-Pro-Drone-System/
 |   +-- bom.csv                     9-inch reference build
 |   +-- bom-variants.csv            what differs in the other nine
 +-- tools/
-|   +-- check_consistency.py        The specification-vs-code gate     [27 checks]
+|   +-- check_consistency.py        The specification-vs-code gate     [28 checks]
 |   +-- blackbox_decode.py          Flight log decoder, formats v2-v4
 |   +-- test_blackbox_decode.py     ...and its tests
 |   +-- patchfile.py                Line-ending-safe in-place edits

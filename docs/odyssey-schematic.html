@@ -488,6 +488,11 @@ footer {
    array, so the sheet cannot disagree with its own pin table -- which is
    the failure mode that put the battery divider on GPIO 1 for three commits.
    ========================================================================= */
+//  The specification's revision, carried here once. It used to be written out
+//  three times and the three had drifted apart from each other as well as from
+//  the document. The schematic-revision check holds this to §1's value.
+const DOC_REV = "5.0";
+
 const CLASSES = {
   i2c:   { label: "I²C",            colour: "var(--c-i2c)"   },
   spi:   { label: "SPI",                 colour: "var(--c-spi)"   },
@@ -824,7 +829,7 @@ function draw() {
   };
   field(0, 0, "DRAWN FROM",   "config.h");
   field(1, 0, "SCOPE",        "AIRCRAFT — not the EV board");
-  field(0, 1, "REVISION",     "4.9");
+  field(0, 1, "REVISION",     DOC_REV);
   field(1, 1, "SHEET / NETS", `1 of 1  ·  ${allPins.length}`);
 }
 
@@ -1057,7 +1062,7 @@ function tables() {
     `<span class="dot">/</span>`,
     `<b>Nets</b> ${uniq.size}`,
     `<span class="dot">/</span>`,
-    `<b>Doc</b> rev 4.9 §9.2`,
+    `<b>Doc</b> rev ${DOC_REV} §9.2`,
     `<span class="dot">/</span>`,
     `<b>Verified</b> gpio-map check`,
     `<span class="dot">/</span>`,
@@ -1065,7 +1070,7 @@ function tables() {
   ].join(" ");
 
   $("#titleblock").innerHTML =
-    `Odyssey-10 Pro &middot; ESP32-P4 flight controller &middot; aircraft pinout, revision 4.8<br>` +
+    `Odyssey-10 Pro &middot; ESP32-P4 flight controller &middot; aircraft pinout, revision ${DOC_REV}<br>` +
     `Generated from <code>firmware/flight-controller/include/config.h</code>. ` +
     `The <code>gpio-map</code> consistency check holds §9.2 and <code>config.h</code> to the same ${uniq.size} GPIOs; ` +
     `<code>uart-allocation</code> holds §9.1 to the firmware&rsquo;s five ports.<br>` +
