@@ -2354,6 +2354,29 @@ def check_gpio_map(rep, fix):
                     f"PIN_* in config.h is on that GPIO -- wiring it would connect a "
                     f"peripheral to a pin the firmware never touches")
 
+    #  Prose that ROUTES something to or from a reserved pin. Section 9.4 said "One
+    #  wire from GPIO 24 to the RX pins of both..." for three revisions after finding 41
+    #  moved that wire to GPIO 39, because the map block above was corrected and the
+    #  sentence below it was not. The pattern is deliberately narrow -- "from GPIO n" or
+    #  "to GPIO n" -- so that prose DISCUSSING the reserved range still passes.
+    for m in re.finditer(r"\b(?:from|to)\s+\*{0,2}`?GPIO\s*(\d+)`?", doc):
+        gpio = int(m.group(1))
+        if gpio not in CHIP_RESERVED:
+            continue
+        #  Prose ABOUT the reservation is fine: "routes USB Serial/JTAG to GPIO 24/26"
+        #  describes the constraint rather than violating it. Only a sentence that says
+        #  nothing about why the pin is special is aiming a real signal at it.
+        ls = doc.rfind("\n", 0, m.start()) + 1
+        le = doc.find("\n", m.end())
+        line = doc[ls:le if le != -1 else len(doc)]
+        if re.search(r"USB Serial/JTAG|RESERVED|reserved|Do not use|ROM console", line):
+            continue
+        if True:
+            rep.problem("gpio-map",
+                        f"prose routes a signal to or from GPIO {gpio}, which the "
+                        f"ESP32-P4 reserves for {CHIP_RESERVED[gpio]}. Wiring it costs "
+                        f"the aircraft its USB console. See finding 41.")
+
     if not (set(defined) ^ set(mapped)):
         rep.note = getattr(rep, "note", [])
         rep.note.append(f"gpio-map: section 9.2 and config.h agree on all "

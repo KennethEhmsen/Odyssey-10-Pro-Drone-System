@@ -173,7 +173,7 @@ h2 span {
   letter-spacing: .04em;
   text-transform: none;
   font-weight: 400;
-  color: var(--rule);
+  color: var(--ink-3);
 }
 
 .lede { max-width: 68ch; color: var(--ink-2); margin: 0; }
@@ -453,7 +453,7 @@ const GROUPS = [
   { side: "L", cls: "spi",   name: "MicroSD BlackBox", sub: "SPI1 · 100 Hz flight log",
     pins: [ [35,"SCK"], [36,"MISO"], [34,"MOSI"], [33,"CS"] ] },
   { side: "L", cls: "pwm",   name: "4-in-1 ESC",       sub: "DShot300 bidirectional",
-    pins: [ [4,"M1 rear-R CCW"], [5,"M2 front-R CW"], [6,"M3 rear-L CW"], [15,"M4 front-L CCW"] ] },
+    pins: [ [4,"M1"], [5,"M2"], [6,"M3"], [15,"M4"] ] },
 
   { side: "R", cls: "uart",  name: "BN-220 GNSS",      sub: "UART1 · 115200, negotiated",
     pins: [ [17,"RX"], [18,"TX"] ] },
@@ -463,25 +463,29 @@ const GROUPS = [
     pins: [ [22,"RX"], [23,"TX"] ] },
   { side: "R", cls: "uart",  name: "ExpressLRS RX",    sub: "UART4 · CRSF @ 420000",
     pins: [ [42,"RX"], [28,"TX"] ] },
-  { side: "R", cls: "uart",  name: "AUX broadcast",    sub: "UART0 · TX only, two listeners",
-    pins: [ [39,"TX"] ] },
-  { side: "R", cls: "gpio",  name: "Discrete I/O",     sub: "buttons, latch, servo, sensing",
-    pins: [ [2,"Arm button"], [21,"Beacon latch"], [40,"RemoteID health"], [41,"Parachute servo"], [51,"Batt divider"] ] }
+  { side: "R", cls: "uart",  name: "Remote ID · beacon", sub: "UART0 broadcast + health return",
+    note: "C6 Remote ID · C3 beacon",
+    pins: [ [39,"AUX_TX"], [40,"RID_OK"] ] },
+  { side: "R", cls: "gpio",  name: "Discrete I/O",     sub: "button, latch, servo, sensing",
+    pins: [ [2,"ARM"], [21,"BEACON"], [41,"CHUTE"], [51,"VBAT"] ] }
 ];
 
 const DETAIL = {
   7:"Shared with SCL 8; pull-ups on the breakout", 8:"400 kHz",
   12:"", 13:"", 11:"", 10:"Chip select", 9:"Reset", 3:"Interrupt line",
   35:"", 36:"", 34:"", 33:"Chip select",
-  4:"", 5:"", 6:"", 15:"On the EV board this is SDIO D1",
+  4:"Rear-right, CCW", 5:"Front-right, CW", 6:"Rear-left, CW",
+  15:"Front-left, CCW. On the EV board this is SDIO D1",
   17:"ESP32 RX ← GNSS TX. EV board: SDIO D3", 18:"ESP32 TX → GNSS RX. EV board: SDIO CLK",
   19:"ESP32 TX → VTX RX. EV board: SDIO CMD", 20:"ESP32 RX ← VTX TX",
   22:"ESP32 RX ← LiDAR TX", 23:"ESP32 TX → LiDAR RX",
   42:"ESP32 RX ← receiver TX", 28:"Handset telemetry",
-  39:"One wire to beacon and Remote ID module",
-  2:"Active LOW to GND, pre-arm safety", 21:"Active HIGH, 100 ms pulse",
-  40:"INPUT_PULLDOWN; LOW blocks arming", 41:"LEDC 50 Hz, 16-bit",
-  51:"ADC2_CH2, 12-bit, 8× oversampled, 11.0 divider"
+  39:"UART0 TX. One wire in parallel to the beacon node's RX and the Remote ID module's RX — the FC never listens on this bus",
+  2:"Arm button — active LOW to GND, pre-arm safety",
+  21:"Beacon latch — active HIGH, 100 ms pulse to the solid-state switch",
+  40:"Remote ID health — the ESP32-C6 drives this HIGH while actually broadcasting; INPUT_PULLDOWN, so a dead or unconfigured module reads unhealthy",
+  41:"Parachute servo — LEDC 50 Hz, 16-bit",
+  51:"Battery divider — ADC2_CH2, 12-bit, 8× oversampled, 11.0 ratio"
 };
 
 const I2C = [
@@ -494,7 +498,7 @@ const I2C = [
 ];
 
 const UARTS = [
-  ["UART0","AUX broadcast bus","115200","TX 39","Free because the console is USB Serial/JTAG"],
+  ["UART0","AUX broadcast bus","115200","TX 39","One wire to the Remote ID C6 and the beacon C3. Free because the console is USB Serial/JTAG"],
   ["UART1","Beitian BN-220 GNSS","115200","RX 17 / TX 18","Probes 115200, falls back to 9600, then pushes the module up"],
   ["UART2","VTX MSP OSD","115200","TX 19 / RX 20","—"],
   ["UART3","TFmini-S LiDAR","115200","RX 22 / TX 23","—"],
@@ -560,7 +564,11 @@ const allPins = GROUPS.flatMap(g => g.pins.map(p => ({
 
 /* ---- the drawing ------------------------------------------------------- */
 function draw() {
-  const ROW = 36, PAD = 30, IC_W = 178, CARD_W = 244, STUB = 30, GUTTER = 128;
+  //  STUB carries the net label, so it must be long enough to set one on and must
+  //  still end before the routing lanes begin. LANE_GAP then stacks one lane per
+  //  group, outward, so leaders never cross and never touch a label.
+  const ROW = 36, PAD = 30, IC_W = 220, CARD_W = 244;
+  const STUB = 62, LANE_GAP = 13, LANE_0 = 74, GUTTER = 165, CARD_H = 92;
   const left  = GROUPS.filter(g => g.side === "L");
   const right = GROUPS.filter(g => g.side === "R");
   const rows  = Math.max(
@@ -572,7 +580,7 @@ function draw() {
   const W = PAD + CARD_W + GUTTER + IC_W + GUTTER + CARD_W + PAD;
   /* Deep bottom margin: the title block sits clear of the drawing, the way a
      drawing sheet keeps its border zone free of the circuit. */
-  const H = icH + 190;
+  const H = icH + 246;
   const icX = PAD + CARD_W + GUTTER, icY = 56;
 
   const svg = $("#schematic");
@@ -599,14 +607,18 @@ function draw() {
     return n;
   };
 
-  t(icX + IC_W / 2, icY + icH / 2 - 12, "ESP32-P4", {
-    "text-anchor": "middle", "font-size": 17, "font-weight": 600,
+  //  ONLY the part number goes inside the body. The descriptive lines used to sit
+  //  here too and collided with the pin numbers at mid-height -- pins run the full
+  //  height of both flanks, so there is no vertical position that avoids them. They
+  //  are a caption under the IC instead, where the sheet has room.
+  t(icX + IC_W / 2, icY + icH / 2, "ESP32-P4", {
+    "text-anchor": "middle", "font-size": 18, "font-weight": 600,
     "font-family": "Archivo, sans-serif"
   });
-  t(icX + IC_W / 2, icY + icH / 2 + 8, "dual RISC-V · 400 MHz", {
+  t(icX + IC_W / 2, icY + icH + 20, "dual RISC-V · 400 MHz", {
     "text-anchor": "middle", "font-size": 10.5, fill: "var(--ink-3)"
   });
-  t(icX + IC_W / 2, icY + icH / 2 + 26, "flight 500 Hz · core 1", {
+  t(icX + IC_W / 2, icY + icH + 36, "flight loop 500 Hz on core 1", {
     "text-anchor": "middle", "font-size": 10.5, fill: "var(--ink-3)"
   });
 
@@ -619,13 +631,15 @@ function draw() {
       const ys = g.pins.map((_, i) => icY + 22 + (row + i) * ROW + ROW / 2);
       const mid = (ys[0] + ys[ys.length - 1]) / 2;
 
-      /* channel: each group gets its own vertical lane so leaders never cross */
+      /* One lane per group, stacked outward from the stub ends. */
       const lane = isL
-        ? icX - 22 - (gi + 1) * (GUTTER - 40) / (groups.length + 1)
-        : icX + IC_W + 22 + (gi + 1) * (GUTTER - 40) / (groups.length + 1);
+        ? icX - LANE_0 - gi * LANE_GAP
+        : icX + IC_W + LANE_0 + gi * LANE_GAP;
 
+      /* Fixed height, centred on the group. A card stretched to its pin span is
+         mostly empty space, which reads as a rendering fault rather than a group. */
       const cardX = isL ? PAD : W - PAD - CARD_W;
-      const cardH = Math.max(52, g.pins.length * ROW + 12);
+      const cardH = CARD_H;
       const cardY = mid - cardH / 2;
 
       /* leaders, orthogonal only -- schematics have no diagonals */
@@ -647,8 +661,9 @@ function draw() {
           "text-anchor": isL ? "start" : "end", "font-size": 11,
           "font-weight": 600, fill: "var(--ink-2)"
         });
-        t(isL ? x1 - 6 : x1 + 6, y - 8, p[1], {
-          "text-anchor": isL ? "end" : "start", "font-size": 9.5, fill: "var(--ink-3)"
+        t((x0 + x1) / 2, y - 9, p[1], {
+          "text-anchor": "middle", "font-size": 9.5, fill: "var(--ink-3)",
+          "letter-spacing": ".03em"
         });
       });
 
@@ -665,10 +680,11 @@ function draw() {
         "font-size": 13, "font-weight": 600, "font-family": "Archivo, sans-serif"
       });
       t(cardX + 14, cardY + 37, g.sub, { "font-size": 10, fill: "var(--ink-3)" });
-      if (cardH > 62) {
-        t(cardX + 14, cardY + 55, g.pins.map(p => p[0]).join("  ·  "), {
-          "font-size": 10.5, fill: colour, "font-weight": 500
-        });
+      t(cardX + 14, cardY + 58, g.pins.map(p => p[0]).join(" · "), {
+        "font-size": 10.5, fill: colour, "font-weight": 500
+      });
+      if (g.note) {
+        t(cardX + 14, cardY + 76, g.note, { "font-size": 9.5, fill: "var(--ink-3)" });
       }
 
       row += g.pins.length + 1;
@@ -680,34 +696,43 @@ function draw() {
   /* Title block, bottom-right and set well below the circuit, as a drawing
      sheet carries it. Three ruled fields rather than two, now that there is
      room to give each one its own line. */
-  const tbW = 372, tbH = 84, tbX = W - PAD - tbW, tbY = H - tbH - 26;
+  //  Row geometry is derived, not hand-placed. The previous block used 28 px rows
+  //  with the value baseline 24 px down, so descenders crossed the rule below and
+  //  the last row punched through the bottom edge. Each row now owns ROW_H and the
+  //  label/value baselines are computed inside it.
+  const HDR_H = 28, ROW_H = 36, COL_X = 272;
+  const tbW = 424, tbH = HDR_H + ROW_H * 2;
+  const tbX = W - PAD - tbW, tbY = H - tbH - 30;
 
   svg.appendChild(el("rect", {
     x: tbX, y: tbY, width: tbW, height: tbH,
     fill: "var(--paper)", stroke: "var(--ink-3)", "stroke-width": 1.2
   }));
-  [28, 56].forEach(dy => svg.appendChild(el("line", {
+  [HDR_H, HDR_H + ROW_H].forEach(dy => svg.appendChild(el("line", {
     x1: tbX, y1: tbY + dy, x2: tbX + tbW, y2: tbY + dy,
     stroke: "var(--rule)", "stroke-width": 1
   })));
   svg.appendChild(el("line", {
-    x1: tbX + 232, y1: tbY + 28, x2: tbX + 232, y2: tbY + tbH,
+    x1: tbX + COL_X, y1: tbY + HDR_H, x2: tbX + COL_X, y2: tbY + tbH,
     stroke: "var(--rule)", "stroke-width": 1
   }));
 
-  t(tbX + 12, tbY + 14, "ODYSSEY-10 PRO — AVIONICS INTERCONNECT", {
-    "font-size": 10.5, "font-weight": 600, fill: "var(--ink)",
+  t(tbX + 14, tbY + HDR_H / 2, "ODYSSEY-10 PRO — AVIONICS INTERCONNECT", {
+    "font-size": 11, "font-weight": 600, fill: "var(--ink)",
     "font-family": "Archivo, sans-serif"
   });
 
-  const field = (x, y, k, v) => {
-    t(x, y, k, { "font-size": 8, fill: "var(--ink-3)", "letter-spacing": ".09em" });
-    t(x, y + 14, v, { "font-size": 10.5, "font-weight": 600, fill: "var(--ink-2)" });
+  /* row: 0 or 1; col: 0 (wide) or 1 (narrow) */
+  const field = (row, col, k, v) => {
+    const x = tbX + 14 + (col ? COL_X : 0);
+    const top = tbY + HDR_H + row * ROW_H;
+    t(x, top + 12, k, { "font-size": 8, fill: "var(--ink-3)", "letter-spacing": ".1em" });
+    t(x, top + 26, v, { "font-size": 11, "font-weight": 600, fill: "var(--ink-2)" });
   };
-  field(tbX + 12,  tbY + 38, "DRAWN FROM",  "config.h");
-  field(tbX + 12,  tbY + 66, "SCOPE",       "AIRCRAFT — not the EV board");
-  field(tbX + 244, tbY + 38, "REVISION",    "4.9");
-  field(tbX + 244, tbY + 66, "SHEET / NETS", `1 of 1  ·  ${allPins.length}`);
+  field(0, 0, "DRAWN FROM",   "config.h");
+  field(1, 0, "SCOPE",        "AIRCRAFT — not the EV board");
+  field(0, 1, "REVISION",     "4.9");
+  field(1, 1, "SHEET / NETS", `1 of 1  ·  ${allPins.length}`);
 }
 
 /* ---- power tree --------------------------------------------------------

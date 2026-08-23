@@ -2251,10 +2251,25 @@ device; every other transaction happens on core 0. Revision 1.0 had both cores d
 
 ### 9.4 AUX broadcast bus wiring
 
-One wire from GPIO 24 to the RX pins of both the beacon node and the Remote ID module, in
-parallel. Frames are addressed, CRC-protected and transmit-only — the flight controller
-never listens on this bus, so a faulty auxiliary module cannot feed data back into the
-avionics or jam the line.
+One wire from **GPIO 39** to the RX pins of both the beacon node and the Remote ID
+module, in parallel. Frames are addressed, CRC-protected and transmit-only — the flight
+controller never listens on this bus, so a faulty auxiliary module cannot feed data back
+into the avionics or jam the line.
+
+The bus is **UART0**, which is free because the console is USB Serial/JTAG — see §9.1 and
+finding 44, where this port was briefly shared with the GNSS.
+
+**The Remote ID module answers on a separate wire.** The ESP32-C6 drives `GPIO 40` HIGH
+while it is actually broadcasting, and that line is `INPUT_PULLDOWN` at the flight
+controller, so a missing, dead or unconfigured module reads as unhealthy rather than as
+fine. Those two GPIOs are one relationship, not two unrelated pins: 39 out to the module,
+40 back from it. `REQUIRE_REMOTE_ID_TO_ARM` decides whether an unhealthy answer blocks
+arming — see §12.1 for when it must be set.
+
+> This paragraph named GPIO 24 until revision 4.9, which was the pin the AUX bus used
+> before finding 41 moved it clear of the USB data lines. §9.2's map was corrected then
+> and this prose was not, because the `gpio-map` check reads only the map block. It now
+> also refuses prose that routes a signal *from* or *to* a pin the silicon reserves.
 
 ---
 
