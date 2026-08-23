@@ -2319,6 +2319,111 @@ def check_devboard_pins(rep, fix):
 # =====================================================================================
 #  Registry
 # =====================================================================================
+def check_gpio_map(rep, fix):
+    """Section 9.2's pinout versus config.h, pin by pin.
+
+    This is the diagram somebody solders from. When finding 42 moved PIN_BATT_ADC off
+    GPIO 1 -- which has no ADC on the P4 -- config.h was corrected and section 9.2 was
+    not, so for three commits the document told you to wire the battery divider to a pin
+    the firmware no longer reads. Nothing caught it: prose-constants checks numeric
+    claims in prose, and devboard-pins checks config.h against the silicon. Neither
+    compares the two documents' idea of the pinout with each other.
+    """
+    cfg = read(CONFIG_H)
+    doc = read(SPEC)
+
+    defined = {}
+    for m in re.finditer(r"^#define\s+(PIN_[A-Z0-9_]+|MOTOR[0-9]_PIN)\s+(\d+)", cfg, re.M):
+        defined.setdefault(int(m.group(2)), []).append(m.group(1))
+
+    sec = re.search(r"### 9\.2 GPIO map(.*?)^### 9\.3", doc, re.S | re.M)
+    if not sec:
+        rep.problem("gpio-map", "section 9.2's GPIO map is missing entirely")
+        return
+    mapped = {int(m.group(1)): m.group(2).strip()
+              for m in re.finditer(r"^GPIO (\d+)\s+-->\s+(.+)$", sec.group(1), re.M)}
+
+    for gpio in sorted(set(defined) - set(mapped)):
+        rep.problem("gpio-map",
+                    f"config.h puts {', '.join(defined[gpio])} on GPIO {gpio}, but "
+                    f"section 9.2's map does not list that pin -- the document somebody "
+                    f"wires from is missing a connection the firmware drives")
+    for gpio in sorted(set(mapped) - set(defined)):
+        rep.problem("gpio-map",
+                    f"section 9.2 maps GPIO {gpio} to \"{mapped[gpio][:60]}\", but no "
+                    f"PIN_* in config.h is on that GPIO -- wiring it would connect a "
+                    f"peripheral to a pin the firmware never touches")
+
+    if not (set(defined) ^ set(mapped)):
+        rep.note = getattr(rep, "note", [])
+        rep.note.append(f"gpio-map: section 9.2 and config.h agree on all "
+                        f"{len(defined)} assigned GPIOs")
+
+
+def check_uart_allocation(rep, fix):
+    """Every HardwareSerial(n) in the firmware, against itself and against section 9.1.
+
+    Two HardwareSerial objects on one port is not a compile error and not a runtime
+    error. The second begin() silently re-points the peripheral, so the loser simply
+    stops working -- no message, no failed init, nothing on the console. Finding 44 was
+    exactly this: AuxSerial and GnssSerial both took UART1, and because sensors.cpp
+    calls GnssSerial.begin() after setup() calls auxBus.begin(), the AUX broadcast to
+    the beacon and the Remote ID module went dead.
+
+    A pin check cannot see it. Both objects have their own perfectly valid pins; it is
+    the peripheral behind them that collides.
+    """
+    main = read(ROOT / "firmware" / "flight-controller" / "src" / "main.cpp")
+    doc  = read(SPEC)
+
+    #  object name -> port number
+    objs = {m.group(1): int(m.group(2))
+            for m in re.finditer(r"^HardwareSerial\s+(\w+)\s*\(\s*(\d+)\s*\)\s*;",
+                                 main, re.M)}
+    if not objs:
+        rep.problem("uart-allocation", "no HardwareSerial objects found in main.cpp")
+        return
+
+    by_port = {}
+    for name, port in objs.items():
+        by_port.setdefault(port, []).append(name)
+
+    for port, names in sorted(by_port.items()):
+        if len(names) > 1:
+            rep.problem("uart-allocation",
+                        f"{' and '.join(sorted(names))} all claim HardwareSerial({port}). "
+                        f"One peripheral wins silently -- whichever calls begin() last "
+                        f"re-points the port onto its own pins and the others stop "
+                        f"working with nothing on the console. See finding 44.")
+
+    #  Section 9.1 claims a peripheral per port; the firmware must agree on which ports
+    #  are in use, even though the table names peripherals rather than C++ objects.
+    sec = re.search(r"### 9\.1 UART allocation(.*?)^### 9\.2", doc, re.S | re.M)
+    if not sec:
+        rep.problem("uart-allocation", "section 9.1's UART table is missing")
+        return
+
+    documented = set()
+    for m in re.finditer(r"^\|\s*UART(\d)\s*\|\s*([^|]+?)\s*\|", sec.group(1), re.M):
+        if "unused" not in m.group(2).lower():
+            documented.add(int(m.group(1)))
+
+    used = set(by_port)
+    for port in sorted(used - documented):
+        rep.problem("uart-allocation",
+                    f"the firmware opens UART{port} ({', '.join(by_port[port])}) but "
+                    f"section 9.1 does not list it as used")
+    for port in sorted(documented - used):
+        rep.problem("uart-allocation",
+                    f"section 9.1 lists UART{port} as in use, but no HardwareSerial "
+                    f"in the firmware claims it")
+
+    if not (used ^ documented) and all(len(v) == 1 for v in by_port.values()):
+        rep.note = getattr(rep, "note", [])
+        rep.note.append(f"uart-allocation: {len(objs)} ports, one peripheral each, "
+                        f"matching section 9.1")
+
+
 CHECKS = [
     ("comment-continuation", "// comments ending in a backslash swallow the next line",
      check_comment_backslash),
@@ -2333,6 +2438,12 @@ CHECKS = [
     ("devboard-pins",
      "project pins versus what the development board has already claimed",
      check_devboard_pins),
+    ("gpio-map",
+     "section 9.2's pinout and config.h name the same GPIOs",
+     check_gpio_map),
+    ("uart-allocation",
+     "no two peripherals share a UART, and section 9.1 agrees with the firmware",
+     check_uart_allocation),
     ("bom-mass",
      "the parts list and config.h agree on mass, ESC margin and connector, for every build",
      check_bom_mass),

@@ -2061,6 +2061,34 @@ to filter a peak that RPM telemetry would have located exactly.
 > peripheral behind the pin has its own constraints. The check added for finding 41
 > verified that 24–27 stayed clear; it did not know the LP-UART existed. It does now.
 
+> **FINDING 44, and it is the direct consequence of finding 43's fix.** Moving
+> `AuxSerial` off the LP-UART put it on `HardwareSerial(1)` — and `GnssSerial` has been
+> `HardwareSerial(1)` since revision 1.0. Two peripherals, one port.
+>
+> **Nothing fails when you do this.** There is no error and no console output. The
+> second `begin()` simply reconfigures the peripheral, and `sensors.cpp` calls
+> `GnssSerial.begin()` *after* `setup()` calls `auxBus.begin()`, so UART1 ends up on the
+> GNSS pins and the AUX bus stops existing.
+>
+> The cost is not the AUX bus itself. It is what hangs off it: the beacon would keep
+> broadcasting its last known position instead of the current one — **finding 7 all over
+> again** — and the Remote ID module would never be told to broadcast, so
+> `PIN_REMOTEID_HEALTH` stays LOW and arming is blocked with `REQUIRE_REMOTE_ID_TO_ARM`
+> set, with nothing to explain why.
+>
+> Moved to **UART0**, which is genuinely free: `ARDUINO_USB_CDC_ON_BOOT=1` puts the
+> console on USB Serial/JTAG and nothing references `Serial0`.
+>
+> The comment I wrote at the time said "UART1 was unused — the console is on USB, which
+> frees UART0 and UART1." Half right, stated with the same confidence as the half that
+> was wrong. The `uart-allocation` check now compares every `HardwareSerial(n)` in the
+> firmware against §9.1's table, so a port cannot be claimed twice or drift from the
+> document again.
+>
+> Found while drawing the schematic in §9.5 — the collision is invisible in a pin list,
+> because both objects have their own pins. It is only visible when you draw the
+> peripheral behind them.
+
 ### 8.4 Radio frequency plan
 
 This aircraft carries four transmitters. Two interactions matter.
@@ -2138,16 +2166,21 @@ recommended configuration for a new build.
 
 ### 9.1 UART allocation
 
-The ESP32-P4 provides five full UARTs plus a low-power UART. All six are used:
+The ESP32-P4 provides five full UARTs plus a low-power UART. Five are used:
 
 | Port | Peripheral | Baud | Notes |
 | --- | --- | --- | --- |
-| UART0 | USB / debug console | 115200 | |
+| UART0 | AUX broadcast bus | 115200 | TX only, one wire to two modules. Free because the console is USB Serial/JTAG |
 | UART1 | Beitian BN-220 GNSS | **115200** | Auto-negotiated — see below |
 | UART2 | VTX MSP OSD | 115200 | |
 | UART3 | TFmini-S forward LiDAR | 115200 | |
-| UART4 | ExpressLRS receiver (CRSF) | 420000 | **New** — the manual control link |
-| LP-UART | AUX broadcast bus | 115200 | **New** — TX only, one wire to two modules |
+| UART4 | ExpressLRS receiver (CRSF) | 420000 | The manual control link |
+| LP-UART | *unused* | — | Reaches only LP-IO pins, GPIO 0–15, all of which are allocated — see finding 43 |
+
+The console is not a UART on this build. `ARDUINO_USB_CDC_ON_BOOT=1` binds Arduino's
+`Serial` to USB Serial/JTAG, which is what frees UART0 for the AUX bus. The ROM
+bootloader still logs on GPIO 37/38 before `setup()` runs, but GPIO 39 is undriven until
+the firmware claims it, so the beacon and Remote ID module never see that traffic.
 
 > **FINDING 16.** Revision 1.0's section 9 documented the BN-220 at 115200 baud while the
 > firmware opened the port at 9600. A builder who followed the documentation and
@@ -2166,7 +2199,6 @@ on the console and arming stays blocked with the `SENSORS` flag set.
 ```
 ESP32-P4 MASTER AVIONICS PINOUT
 -------------------------------------------------------------------------------
-GPIO 1   --> Battery voltage divider (100k/10k, 12-bit ADC, 8x oversampled)
 GPIO 2   --> Physical pre-arm safety push-button (active LOW to GND)
 GPIO 3   --> LoRa SX1278 DIO0 (interrupt line)
 GPIO 4   --> Motor 1 ESC PWM  (rear-right,  CCW)
@@ -2193,6 +2225,7 @@ GPIO 40  --> Remote ID health line (INPUT_PULLDOWN; module drives HIGH while
              broadcasting -- a dead or unconfigured module blocks arming)
 GPIO 41  --> Ballistic parachute servo (LEDC 50 Hz, 16-bit)
 GPIO 42  --> ExpressLRS CRSF RX     (ESP32 RX <- receiver TX @ 420000)
+GPIO 51  --> Battery voltage divider (100k/10k, ADC2_CH2, 12-bit, 8x oversampled)
 
 GPIO 24-27  RESERVED -- USB Serial/JTAG D-/D+. Do not use. See below.
 GPIO 33  --> MicroSD BlackBox CS   (SPI1)
@@ -2280,7 +2313,7 @@ Odyssey-10-Pro-Drone-System/
 |   +-- bom.csv                     9-inch reference build
 |   +-- bom-variants.csv            what differs in the other nine
 +-- tools/
-|   +-- check_consistency.py        The specification-vs-code gate     [25 checks]
+|   +-- check_consistency.py        The specification-vs-code gate     [27 checks]
 |   +-- blackbox_decode.py          Flight log decoder, formats v2-v4
 |   +-- test_blackbox_decode.py     ...and its tests
 |   +-- patchfile.py                Line-ending-safe in-place edits
