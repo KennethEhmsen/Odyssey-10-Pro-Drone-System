@@ -2896,6 +2896,20 @@ def check_findings_ledger(rep, fix):
                         f"whole argument is that ratio, so a stale count is the claim "
                         f"being wrong")
 
+    #  The ledger states how many checks exist. It cannot read this file, so it is
+    #  written down -- which means it has to be checked, or it drifts. It already did:
+    #  the sheet said 33 while there were 34.
+    m = re.search(r"const TOTAL_CHECKS = (\d+)", sheet)
+    if m and int(m.group(1)) != len(CHECKS):
+        rep.problem("findings-ledger",
+                    f"the ledger says there are {m.group(1)} checks; there are "
+                    f"{len(CHECKS)}", fixable=True)
+        if fix:
+            write(sheet_path, sheet.replace(f"const TOTAL_CHECKS = {m.group(1)}",
+                                            f"const TOTAL_CHECKS = {len(CHECKS)}"))
+            rep.fix("findings-ledger", f"check count {m.group(1)} -> {len(CHECKS)}")
+            return
+
     drawn_sev = {m[0]: int(m[1]) for m in re.findall(r'\["(\w+)",(\d+)\]', sheet)}
     drawn_sev = {k: v for k, v in drawn_sev.items() if k in sev or k in
                  ("Critical", "High", "Medium", "Low")}

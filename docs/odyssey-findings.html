@@ -193,6 +193,11 @@ const DOC_REV = "5.1";
 
 /* Counts parsed from §13 of the specification: 18 numbered rows with severities,
    46 unnumbered rows across §13.1 and §13.2. */
+//  The repository's check count. Written here because the page cannot read
+//  check_consistency.py -- and verified against it by `findings-ledger`, because
+//  a number typed next to data that already knows it is how this sheet's own
+//  headline said 33 while there were 34.
+const TOTAL_CHECKS = 34;
 const ORIGINAL = 18;
 const LATER = 46;
 const SEVERITY = [["Critical",7],["High",9],["Medium",1],["Low",1]];
@@ -290,7 +295,7 @@ function drawShape(){
 }
 
 function tables(){
-  $("#chkspan").textContent=`${CHECKS.length} of ${33} checks traced to a defect`;
+  $("#chkspan").textContent=`${CHECKS.length} of ${TOTAL_CHECKS} checks traced to a defect`;
 
   $("#orig tbody").innerHTML=SEVERITY.map(([s,n])=>{
     const colour = s==="Critical"?"var(--c-power)":s==="High"?"var(--c-i2c)":"var(--ink-3)";
