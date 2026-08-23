@@ -1,0 +1,239 @@
+<title>Odyssey-10 Pro Drawing Set</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+/* The index. Same system as the sheets it lists. */
+:root{
+  --paper:#F1F4F5;--sheet:#FBFCFC;--rule:#C9D2D6;--rule-soft:#E2E8EA;
+  --ink:#131C22;--ink-2:#46565F;--ink-3:#6E818B;--copper:#A85C34;
+  --c-power:#BE3F24;--c-i2c:#8A5E0C;--c-spi:#61469C;
+  --c-uart:#0B6670;--c-pwm:#2A6E36;--c-gpio:#55666F;
+  --warn-bg:#FBF0E6;--warn-edge:#D9A273;
+  --grid:rgba(19,28,34,.055);
+  --shadow:0 1px 2px rgba(19,28,34,.06),0 8px 24px -12px rgba(19,28,34,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{margin:0;background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:32px 32px,32px 32px;color:var(--ink);
+  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:48px 24px 96px;display:flex;flex-direction:column;gap:40px}
+.masthead{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--copper)}
+h1{font-family:Archivo,sans-serif;font-weight:700;font-size:clamp(30px,5.2vw,46px);
+  line-height:1.05;letter-spacing:-.021em;margin:0;text-wrap:balance}
+.standfirst{max-width:66ch;font-size:16.5px;color:var(--ink-2);margin:0}
+.provenance{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3);
+  padding-top:6px;border-top:1px solid var(--rule-soft)}
+.provenance b{color:var(--ink-2);font-weight:600}
+.dot{color:var(--rule)}
+section{display:flex;flex-direction:column;gap:16px}
+h2{font-family:Archivo,sans-serif;font-weight:600;font-size:12px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--ink-3);margin:0;padding-bottom:9px;
+  border-bottom:1.5px solid var(--rule);display:flex;justify-content:space-between;
+  align-items:baseline;gap:16px}
+h2 span{font-family:"IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:none;
+  font-weight:400;color:var(--ink-3)}
+.lede{max-width:68ch;color:var(--ink-2);margin:0}
+.sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:2px;
+  box-shadow:var(--shadow);overflow-x:auto;overflow-y:hidden}
+.sheet svg{display:block;min-width:760px;width:100%;height:auto}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:640px}
+caption{text-align:left;font-size:13px;color:var(--ink-3);padding-bottom:10px}
+th{text-align:left;font-family:Archivo,sans-serif;font-size:11px;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+  padding:0 14px 8px 0;border-bottom:1.5px solid var(--rule);white-space:nowrap}
+td{padding:7px 14px 7px 0;border-bottom:1px solid var(--rule-soft);vertical-align:baseline}
+tbody tr:last-child td{border-bottom:none}
+.mono,td.k{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+td.k{font-weight:600;white-space:nowrap;border-left:3px solid var(--cls,var(--rule));
+  padding-left:11px}
+td.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;
+  text-align:right;white-space:nowrap}
+td.note{color:var(--ink-2);font-size:13px}
+a{color:inherit;text-decoration:none}
+a.card{display:flex;flex-direction:column;gap:6px;padding:18px 20px;
+  background:var(--sheet);border:1px solid var(--rule);border-left:3px solid var(--cls);
+  border-radius:2px;box-shadow:var(--shadow);transition:border-color .12s}
+a.card:hover{border-color:var(--cls)}
+.cards{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
+.cardq{font-family:Archivo,sans-serif;font-size:16px;font-weight:600;
+  letter-spacing:-.008em}
+.cardsub{font-size:13px;color:var(--ink-2)}
+.cardmeta{display:flex;flex-wrap:wrap;gap:6px 12px;font-family:"IBM Plex Mono",monospace;
+  font-size:10.5px;color:var(--ink-3);padding-top:4px}
+.no{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--cls);
+  font-weight:600;letter-spacing:.1em}
+.pill{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;
+  font-weight:500;letter-spacing:.06em;padding:2px 8px;border-radius:2px;
+  border:1px solid currentColor;white-space:nowrap}
+.callout{background:var(--warn-bg);border:1px solid var(--warn-edge);border-left-width:3px;
+  border-radius:2px;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.callout h3{font-family:Archivo,sans-serif;font-size:14px;font-weight:700;margin:0}
+.callout p{margin:0;font-size:14px;color:var(--ink-2);max-width:70ch}
+code{font-family:"IBM Plex Mono",monospace;font-size:.92em;color:var(--ink)}
+footer{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3);
+  border-top:1px solid var(--rule-soft);padding-top:16px;line-height:1.8}
+:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Odyssey-10 Pro &middot; Drawing set &middot; revision 5.1</div>
+    <h1>Nine Sheets</h1>
+    <p class="standfirst">
+      Each one answers a question the specification answers in prose, and each is held to
+      the source by a check that fails the build when they drift apart. If a sheet and the
+      code disagree, the code is right and the sheet is a bug.
+    </p>
+    <div class="provenance" id="provenance"></div>
+  </header>
+
+  <section>
+    <h2>The set <span>9 sheets</span></h2>
+    <div class="cards">
+      <a class="card" href="odyssey-schematic.html" style="--cls:var(--c-pwm)">
+        <div class="no">SHEET 1</div>
+        <div class="cardq">What is wired to what</div>
+        <div class="cardsub">Interconnect, flight-loop stages, power tree and GPIO budget</div>
+        <div class="cardmeta"><span>rev 5.1</span><span><code>gpio-map</code> · <code>uart-allocation</code></span></div>
+      </a>
+      <a class="card" href="odyssey-layout.html" style="--cls:var(--c-i2c)">
+        <div class="no">SHEET 2</div>
+        <div class="cardq">Where every part is bolted</div>
+        <div class="cardsub">Plan and elevation, §8.1 coordinates, RF separation, mass budget</div>
+        <div class="cardmeta"><span>rev 5.1</span><span><span style='opacity:.6'>no dedicated check</span></span></div>
+      </a>
+      <a class="card" href="odyssey-flow.html" style="--cls:var(--c-spi)">
+        <div class="no">SHEET 3</div>
+        <div class="cardq">How the system decides</div>
+        <div class="cardsub">Four processors, five links, and the escalate-only state ladder</div>
+        <div class="cardmeta"><span>rev 5.1</span><span><code>flow-transitions</code></span></div>
+      </a>
+      <a class="card" href="odyssey-arming.html" style="--cls:var(--c-power)">
+        <div class="no">SHEET 4</div>
+        <div class="cardq">Why it will not arm</div>
+        <div class="cardsub">Ten conditions, seven blocker bits, and the one that can never fire</div>
+        <div class="cardmeta"><span>rev 5.1</span><span><code>arming-sheet</code></span></div>
+      </a>
+      <a class="card" href="odyssey-blackbox.html" style="--cls:var(--c-uart)">
+        <div class="no">SHEET 5</div>
+        <div class="cardq">What a flight log contains</div>
+        <div class="cardsub">The 54-byte record, field by field and byte by byte</div>
+        <div class="cardmeta"><span>rev 5.1</span><span><code>blackbox-sheet</code> · <code>blackbox</code></span></div>
+      </a>
+      <a class="card" href="odyssey-builds.html" style="--cls:var(--c-copper)">
+        <div class="no">SHEET 6</div>
+        <div class="cardq">What the three switches move</div>
+        <div class="cardsub">Ten builds resolved by the C preprocessor, and the coupling between them</div>
+        <div class="cardmeta"><span>rev 5.1</span><span><code>build-matrix</code> · <code>build-configs</code></span></div>
+      </a>
+      <a class="card" href="odyssey-dshot.html" style="--cls:var(--c-pwm)">
+        <div class="no">SHEET 7</div>
+        <div class="cardq">What the wire should look like</div>
+        <div class="cardsub">DShot300 drawn to scale, for holding next to a capture</div>
+        <div class="cardmeta"><span>rev 5.1</span><span><code>dshot-sheet</code></span></div>
+      </a>
+      <a class="card" href="odyssey-link.html" style="--cls:var(--c-uart)">
+        <div class="no">SHEET 8</div>
+        <div class="cardq">How the four images talk</div>
+        <div class="cardsub">Frame anatomy, the header, the four types and the command opcodes</div>
+        <div class="cardmeta"><span>rev 5.1</span><span><span style='opacity:.6'>no dedicated check</span></span></div>
+      </a>
+      <a class="card" href="odyssey-bringup.html" style="--cls:var(--c-gpio)">
+        <div class="no">SHEET 9</div>
+        <div class="cardq">Where the project is</div>
+        <div class="cardsub">Four steps, four DShot assumptions, and what is actually verified</div>
+        <div class="cardmeta"><span>rev 5.1</span><span><span style='opacity:.6'>no dedicated check</span></span></div>
+      </a>
+    </div>
+  </section>
+
+  <section>
+    <h2>Where to start <span>by what you are doing</span></h2>
+    <div class="scroll"><table>
+      <thead><tr><th>If you are…</th><th>Read</th></tr></thead>
+      <tbody>
+        <tr><td class="k" style="--cls:var(--c-gpio)">wondering what to do next</td>
+            <td class="note"><a href="odyssey-bringup.html"><b>Bring-up</b></a> — four steps, one done, and what each still needs</td></tr>
+        <tr><td class="k" style="--cls:var(--c-pwm)">soldering</td>
+            <td class="note"><a href="odyssey-schematic.html"><b>Interconnect</b></a> for the nets, then <a href="odyssey-layout.html"><b>Layout</b></a> for where they go. The power rules in §9.5 are on the interconnect sheet</td></tr>
+        <tr><td class="k" style="--cls:var(--c-power)">staring at ARMING IS BLOCKED</td>
+            <td class="note"><a href="odyssey-arming.html"><b>Arming</b></a> — every condition, its constant, and what to do about it</td></tr>
+        <tr><td class="k" style="--cls:var(--c-uart)">holding a logic analyser</td>
+            <td class="note"><a href="odyssey-dshot.html"><b>DShot</b></a> — drawn to scale, with the disarmed frame to compare against</td></tr>
+        <tr><td class="k" style="--cls:var(--c-spi)">writing a decoder</td>
+            <td class="note"><a href="odyssey-blackbox.html"><b>BlackBox</b></a> for log files, <a href="odyssey-link.html"><b>Link</b></a> for radio frames</td></tr>
+        <tr><td class="k" style="--cls:var(--copper)">choosing a build</td>
+            <td class="note"><a href="odyssey-builds.html"><b>Build matrix</b></a> — ten combinations, and which three exceed the connector</td></tr>
+        <tr><td class="k" style="--cls:var(--c-i2c)">trying to understand it</td>
+            <td class="note"><a href="odyssey-flow.html"><b>Flow</b></a> — the state ladder is the shortest explanation of how this aircraft thinks</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>How these stay true <span>not by discipline</span></h2>
+    <div class="callout">
+      <h3>Every sheet is derived, and most are checked</h3>
+      <p>
+        No number on these pages was typed in from memory. Pin assignments come from
+        <code>config.h</code>, byte offsets are computed from the field lists, the build
+        matrix runs the C preprocessor once per combination, and the DShot timings use the
+        firmware's own integer arithmetic — down to reproducing its 9999 ppm rounding.
+        <br><br>
+        Six sheets have a dedicated consistency check that re-reads the source and fails
+        the build on a mismatch, and <code>schematic-rev</code> holds every sheet to the
+        specification's revision. The three without one are drawings of things that have
+        no single machine-readable source: physical placement, the wire protocol's prose,
+        and the project's own progress.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    Odyssey-10 Pro &middot; drawing set, revision 5.1 &middot;
+    generated by <code>tools/gen_docs_index.py</code><br>
+    Titles, revisions and sheet numbers are read from the files themselves, so a new sheet
+    appears here by existing rather than by being remembered.<br>
+    The specification these accompany is <code>docs/Odyssey-10-Pro-Drone-System.md</code>.
+  </footer>
+</div>
+
+<script>
+const DOC_REV = "5.1";
+const SHEETS = 9;
+document.querySelector("#provenance").innerHTML = [
+  `<b>Sheets</b> ${SHEETS}`, `<span class="dot">/</span>`,
+  `<b>Revision</b> ${DOC_REV}`, `<span class="dot">/</span>`,
+  `<b>Checked</b> 6 of ${SHEETS}`, `<span class="dot">/</span>`,
+  `<b>Source</b> read from the files`
+].join(" ");
+</script>

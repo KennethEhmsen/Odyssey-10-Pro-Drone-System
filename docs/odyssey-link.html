@@ -1,0 +1,363 @@
+<title>Odyssey-10 Pro Link Protocol</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+/* Eighth sheet, same system as the others. */
+:root{
+  --paper:#F1F4F5;--sheet:#FBFCFC;--rule:#C9D2D6;--rule-soft:#E2E8EA;
+  --ink:#131C22;--ink-2:#46565F;--ink-3:#6E818B;--copper:#A85C34;
+  --c-power:#BE3F24;--c-i2c:#8A5E0C;--c-spi:#61469C;
+  --c-uart:#0B6670;--c-pwm:#2A6E36;--c-gpio:#55666F;
+  --warn-bg:#FBF0E6;--warn-edge:#D9A273;
+  --grid:rgba(19,28,34,.055);
+  --shadow:0 1px 2px rgba(19,28,34,.06),0 8px 24px -12px rgba(19,28,34,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{margin:0;background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:32px 32px,32px 32px;color:var(--ink);
+  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:48px 24px 96px;display:flex;flex-direction:column;gap:40px}
+.masthead{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--copper)}
+.eyebrow a{color:var(--copper);text-decoration:none;border-bottom:1px dotted currentColor;padding-bottom:1px}
+.eyebrow a:hover{border-bottom-style:solid}
+h1{font-family:Archivo,sans-serif;font-weight:700;font-size:clamp(30px,5.2vw,46px);
+  line-height:1.05;letter-spacing:-.021em;margin:0;text-wrap:balance}
+.standfirst{max-width:66ch;font-size:16.5px;color:var(--ink-2);margin:0}
+.provenance{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3);
+  padding-top:6px;border-top:1px solid var(--rule-soft)}
+.provenance b{color:var(--ink-2);font-weight:600}
+.dot{color:var(--rule)}
+section{display:flex;flex-direction:column;gap:16px}
+h2{font-family:Archivo,sans-serif;font-weight:600;font-size:12px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--ink-3);margin:0;padding-bottom:9px;
+  border-bottom:1.5px solid var(--rule);display:flex;justify-content:space-between;
+  align-items:baseline;gap:16px}
+h2 span{font-family:"IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:none;
+  font-weight:400;color:var(--ink-3)}
+.lede{max-width:68ch;color:var(--ink-2);margin:0}
+.sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:2px;
+  box-shadow:var(--shadow);overflow-x:auto;overflow-y:hidden}
+.sheet svg{display:block;min-width:760px;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:"IBM Plex Mono",monospace;
+  font-size:12px;color:var(--ink-2)}
+.legend i{display:inline-block;width:22px;height:3px;margin-right:8px;
+  vertical-align:middle;border-radius:1px}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:640px}
+caption{text-align:left;font-size:13px;color:var(--ink-3);padding-bottom:10px}
+th{text-align:left;font-family:Archivo,sans-serif;font-size:11px;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+  padding:0 14px 8px 0;border-bottom:1.5px solid var(--rule);white-space:nowrap}
+td{padding:7px 14px 7px 0;border-bottom:1px solid var(--rule-soft);vertical-align:baseline}
+tbody tr:last-child td{border-bottom:none}
+.mono,td.k{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+td.k{font-weight:600;white-space:nowrap;border-left:3px solid var(--cls,var(--rule));
+  padding-left:11px}
+td.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;
+  text-align:right;white-space:nowrap}
+td.note{color:var(--ink-2);font-size:13px}
+.pill{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;
+  font-weight:500;letter-spacing:.06em;padding:2px 8px;border-radius:2px;
+  border:1px solid currentColor;white-space:nowrap}
+.callout{background:var(--warn-bg);border:1px solid var(--warn-edge);border-left-width:3px;
+  border-radius:2px;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.callout h3{font-family:Archivo,sans-serif;font-size:14px;font-weight:700;margin:0}
+.callout p{margin:0;font-size:14px;color:var(--ink-2);max-width:70ch}
+code{font-family:"IBM Plex Mono",monospace;font-size:.92em;color:var(--ink)}
+footer{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3);
+  border-top:1px solid var(--rule-soft);padding-top:16px;line-height:1.8}
+:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow"><a href="index.html">&larr; All sheets</a> &middot; Odyssey-10 Pro &middot; Link protocol &middot; Sheet 8 of 8</div>
+    <h1>Ten Bytes Of Envelope</h1>
+    <p class="standfirst">
+      One frame format carries all four conversations — telemetry down, commands up, the
+      AUX broadcast, and the beacon. Eight bytes of header, a payload, and a CRC that
+      deliberately does not cover the first byte.
+    </p>
+    <div class="provenance" id="provenance"></div>
+  </header>
+
+  <section>
+    <h2>Frame anatomy <span id="anaspan"></span></h2>
+    <div class="sheet">
+      <svg id="anatomy" role="img" aria-label="The frame: eight-byte header, payload, two-byte CRC"></svg>
+    </div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section>
+    <h2>The header <span>8 bytes, little-endian</span></h2>
+    <div class="scroll"><table id="header">
+      <caption>Offsets computed from the field list, as with the blackbox record.</caption>
+      <thead><tr><th>Offset</th><th>Type</th><th>Field</th><th>Meaning</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>The CRC skips <code>magic</code>, on purpose</h3>
+      <p>
+        <code>odyCrc16</code> is CRC-16/CCITT — polynomial <code>0x1021</code>, initial
+        <code>0xFFFF</code> — and it covers <b>version through the last payload byte</b>.
+        The start-of-frame byte is excluded so a receiver that has lost sync can hunt for
+        <code>0xA7</code> without special-casing the checksum, and so a byte that arrives
+        corrupted into <code>0xA7</code> still fails on CRC rather than on framing.
+        <br><br>
+        <code>reserved</code> is zero and exists only to keep the payload 4-byte aligned.
+        It is a place to put a future field without moving anything.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>The four frame types <span>one envelope, four conversations</span></h2>
+    <div class="scroll"><table id="types">
+      <thead><tr><th>Type</th><th>Direction</th><th>Carrier</th><th>Payload</th><th>On the wire</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>Only one of these is bidirectional</h3>
+      <p>
+        Telemetry and commands share the LoRa link, so the ground station can talk back.
+        The <b>AUX broadcast is transmit-only</b> — the flight controller never listens on
+        it, so a faulty beacon or Remote ID module cannot feed data into the avionics or
+        jam the line. And the beacon transmits to the ground on its own, from its own
+        cell, after the aircraft is down.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Commands the ground can send <span>CommandPayload · 8 bytes</span></h2>
+    <div class="scroll"><table id="cmds">
+      <thead><tr><th>Opcode</th><th>Name</th><th>Effect</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>Five opcodes, and none of them arms</h3>
+      <p>
+        The ground station can ask the aircraft to come home, to land now, or to answer a
+        landing prompt. <b>It cannot arm, and it cannot disarm in flight.</b> Arming needs
+        a physical button held for a second next to the aircraft (sheet 4), and the state
+        ladder only escalates (sheet 3) — so no command on this link can make the aircraft
+        less safe than it already is.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>AUX addressing <span>one wire, two listeners</span></h2>
+    <div class="scroll"><table id="aux">
+      <thead><tr><th>Address</th><th>Value</th><th>Reaches</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <footer id="titleblock"></footer>
+</div>
+
+<script>
+const DOC_REV = "5.1";
+
+/* From shared/odyssey_link.h. Sizes were taken from the compiler, not added up here. */
+const LINK_VERSION = 2;
+const LINK_MAGIC = 0xA7;
+const MAX_PAYLOAD = 64;
+const HDR_BYTES = 8;
+const CRC_BYTES = 2;
+
+const T = {u8:1, u16:2, u32:4, i16:2, i32:4};
+/* `abbr` is what fits a one-byte cell in the diagram: 26 px holds about five
+   characters at 8 px, and "version" is seven. */
+const ABBR = {magic:"mag", version:"ver", type:"typ", dest:"dst",
+              seq:"seq", len:"len", reserved:"rsv"};
+
+const HEADER = [
+  ["u8","magic","<code>0xA7</code> — start of frame. Excluded from the CRC"],
+  ["u8","version","<code>2</code> — bumped on any wire-format change; a mismatch is rejected"],
+  ["u8","type","One of the four frame types below"],
+  ["u8","dest","AUX bus only; zero on every other carrier"],
+  ["u16","seq","Monotonic per sender, wraps. Gaps are lost frames"],
+  ["u8","len","Payload length in bytes, ≤ 64"],
+  ["u8","reserved","Zero. Keeps the payload 4-byte aligned"]
+];
+
+const TYPES = [
+  ["ODY_FRAME_TELEMETRY","0x10","FC → ground","LoRa 433 MHz","TelemetryPayload",48],
+  ["ODY_FRAME_COMMAND","0x20","ground → FC","LoRa 433 MHz","CommandPayload",8],
+  ["ODY_FRAME_AUX_POS","0x30","FC → aux modules","UART0 broadcast","AuxPositionPayload",30],
+  ["ODY_FRAME_BEACON","0x40","beacon → ground","LoRa 433 MHz","BeaconPayload",28]
+];
+
+const CMDS = [
+  [0,"ODY_CMD_NONE","No-op"],
+  [1,"ODY_CMD_PERMIT_LAND","Pilot answers the land-permission prompt: yes"],
+  [2,"ODY_CMD_DENY_LAND","Pilot refuses; the aircraft holds until critical"],
+  [3,"ODY_CMD_RTH_NOW","Operator-commanded return to home"],
+  [4,"ODY_CMD_ABORT_TO_LAND","Operator-commanded immediate failsafe landing"],
+  [5,"ODY_CMD_LINK_PING","Keeps the command link measurably alive"]
+];
+
+const AUX = [
+  ["ODY_AUX_ADDR_ALL","0x00","Both listeners"],
+  ["ODY_AUX_ADDR_BEACON","0x01","Beacon node only"],
+  ["ODY_AUX_ADDR_REMOTEID","0x02","Remote ID module only"]
+];
+
+const CLASSES = {
+  hdr:{label:"Header", colour:"var(--c-gpio)"},
+  pay:{label:"Payload", colour:"var(--c-pwm)"},
+  crc:{label:"CRC-16", colour:"var(--c-power)"},
+  cov:{label:"CRC coverage", colour:"var(--copper)"}
+};
+
+let hoff = 0;
+const HDR = HEADER.map(([ty,name,meaning])=>{
+  const r={off:hoff, size:T[ty], ty, name, meaning}; hoff+=T[ty]; return r;
+});
+const HDR_COMPUTED = hoff;
+
+const $=(s)=>document.querySelector(s);
+const SVGNS="http://www.w3.org/2000/svg";
+const el=(n,a={})=>{const e=document.createElementNS(SVGNS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const esc=(s)=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+/* ---- frame anatomy ---------------------------------------------------- */
+function drawAnatomy(){
+  const svg=$("#anatomy"), PAD=36, W=920, H=232, CELL=26, y0=76;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.setAttribute("font-family",'"IBM Plex Mono",ui-monospace,monospace');
+  const t=(x,y,s,o={})=>{const n=el("text",Object.assign({x,y,"font-size":11,
+    fill:"var(--ink)","dominant-baseline":"middle"},o));n.textContent=s;svg.appendChild(n);return n;};
+
+  t(PAD,40,`TELEMETRY FRAME — ${HDR_BYTES} + 48 + ${CRC_BYTES} = ${HDR_BYTES+48+CRC_BYTES} BYTES`,
+    {"font-size":10,fill:"var(--ink-3)","letter-spacing":".12em"});
+
+  /* header bytes, individually */
+  HDR.forEach(f=>{
+    const x=PAD+f.off*CELL, w=f.size*CELL;
+    svg.appendChild(el("rect",{x,y:y0,width:w,height:34,rx:1.5,
+      fill:"var(--c-gpio)","fill-opacity":.14,stroke:"var(--c-gpio)","stroke-width":1.2}));
+    t(x+w/2,y0+17,ABBR[f.name]||f.name,{"text-anchor":"middle","font-size":8,
+      fill:"var(--ink-2)"});
+    t(x+w/2,y0-10,String(f.off),{"text-anchor":"middle","font-size":7.5,
+      fill:"var(--ink-3)"});
+  });
+
+  /* payload, compressed */
+  const px=PAD+HDR_BYTES*CELL, pw=CELL*10;
+  svg.appendChild(el("rect",{x:px,y:y0,width:pw,height:34,rx:1.5,
+    fill:"var(--c-pwm)","fill-opacity":.14,stroke:"var(--c-pwm)","stroke-width":1.2,
+    "stroke-dasharray":"5 3"}));
+  t(px+pw/2,y0+17,"payload · len bytes",{"text-anchor":"middle","font-size":9,
+    fill:"var(--c-pwm)","font-weight":600});
+  t(px+pw/2,y0-10,`8 … 8+len-1`,{"text-anchor":"middle","font-size":7.5,
+    fill:"var(--ink-3)"});
+
+  /* crc */
+  const cx=px+pw, cw=CRC_BYTES*CELL;
+  svg.appendChild(el("rect",{x:cx,y:y0,width:cw,height:34,rx:1.5,
+    fill:"var(--c-power)","fill-opacity":.16,stroke:"var(--c-power)","stroke-width":1.2}));
+  t(cx+cw/2,y0+17,"crc",{"text-anchor":"middle","font-size":9,fill:"var(--c-power)",
+    "font-weight":600});
+
+  /* CRC coverage bracket: version .. last payload byte */
+  const bx=PAD+CELL, bw=cx-bx;
+  svg.appendChild(el("path",{d:`M ${bx} ${y0+50} V ${y0+58} H ${bx+bw} V ${y0+50}`,
+    stroke:"var(--copper)","stroke-width":1.4,fill:"none"}));
+  t(bx+bw/2,y0+72,"CRC-16/CCITT covers this — poly 0x1021, init 0xFFFF",
+    {"text-anchor":"middle","font-size":9.5,fill:"var(--copper)","font-weight":600});
+
+  /* and what it does not */
+  svg.appendChild(el("path",{d:`M ${PAD} ${y0+50} V ${y0+58} H ${PAD+CELL} V ${y0+50}`,
+    stroke:"var(--ink-3)","stroke-width":1.2,fill:"none","stroke-dasharray":"3 2"}));
+  t(PAD,y0+92,"magic is outside the CRC, so a resynchronising receiver can hunt for 0xA7",
+    {"font-size":9,fill:"var(--ink-3)"});
+  t(PAD,y0+105,"without special-casing it — and a byte corrupted INTO 0xA7 still fails on CRC",
+    {"font-size":9,fill:"var(--ink-3)"});
+}
+
+function tables(){
+  $("#anaspan").textContent=`v${LINK_VERSION} · magic 0x${LINK_MAGIC.toString(16).toUpperCase()} · ≤ ${MAX_PAYLOAD} B payload`;
+  $("#legend").innerHTML=Object.values(CLASSES).map(c=>
+    `<span><i style="background:${c.colour}"></i>${esc(c.label)}</span>`).join("");
+
+  const TYPE={u8:"uint8",u16:"uint16",u32:"uint32",i16:"int16",i32:"int32"};
+  $("#header tbody").innerHTML=HDR.map(f=>`<tr>
+      <td class="k" style="--cls:var(--c-gpio);text-align:right">${f.off}</td>
+      <td class="mono" style="color:var(--ink-3)">${TYPE[f.ty]}</td>
+      <td class="mono">${esc(f.name)}</td>
+      <td class="note">${f.meaning}</td></tr>`).join("");
+
+  $("#types tbody").innerHTML=TYPES.map(t=>`<tr>
+      <td class="k" style="--cls:var(--c-uart)"><span class="mono" style="font-size:12px">${esc(t[0])}</span><br>
+          <span class="mono" style="color:var(--ink-3);font-size:11px">${esc(t[1])}</span></td>
+      <td class="note">${esc(t[2])}</td>
+      <td class="note">${esc(t[3])}</td>
+      <td class="mono">${esc(t[4])}<br><span style="color:var(--ink-3);font-size:11px">${t[5]} B</span></td>
+      <td class="num">${HDR_BYTES + t[5] + CRC_BYTES} B</td>
+    </tr>`).join("");
+
+  $("#cmds tbody").innerHTML=CMDS.map(c=>`<tr>
+      <td class="k" style="--cls:var(--c-spi);text-align:right">${c[0]}</td>
+      <td class="mono">${esc(c[1])}</td>
+      <td class="note">${esc(c[2])}</td></tr>`).join("");
+
+  $("#aux tbody").innerHTML=AUX.map(a=>`<tr>
+      <td class="k" style="--cls:var(--c-i2c)"><span class="mono">${esc(a[0])}</span></td>
+      <td class="mono">${esc(a[1])}</td>
+      <td class="note">${esc(a[2])}</td></tr>`).join("");
+
+  const ok = HDR_COMPUTED === HDR_BYTES;
+  $("#provenance").innerHTML=[
+    `<b>Version</b> ${LINK_VERSION}`,`<span class="dot">/</span>`,
+    `<b>Header</b> ${HDR_COMPUTED} B`,`<span class="dot">/</span>`,
+    `<b>Overhead</b> ${HDR_BYTES+CRC_BYTES} B`,`<span class="dot">/</span>`,
+    `<b>Max payload</b> ${MAX_PAYLOAD} B`,`<span class="dot">/</span>`,
+    `<b>Computed</b> ${ok?"matches the compiler":"MISMATCH — SHEET IS WRONG"}`,
+    `<span class="dot">/</span>`,`<b>Doc</b> rev ${DOC_REV}`
+  ].join(" ");
+
+  $("#titleblock").innerHTML=
+    `Odyssey-10 Pro &middot; link protocol v${LINK_VERSION}, revision ${DOC_REV}<br>`+
+    `Fields and opcodes from <code>shared/odyssey_link.h</code>; every struct size taken `+
+    `from the compiler rather than added up here. Three of the four firmware images speak `+
+    `this &mdash; flight controller, ground station and beacon &mdash; and the fourth `+
+    `listens to it.<br>`+
+    `The host suite round-trips real frames through <code>odyBuildFrame</code> and `+
+    `<code>odyParseFrame</code>; if this sheet and the header disagree, the header is right.`;
+}
+
+drawAnatomy();
+tables();
+</script>
