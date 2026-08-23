@@ -21,6 +21,7 @@
 #define ODY_BLACKBOX_H
 
 #include <Arduino.h>
+#include <atomic>
 #include "types.h"
 
 #define BLACKBOX_RING_RECORDS   256    // ~2.5 s of buffer at 100 Hz
@@ -43,14 +44,41 @@ public:
 
   bool     ready()        const { return ready_; }
   uint32_t recordsWritten() const { return written_; }
-  uint32_t recordsDropped() const { return dropped_; }
+  uint32_t recordsDropped() const { return dropped_.load(std::memory_order_relaxed); }
   const char* currentPath() const { return path_; }
 
 private:
   BlackBoxRecord ring_[BLACKBOX_RING_RECORDS];
-  volatile uint32_t head_ = 0;   // producer, flight loop
-  volatile uint32_t tail_ = 0;   // consumer, storage task
-  volatile uint32_t dropped_ = 0;
+  //  ATOMIC, NOT VOLATILE -- AND THE DIFFERENCE IS A CORRUPTED FLIGHT LOG.
+  //
+  //  push() runs in TaskFlightLoop pinned to core 1; service() runs in TaskStorage
+  //  pinned to core 0. This is a real cross-core single-producer/single-consumer
+  //  queue, not two threads on one core.
+  //
+  //  volatile keeps the compiler from caching these in registers, and that is ALL it
+  //  does. It emits no memory barrier, and -- the part that bites -- it does not
+  //  order the NON-volatile store of ring_[head_] against the volatile store to
+  //  head_. Either the compiler or the store buffer may let the index land first, so
+  //  the consumer can observe an advanced head_ while ring_[tail_] still holds the
+  //  previous record, or half of the new one. BlackBoxRecord is many words wide, so
+  //  the failure is a torn record, silently, in the one file that exists to explain
+  //  a crash.
+  //
+  //  With acquire/release the release store to head_ publishes everything written to
+  //  the slot before it, and the consumer's acquire load makes it visible. See
+  //  push() and service() for where each ordering is paired.
+  //
+  //  C++20 deprecating volatile compound assignment is what surfaced this. The
+  //  warning was pointing at a defect, not at a style preference.
+  std::atomic<uint32_t> head_{0};      // written by the producer only
+  std::atomic<uint32_t> tail_{0};      // written by the consumer only
+  std::atomic<uint32_t> dropped_{0};
+
+  //  A lock-based atomic here would take a mutex inside the 500 Hz flight loop --
+  //  exactly the blocking this ring exists to avoid. Fail the build instead.
+  static_assert(std::atomic<uint32_t>::is_always_lock_free,
+                "blackbox ring indices must be lock-free: push() runs in the flight "
+                "loop and must never block");
   uint32_t written_ = 0;
   bool     ready_   = false;
   bool     fileOpen_ = false;

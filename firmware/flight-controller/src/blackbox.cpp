@@ -53,8 +53,11 @@ bool BlackBox::startFlight(uint32_t flightNumber) {
   logFile.write((const uint8_t*)&h, sizeof(h));
   logFile.flush();
 
-  head_ = tail_ = 0;
-  dropped_ = 0;
+  //  Relaxed: no logging is in flight yet -- fileOpen_ is still false, so the
+  //  producer cannot be running.
+  head_.store(0, std::memory_order_relaxed);
+  tail_.store(0, std::memory_order_relaxed);
+  dropped_.store(0, std::memory_order_relaxed);
   written_ = 0;
   fileOpen_ = true;
   Serial.printf("[BLACKBOX] logging to %s\n", path_);
@@ -68,22 +71,31 @@ void BlackBox::endFlight() {
   logFile.close();
   fileOpen_ = false;
   Serial.printf("[BLACKBOX] closed %s -- %lu records, %lu dropped\n",
-                path_, (unsigned long)written_, (unsigned long)dropped_);
+                path_, (unsigned long)written_,
+                (unsigned long)dropped_.load(std::memory_order_relaxed));
 }
 
 void BlackBox::push(const BlackBoxRecord& rec) {
   if (!fileOpen_) return;
 
-  const uint32_t next = (head_ + 1) % BLACKBOX_RING_RECORDS;
-  if (next == tail_) {
+  //  Relaxed on our own index: this task is the only writer of head_.
+  const uint32_t head = head_.load(std::memory_order_relaxed);
+  const uint32_t next = (head + 1) % BLACKBOX_RING_RECORDS;
+
+  //  Acquire on tail_: once we see the consumer's advance, the slots it freed really
+  //  are finished with.
+  if (next == tail_.load(std::memory_order_acquire)) {
     // Ring full: the card is stalling. Drop the sample and count it. Dropping is the
     // right call -- blocking here would miss a 500 Hz control deadline, and a gap in
     // the log is far cheaper than a gap in the control loop.
-    ++dropped_;
+    dropped_.fetch_add(1, std::memory_order_relaxed);
     return;
   }
-  ring_[head_] = rec;
-  head_ = next;
+  ring_[head] = rec;
+
+  //  RELEASE. This is the barrier that makes the record above visible to the
+  //  storage task on the other core before the index that points at it.
+  head_.store(next, std::memory_order_release);
 }
 
 void BlackBox::service() {
@@ -91,15 +103,29 @@ void BlackBox::service() {
 
   // Copy out of the ring in blocks so the SD layer sees large sequential writes.
   static BlackBoxRecord batch[BLACKBOX_FLUSH_RECORDS];
-  while (tail_ != head_) {
+  //  ACQUIRE, paired with the release store in push(): every record published
+  //  before this head value is visible to us now.
+  uint32_t head = head_.load(std::memory_order_acquire);
+  uint32_t tail = tail_.load(std::memory_order_relaxed);   // we are its only writer
+
+  while (tail != head) {
     uint32_t n = 0;
-    while (tail_ != head_ && n < BLACKBOX_FLUSH_RECORDS) {
-      batch[n++] = ring_[tail_];
-      tail_ = (tail_ + 1) % BLACKBOX_RING_RECORDS;
+    while (tail != head && n < BLACKBOX_FLUSH_RECORDS) {
+      batch[n++] = ring_[tail];
+      tail = (tail + 1) % BLACKBOX_RING_RECORDS;
     }
     if (n == 0) break;
+
+    //  RELEASE, and published BEFORE the write rather than after it. The producer may
+    //  not reuse these slots until the copy above has finished, and an SD card can
+    //  stall for 100 ms -- freeing the slots first is what keeps that stall from
+    //  turning into dropped samples.
+    tail_.store(tail, std::memory_order_release);
+
     logFile.write((const uint8_t*)batch, n * sizeof(BlackBoxRecord));
     written_ += n;
+
+    head = head_.load(std::memory_order_acquire);
   }
 
   // Flush roughly once a second. Frequent flushes cost throughput; rare ones cost
