@@ -1,0 +1,476 @@
+<title>Odyssey-10 Pro DShot Waveform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+/* Seventh sheet, same system as the others. */
+:root{
+  --paper:#F1F4F5;--sheet:#FBFCFC;--rule:#C9D2D6;--rule-soft:#E2E8EA;
+  --ink:#131C22;--ink-2:#46565F;--ink-3:#6E818B;--copper:#A85C34;
+  --c-power:#BE3F24;--c-i2c:#8A5E0C;--c-spi:#61469C;
+  --c-uart:#0B6670;--c-pwm:#2A6E36;--c-gpio:#55666F;
+  --warn-bg:#FBF0E6;--warn-edge:#D9A273;
+  --grid:rgba(19,28,34,.055);
+  --shadow:0 1px 2px rgba(19,28,34,.06),0 8px 24px -12px rgba(19,28,34,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --paper:#0F1519;--sheet:#151D22;--rule:#35444C;--rule-soft:#232F35;
+  --ink:#E6EDF0;--ink-2:#A7B7BF;--ink-3:#7A8B94;--copper:#D08A5E;
+  --c-power:#F1785C;--c-i2c:#D9A83C;--c-spi:#A78BE0;
+  --c-uart:#46B6C0;--c-pwm:#6BBF75;--c-gpio:#93A5AE;
+  --warn-bg:#2A2019;--warn-edge:#7A5735;
+  --grid:rgba(230,237,240,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{margin:0;background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:32px 32px,32px 32px;color:var(--ink);
+  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:48px 24px 96px;display:flex;flex-direction:column;gap:40px}
+.masthead{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--copper)}
+h1{font-family:Archivo,sans-serif;font-weight:700;font-size:clamp(30px,5.2vw,46px);
+  line-height:1.05;letter-spacing:-.021em;margin:0;text-wrap:balance}
+.standfirst{max-width:66ch;font-size:16.5px;color:var(--ink-2);margin:0}
+.provenance{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3);
+  padding-top:6px;border-top:1px solid var(--rule-soft)}
+.provenance b{color:var(--ink-2);font-weight:600}
+.dot{color:var(--rule)}
+section{display:flex;flex-direction:column;gap:16px}
+h2{font-family:Archivo,sans-serif;font-weight:600;font-size:12px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--ink-3);margin:0;padding-bottom:9px;
+  border-bottom:1.5px solid var(--rule);display:flex;justify-content:space-between;
+  align-items:baseline;gap:16px}
+h2 span{font-family:"IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:none;
+  font-weight:400;color:var(--ink-3)}
+.lede{max-width:68ch;color:var(--ink-2);margin:0}
+.sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:2px;
+  box-shadow:var(--shadow);overflow-x:auto;overflow-y:hidden}
+.sheet svg{display:block;min-width:760px;width:100%;height:auto}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:640px}
+caption{text-align:left;font-size:13px;color:var(--ink-3);padding-bottom:10px}
+th{text-align:left;font-family:Archivo,sans-serif;font-size:11px;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+  padding:0 14px 8px 0;border-bottom:1.5px solid var(--rule);white-space:nowrap}
+td{padding:7px 14px 7px 0;border-bottom:1px solid var(--rule-soft);vertical-align:baseline}
+tbody tr:last-child td{border-bottom:none}
+.mono,td.k{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+td.k{font-weight:600;white-space:nowrap;border-left:3px solid var(--cls,var(--rule));
+  padding-left:11px}
+td.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;
+  text-align:right;white-space:nowrap}
+td.note{color:var(--ink-2);font-size:13px}
+.pill{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;
+  font-weight:500;letter-spacing:.06em;padding:2px 8px;border-radius:2px;
+  border:1px solid currentColor;white-space:nowrap}
+.callout{background:var(--warn-bg);border:1px solid var(--warn-edge);border-left-width:3px;
+  border-radius:2px;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.callout h3{font-family:Archivo,sans-serif;font-size:14px;font-weight:700;margin:0}
+.callout p{margin:0;font-size:14px;color:var(--ink-2);max-width:70ch}
+code{font-family:"IBM Plex Mono",monospace;font-size:.92em;color:var(--ink)}
+footer{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3);
+  border-top:1px solid var(--rule-soft);padding-top:16px;line-height:1.8}
+:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Odyssey-10 Pro &middot; DShot300 &middot; Sheet 7 of 7</div>
+    <h1>What The Wire Should Look Like</h1>
+    <p class="standfirst">
+      Drawn to scale, for holding next to a capture. Every edge here comes from the same
+      arithmetic the firmware uses, and the firmware has already printed its half of it on
+      real hardware — <code>33 ticks/bit, 9999 ppm error, bidirectional</code>.
+    </p>
+    <div class="provenance" id="provenance"></div>
+  </header>
+
+  <section>
+    <h2>One frame period <span>500 Hz · 2.6% duty</span></h2>
+    <p class="lede">
+      Almost all of it is idle. The burst is 52.8&nbsp;µs out of 2000, and the ESC's reply
+      lands in the gap just after it.
+    </p>
+    <div class="sheet">
+      <svg id="period" role="img" aria-label="One 2000 microsecond frame period showing the 52.8 microsecond burst and the reply"></svg>
+    </div>
+  </section>
+
+  <section>
+    <h2>A single bit <span>33 ticks at 10 MHz</span></h2>
+    <p class="lede">
+      <b>Bidirectional DShot is inverted</b>, so the line idles HIGH and the pulse is LOW.
+      A <code>1</code> is roughly twice as long as a <code>0</code>, and that ratio is the
+      whole discrimination — there is no clock.
+    </p>
+    <div class="sheet">
+      <svg id="bit" role="img" aria-label="A one bit and a zero bit drawn to scale with their timings"></svg>
+    </div>
+    <div class="callout">
+      <h3>Idling LOW is the failure that looks like a dead pin</h3>
+      <p>
+        Bidirectional DShot idles high specifically so the ESC can pull the line down to
+        answer. Get the inversion wrong and the ESC ignores everything — which on a bench
+        is indistinguishable from a pin that was never connected. <b>Check the idle level
+        before you check anything else.</b>
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>The disarmed frame <span id="disarmspan"></span></h2>
+    <p class="lede">
+      This is the one you will actually capture first, and it has a silhouette you can
+      recognise without decoding anything: twelve short pulses, then four long ones.
+    </p>
+    <div class="sheet">
+      <svg id="frame" role="img" aria-label="The sixteen bits of a disarmed DShot frame, drawn to scale"></svg>
+    </div>
+    <div class="callout">
+      <h3>If you decode 48, stop</h3>
+      <p>
+        <code>DSHOT_CMD_DISARM</code> is value <b>0</b>, and its frame is
+        <code id="d0"></code>. <code>DSHOT_MIN_THROTTLE</code> is 48, and its frame is
+        <code id="d48"></code> — a completely different shape.
+        <br><br>
+        If a disarmed aircraft is sending 48, <code>idleMotors()</code> is commanding
+        minimum throttle rather than disarm, and <b>the motors would turn on a disarmed
+        aircraft</b>. The two are far enough apart on the wire that you do not need a
+        decoder to tell them apart, which is the point of putting both here.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Frame fields <span>16 bits, MSB first</span></h2>
+    <div class="scroll"><table id="fields">
+      <thead><tr><th>Bits</th><th>Field</th><th>Meaning</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>The checksum is inverted, and only in bidirectional mode</h3>
+      <p>
+        <code>crc = (x ^ (x&gt;&gt;4) ^ (x&gt;&gt;8)) &amp; 0x0F</code>, then <b>inverted</b>
+        when bidirectional. An ESC configured for one mode rejects the other's frames on
+        checksum — which is a loud failure rather than a quiet one, and is the right way
+        round for a mode mismatch.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>What to measure <span>§4.3.2 step 1</span></h2>
+    <div class="scroll"><table id="measure">
+      <caption>No ESC, no motor, no battery. One channel and a shared ground.</caption>
+      <thead><tr><th>Measurement</th><th>Expected</th><th>Why it matters</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>The reply <span>21 bits GCR · assumption 4, still untested</span></h2>
+    <p class="lede">
+      The ESC answers on the same wire, roughly 30&nbsp;µs after the frame ends. Whether
+      that is separable from our own echo is the one DShot assumption hardware has not yet
+      settled.
+    </p>
+    <div class="scroll"><table id="reply">
+      <thead><tr><th>Stage</th><th>Width</th><th>Contents</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="callout">
+      <h3>eRPM is electrical, and the pole count is not on the wire</h3>
+      <p>
+        The decoded period is <b>electrical</b>. Converting to a shaft rate needs the
+        motor's pole count, and getting it wrong scales every derived frequency by a
+        constant — which looks exactly like a mis-tuned notch rather than like a units
+        error. That is why the tracker prefers a measurement but still gates it on the
+        four motors agreeing: a systematic scale error would agree with itself.
+      </p>
+    </div>
+  </section>
+
+  <footer id="titleblock"></footer>
+</div>
+
+<script>
+const DOC_REV = "5.1";
+
+/* From config.h and dshot_rmt.h. */
+const RES_HZ = 10000000;      // DSHOT_RMT_RESOLUTION_HZ
+const BITRATE_KHZ = 300;      // DSHOT_BITRATE_KHZ  -> DShot300
+const FRAME_BITS = 16;
+const TELEM_BITS = 21;        // DSHOT_TELEM_BITS
+const LOOP_HZ = 500;
+const INVERTED = true;        // DSHOT_BIDIRECTIONAL
+
+/* The same arithmetic the firmware uses, so the drawing IS the algorithm rather than
+   a picture of it. Integer division throughout, deliberately -- that is where the
+   9999 ppm comes from rather than 10000. */
+const bitTicks = (r,k)=>Math.floor((r + (k*1000)/2) / (k*1000));
+const oneHigh  = (b)=>Math.floor((b*3 + 2) / 4);
+const zeroHigh = (b)=>Math.floor((b*3 + 4) / 8);
+const errPpm = (r,k)=>{
+  const t=bitTicks(r,k);
+  const realisedPs=Math.floor(t*1e12/r), nominalPs=Math.floor(1e9/k);
+  return Math.floor(Math.abs(realisedPs-nominalPs)*1e6/nominalPs);
+};
+
+const BIT_TICKS = bitTicks(RES_HZ, BITRATE_KHZ);
+const ONE_T = oneHigh(BIT_TICKS), ZERO_T = zeroHigh(BIT_TICKS);
+const US = (t)=>t/RES_HZ*1e6;
+const BIT_US = US(BIT_TICKS);
+const FRAME_US = BIT_US*FRAME_BITS;
+const PERIOD_US = 1e6/LOOP_HZ;
+
+/* Frame construction, mirroring dshot.h. */
+function dshotChecksum(p, bidir){
+  const x=p & 0x0FFF;
+  let c=(x ^ (x>>4) ^ (x>>8)) & 0x0F;
+  return bidir ? ((~c) & 0x0F) : c;
+}
+function dshotFrame(v, telem, bidir){
+  const p=((v & 0x07FF)<<1) | (telem?1:0);
+  return ((p<<4) | dshotChecksum(p,bidir)) & 0xFFFF;
+}
+const DISARM = dshotFrame(0, false, INVERTED);
+const MINTHR = dshotFrame(48, false, INVERTED);
+const hex = (v)=>"0x"+v.toString(16).toUpperCase().padStart(4,"0");
+const bin = (v)=>v.toString(2).padStart(16,"0");
+
+const FIELDS = [
+  ["15 – 5","value","0 = <code>DSHOT_CMD_DISARM</code>; 1–47 are commands; 48–2047 is throttle"],
+  ["4","telemetry request","Set to ask for a reply on the classic telemetry wire. Not used here — bidirectional replies on the signal line itself"],
+  ["3 – 0","checksum","<code>x ^ (x&gt;&gt;4) ^ (x&gt;&gt;8)</code>, inverted for bidirectional"]
+];
+
+const MEASURE = [
+  ["Idle level between frames","<b>HIGH</b>","Bidirectional idles high so the ESC can pull it down. Idling low means the inversion is wrong — and an ESC that ignores everything looks exactly like a dead pin"],
+  ["Bit period",`<b>${BIT_US.toFixed(2)} µs</b> ±5%`,`${BIT_TICKS} ticks at ${(RES_HZ/1e6)} MHz`],
+  ["A <code>1</code> bit",`low for <b>${US(ONE_T).toFixed(2)} µs</b>, high for ${US(BIT_TICKS-ONE_T).toFixed(2)} µs`,"Inverted, so the pulse is the low part"],
+  ["A <code>0</code> bit",`low for <b>${US(ZERO_T).toFixed(2)} µs</b>, high for ${US(BIT_TICKS-ZERO_T).toFixed(2)} µs`,"A 1 is about twice a 0; that ratio is the whole discrimination"],
+  ["Frame length",`<b>${FRAME_US.toFixed(1)} µs</b>, ${FRAME_BITS} bits`,"MSB first"],
+  ["Frame interval",`<b>${PERIOD_US.toFixed(0)} µs</b> at ${LOOP_HZ} Hz`,`1000 µs on a 7-inch. Duty is ${(FRAME_US/PERIOD_US*100).toFixed(1)}%`],
+  ["Frame content, disarmed",`value 0 — <b>${hex(DISARM)}</b>`,`Not 48. If you decode ${hex(MINTHR)} here, <code>idleMotors()</code> is sending minimum throttle and motors would turn on a disarmed aircraft`]
+];
+
+const REPLY = [
+  ["Gap after the frame","~30 µs","The line is released; the ESC takes it"],
+  [`GCR burst`,`${TELEM_BITS} bits @ 2.60 µs ≈ 55 µs`,"Each 5-bit group maps back to 4 bits; an illegal group decodes to 0xFF and the reply is dropped"],
+  ["Decoded","16 bits","<code>eee mmmmmmmmm cccc</code> — exponent, mantissa, checksum"],
+  ["Period","<code>mantissa &lt;&lt; exponent</code> µs","<b>Electrical</b> commutation period, not shaft"],
+  ["Give up after","200 µs","<code>DSHOT_TELEM_TIMEOUT_US</code> — a reply that has not arrived is simply absent this frame"]
+];
+
+const $=(s)=>document.querySelector(s);
+const SVGNS="http://www.w3.org/2000/svg";
+const el=(n,a={})=>{const e=document.createElementNS(SVGNS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+
+/* ---- waveform helper --------------------------------------------------
+   Builds an SVG path from a list of {us, level} segments. Level 1 is the
+   idle (high) rail; on an inverted line the pulses go down from it.       */
+function wave(segs, x0, yHigh, yLow, pxPerUs){
+  let x=x0, d=`M ${x} ${segs[0].level? yHigh : yLow}`;
+  segs.forEach((s,i)=>{
+    const y = s.level ? yHigh : yLow;
+    if(i) d += ` L ${x} ${y}`;
+    x += s.us*pxPerUs;
+    d += ` L ${x} ${y}`;
+  });
+  return {d, end:x};
+}
+
+/* ---- one frame period ------------------------------------------------- */
+function drawPeriod(){
+  const svg=$("#period"), PAD=36, W=920, H=190;
+  const px=(W-PAD*2-90)/PERIOD_US;
+  const yH=78, yL=126;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.setAttribute("font-family",'"IBM Plex Mono",ui-monospace,monospace');
+  const t=(x,y,s,o={})=>{const n=el("text",Object.assign({x,y,"font-size":11,
+    fill:"var(--ink)","dominant-baseline":"middle"},o));n.textContent=s;svg.appendChild(n);return n;};
+
+  const segs=[{us:FRAME_US,level:0},{us:30,level:1},{us:55,level:0},
+              {us:PERIOD_US-FRAME_US-85,level:1}];
+  const w=wave(segs,PAD,yH,yL,px);
+  svg.appendChild(el("path",{d:w.d,stroke:"var(--c-pwm)","stroke-width":1.8,fill:"none"}));
+
+  t(PAD,yH-16,"idle HIGH",{"font-size":9,fill:"var(--ink-3)"});
+  const fw=FRAME_US*px;
+  svg.appendChild(el("rect",{x:PAD,y:yL+8,width:fw,height:3,fill:"var(--c-pwm)"}));
+  t(PAD,yL+30,`frame ${FRAME_US.toFixed(1)} µs`,{"font-size":9.5,fill:"var(--c-pwm)"});
+  t(PAD,yL+43,`${FRAME_BITS} bits`,{"font-size":8.5,fill:"var(--ink-3)"});
+
+  /* At 2.6% duty the frame and the reply are ~30 px apart and their labels are ~80 px
+     wide, so the reply's label goes on a lower tier with a leader back to its mark. */
+  const rx=PAD+(FRAME_US+30)*px, rw=55*px;
+  svg.appendChild(el("rect",{x:rx,y:yL+8,width:Math.max(rw,3),height:3,fill:"var(--c-uart)"}));
+  svg.appendChild(el("path",{d:`M ${rx+Math.max(rw,3)/2} ${yL+11} V ${yL+56} H ${rx+96}`,
+    stroke:"var(--c-uart)","stroke-width":1,opacity:.55,"stroke-dasharray":"2 3"}));
+  t(rx+104,yL+56,"ESC reply ≈55 µs",{"font-size":9.5,fill:"var(--c-uart)"});
+  t(rx+104,yL+69,"assumption 4, untested",{"font-size":8.5,fill:"var(--ink-3)"});
+
+  svg.appendChild(el("path",{d:`M ${PAD} ${yH-34} H ${PAD+PERIOD_US*px}`,
+    stroke:"var(--copper)","stroke-width":1,"stroke-dasharray":"4 3",opacity:.8}));
+  t(PAD+PERIOD_US*px/2,yH-44,`${PERIOD_US.toFixed(0)} µs — one flight-loop tick at ${LOOP_HZ} Hz`,
+    {"text-anchor":"middle","font-size":9.5,fill:"var(--copper)"});
+  t(PAD+PERIOD_US*px+10,yH,`${(FRAME_US/PERIOD_US*100).toFixed(1)}% duty`,
+    {"font-size":9.5,fill:"var(--ink-3)"});
+}
+
+/* ---- a single bit, to scale ------------------------------------------- */
+function drawBit(){
+  const svg=$("#bit"), PAD=48, px=78, W=920, H=210;
+  const yH=76, yL=134;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.setAttribute("font-family",'"IBM Plex Mono",ui-monospace,monospace');
+  const t=(x,y,s,o={})=>{const n=el("text",Object.assign({x,y,"font-size":11,
+    fill:"var(--ink)","dominant-baseline":"middle"},o));n.textContent=s;svg.appendChild(n);return n;};
+
+  /* rails */
+  [[yH,"HIGH — idle"],[yL,"LOW — pulse"]].forEach(([y,lab])=>{
+    svg.appendChild(el("path",{d:`M ${PAD-14} ${y} H ${W-PAD}`,
+      stroke:"var(--rule)","stroke-width":1,"stroke-dasharray":"3 4",opacity:.7}));
+    t(W-PAD+4,y,lab,{"font-size":8.5,fill:"var(--ink-3)"});
+  });
+
+  let x=PAD;
+  [["1",ONE_T],["0",ZERO_T],["1",ONE_T],["0",ZERO_T]].forEach(([label,active],i)=>{
+    const segs=[{us:US(active),level:0},{us:US(BIT_TICKS-active),level:1}];
+    const w=wave(segs,x,yH,yL,px);
+    svg.appendChild(el("path",{d:w.d,stroke:"var(--c-pwm)","stroke-width":2,fill:"none"}));
+
+    const colour = label==="1" ? "var(--c-pwm)" : "var(--c-uart)";
+    /* bit boundary */
+    svg.appendChild(el("path",{d:`M ${x} ${yH-22} V ${yL+26}`,
+      stroke:"var(--rule)","stroke-width":1,opacity:.6}));
+    t(x+BIT_US*px/2,yH-32,label,{"text-anchor":"middle","font-size":15,
+      "font-weight":700,fill:colour,"font-family":"Archivo, sans-serif"});
+
+    if(i<2){
+      /* dimension the pulse and the rest */
+      const aw=US(active)*px;
+      svg.appendChild(el("path",{d:`M ${x} ${yL+16} H ${x+aw}`,
+        stroke:colour,"stroke-width":1.4}));
+      t(x+aw/2,yL+30,`${US(active).toFixed(2)} µs`,{"text-anchor":"middle",
+        "font-size":9.5,fill:colour,"font-weight":600});
+      t(x+aw/2,yL+43,`${active} ticks`,{"text-anchor":"middle","font-size":8.5,
+        fill:"var(--ink-3)"});
+      const rw=US(BIT_TICKS-active)*px;
+      t(x+aw+rw/2,yH-8,`${US(BIT_TICKS-active).toFixed(2)}`,{"text-anchor":"middle",
+        "font-size":8.5,fill:"var(--ink-3)"});
+    }
+    x=w.end;
+  });
+
+  svg.appendChild(el("path",{d:`M ${PAD} ${yL+62} H ${PAD+BIT_US*px}`,
+    stroke:"var(--copper)","stroke-width":1.2}));
+  t(PAD+BIT_US*px/2,yL+74,`one bit — ${BIT_US.toFixed(2)} µs, ${BIT_TICKS} ticks`,
+    {"text-anchor":"middle","font-size":9.5,fill:"var(--copper)","font-weight":600});
+  t(PAD+BIT_US*px/2,yL+87,`nominal ${(1000/BITRATE_KHZ).toFixed(3)} µs — ${errPpm(RES_HZ,BITRATE_KHZ)} ppm fast`,
+    {"text-anchor":"middle","font-size":8.5,fill:"var(--ink-3)"});
+}
+
+/* ---- the whole disarmed frame ----------------------------------------- */
+function drawFrame(){
+  const svg=$("#frame"), PAD=40, W=920, H=200;
+  const px=(W-PAD*2)/(FRAME_US+8);
+  const yH=84, yL=132;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.setAttribute("font-family",'"IBM Plex Mono",ui-monospace,monospace');
+  const t=(x,y,s,o={})=>{const n=el("text",Object.assign({x,y,"font-size":11,
+    fill:"var(--ink)","dominant-baseline":"middle"},o));n.textContent=s;svg.appendChild(n);return n;};
+
+  const bits=bin(DISARM).split("");
+  const segs=[];
+  bits.forEach(b=>{
+    const active = b==="1" ? ONE_T : ZERO_T;
+    segs.push({us:US(active),level:0});
+    segs.push({us:US(BIT_TICKS-active),level:1});
+  });
+  segs.push({us:8,level:1});
+  const w=wave(segs,PAD,yH,yL,px);
+  svg.appendChild(el("path",{d:w.d,stroke:"var(--c-pwm)","stroke-width":1.8,fill:"none"}));
+
+  bits.forEach((b,i)=>{
+    const x=PAD+i*BIT_US*px;
+    svg.appendChild(el("path",{d:`M ${x} ${yH-14} V ${yL+14}`,
+      stroke:"var(--rule)","stroke-width":.8,opacity:.5}));
+    t(x+BIT_US*px/2,yH-24,b,{"text-anchor":"middle","font-size":10,"font-weight":600,
+      fill:b==="1"?"var(--c-pwm)":"var(--ink-3)"});
+    if(i%4===0) t(x+BIT_US*px/2,yH-38,String(15-i),{"text-anchor":"middle",
+      "font-size":8,fill:"var(--ink-3)"});
+  });
+
+  /* field bands */
+  const bands=[[0,11,"value = 0","var(--c-gpio)"],[11,1,"telem","var(--c-i2c)"],
+               [12,4,"crc","var(--c-power)"]];
+  bands.forEach(([s,n,lab,colour])=>{
+    const x=PAD+s*BIT_US*px, bw=n*BIT_US*px;
+    svg.appendChild(el("rect",{x,y:yL+22,width:bw,height:4,fill:colour,opacity:.85}));
+    t(x+bw/2,yL+38,lab,{"text-anchor":"middle","font-size":9.5,fill:colour,
+      "font-weight":600});
+  });
+  t(PAD,yL+58,`${hex(DISARM)} — twelve 0 bits, then four 1 bits`,
+    {"font-size":9.5,fill:"var(--copper)"});
+}
+
+function tables(){
+  $("#disarmspan").textContent=`${hex(DISARM)} · ${FRAME_US.toFixed(1)} µs`;
+  $("#d0").textContent=`${hex(DISARM)}  ${bin(DISARM)}`;
+  $("#d48").textContent=`${hex(MINTHR)}  ${bin(MINTHR)}`;
+
+  $("#fields tbody").innerHTML=FIELDS.map(f=>`<tr>
+      <td class="k" style="--cls:var(--c-pwm)">${f[0]}</td>
+      <td class="mono">${f[1]}</td><td class="note">${f[2]}</td></tr>`).join("");
+
+  $("#measure tbody").innerHTML=MEASURE.map(m=>`<tr>
+      <td class="k" style="--cls:var(--c-uart)">${m[0]}</td>
+      <td class="mono">${m[1]}</td><td class="note">${m[2]}</td></tr>`).join("");
+
+  $("#reply tbody").innerHTML=REPLY.map(r=>`<tr>
+      <td class="k" style="--cls:var(--c-spi)">${r[0]}</td>
+      <td class="mono">${r[1]}</td><td class="note">${r[2]}</td></tr>`).join("");
+
+  $("#provenance").innerHTML=[
+    `<b>DShot300</b> ${BIT_TICKS} ticks/bit`,`<span class="dot">/</span>`,
+    `<b>Error</b> ${errPpm(RES_HZ,BITRATE_KHZ)} ppm`,`<span class="dot">/</span>`,
+    `<b>Inverted</b> yes`,`<span class="dot">/</span>`,
+    `<b>Confirmed on hardware</b> 2026-08-23`,`<span class="dot">/</span>`,
+    `<b>Doc</b> rev ${DOC_REV}`
+  ].join(" ");
+
+  $("#titleblock").innerHTML=
+    `Odyssey-10 Pro &middot; DShot300 waveform, revision ${DOC_REV}<br>`+
+    `Timings computed here with the same integer arithmetic as `+
+    `<code>dshotBitTicks()</code> and <code>dshotOneHighTicks()</code> in `+
+    `<code>dshot_rmt.h</code>; frames built with the same <code>dshotChecksum()</code> as `+
+    `<code>dshot.h</code>. The ${errPpm(RES_HZ,BITRATE_KHZ)} ppm figure is what integer `+
+    `truncation produces, and it is what the firmware printed on hardware.<br>`+
+    `Assumptions 1&ndash;3 are confirmed. Assumption 4 &mdash; that the ESC's reply is `+
+    `separable from our own echo &mdash; needs an ESC and this sheet beside a capture.`;
+}
+
+drawPeriod();
+drawBit();
+drawFrame();
+tables();
+</script>

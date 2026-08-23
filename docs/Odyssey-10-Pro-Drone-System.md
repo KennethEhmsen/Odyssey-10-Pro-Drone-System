@@ -2494,7 +2494,7 @@ Odyssey-10-Pro-Drone-System/
 |   +-- bom.csv                     9-inch reference build
 |   +-- bom-variants.csv            what differs in the other nine
 +-- tools/
-|   +-- check_consistency.py        The specification-vs-code gate     [32 checks]
+|   +-- check_consistency.py        The specification-vs-code gate     [33 checks]
 |   +-- blackbox_decode.py          Flight log decoder, formats v2-v4
 |   +-- test_blackbox_decode.py     ...and its tests
 |   +-- patchfile.py                Line-ending-safe in-place edits
@@ -2519,6 +2519,7 @@ Odyssey-10-Pro-Drone-System/
 |   +-- odyssey-arming.html         Every condition that blocks arming, and its constant
 |   +-- odyssey-blackbox.html       The 54-byte record, field by field and byte by byte
 |   +-- odyssey-builds.html         Ten builds, resolved by the C preprocessor
+|   +-- odyssey-dshot.html          The DShot300 waveform, drawn to scale
 ```
 
 ### 10.2 Task structure

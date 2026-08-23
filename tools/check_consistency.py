@@ -1033,6 +1033,8 @@ def check_prose_constants(rep, fix):
 #  therefore derived and compared, not trusted -- and --fix rewrites them.
 # =====================================================================================
 README = ROOT / "README.md"
+FC_INCLUDE_DSHOT_RMT = (ROOT / "firmware" / "flight-controller" / "include"
+                        / "dshot_rmt.h")
 #  Every drawing in docs/ that states a revision. Named by glob rather than one
 #  by one, so a new sheet is covered the moment it exists.
 def drawings():
@@ -2792,6 +2794,64 @@ def check_build_matrix_sheet(rep, fix):
     rep.note.append(f"build-matrix: {len(drawn)} builds match the preprocessor")
 
 
+def check_dshot_sheet(rep, fix):
+    """docs/odyssey-dshot.html must be drawn for the DShot the firmware actually sends.
+
+    This is the sheet somebody holds next to a logic-analyser capture, so a stale bit
+    rate or a stale inversion turns a correct capture into an apparent fault -- or, far
+    worse, makes an actual fault look expected. The drawing recomputes the timings with
+    the firmware's own integer arithmetic; this pins the four inputs to that arithmetic.
+    """
+    sheet_path = ROOT / "docs" / "odyssey-dshot.html"
+    if not sheet_path.exists():
+        return
+    sheet = read(sheet_path)
+    d = resolved_defines()
+    if not d:
+        rep.problem("dshot-sheet", "no C preprocessor available", severity="warn")
+        return
+
+    rmt = read(FC_INCLUDE_DSHOT_RMT) if FC_INCLUDE_DSHOT_RMT.exists() else ""
+    m = re.search(r"define\s+DSHOT_RMT_RESOLUTION_HZ\s+(\d+)", rmt)
+    res_hz = int(m.group(1)) if m else None
+    m = re.search(r"define\s+DSHOT_TELEM_BITS\s+(\d+)", rmt)
+    telem_bits = int(m.group(1)) if m else None
+
+    def drawn(name):
+        mm = re.search(rf"const {name}\s*=\s*([0-9]+)", sheet)
+        return int(mm.group(1)) if mm else None
+
+    pairs = [
+        ("RES_HZ",      drawn("RES_HZ"),      res_hz,                      "DSHOT_RMT_RESOLUTION_HZ"),
+        ("BITRATE_KHZ", drawn("BITRATE_KHZ"), d.get("DSHOT_BITRATE_KHZ"),  "DSHOT_BITRATE_KHZ"),
+        ("TELEM_BITS",  drawn("TELEM_BITS"),  telem_bits,                  "DSHOT_TELEM_BITS"),
+        ("LOOP_HZ",     drawn("LOOP_HZ"),     d.get("FLIGHT_LOOP_HZ"),     "FLIGHT_LOOP_HZ"),
+    ]
+    for label, got, want, cname in pairs:
+        if want is None:
+            continue
+        if got is None:
+            rep.problem("dshot-sheet",
+                        f"the sheet has no {label} constant to check against {cname}")
+        elif got != int(want):
+            rep.problem("dshot-sheet",
+                        f"the sheet is drawn for {label}={got}, but {cname} is "
+                        f"{int(want)}. A capture compared against the wrong timing "
+                        f"makes a real fault look expected")
+
+    inverted = "const INVERTED = true" in sheet
+    if bool(d.get("DSHOT_BIDIRECTIONAL", 0)) != inverted:
+        rep.problem("dshot-sheet",
+                    f"DSHOT_BIDIRECTIONAL is {int(d.get('DSHOT_BIDIRECTIONAL', 0))} but "
+                    f"the sheet draws the line as {'inverted' if inverted else 'normal'}. "
+                    f"The idle level is the first thing a capture is checked against")
+
+    if not rep.problems or all(p[1] != "dshot-sheet" for p in rep.problems):
+        rep.note = getattr(rep, "note", [])
+        rep.note.append(f"dshot-sheet: drawn for DShot{d.get('DSHOT_BITRATE_KHZ', 0):.0f} "
+                        f"at {res_hz/1e6:.0f} MHz, inverted={inverted}")
+
+
 CHECKS = [
     ("comment-continuation", "// comments ending in a backslash swallow the next line",
      check_comment_backslash),
@@ -2827,6 +2887,9 @@ CHECKS = [
     ("build-matrix",
      "the build matrix holds the numbers the preprocessor produces",
      check_build_matrix_sheet),
+    ("dshot-sheet",
+     "the waveform sheet is drawn for the DShot the firmware sends",
+     check_dshot_sheet),
     ("bom-mass",
      "the parts list and config.h agree on mass, ESC margin and connector, for every build",
      check_bom_mass),
